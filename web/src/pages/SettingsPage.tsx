@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, unwrap, type CreatedInvite } from "../api/client";
-import { useMe, useUpdatePreferences } from "../auth/queries";
+import { useLogout, useMe, useUpdatePreferences } from "../auth/queries";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
@@ -13,7 +13,26 @@ export function SettingsPage() {
       <h1 className="font-display text-[32px] font-extrabold tracking-[-0.02em]">Settings</h1>
       <AppearancePanel />
       {me.role === "owner" && <InvitesPanel />}
+      <AccountPanel />
     </main>
+  );
+}
+
+function AccountPanel() {
+  const me = useMe();
+  const logout = useLogout();
+  return (
+    <Panel title="Account">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex-1">
+          <p className="font-bold">{me.name}</p>
+          <p className="text-text-quiet font-mono text-[13px]">{me.email}</p>
+        </div>
+        <Button type="button" onClick={() => logout.mutate()} disabled={logout.isPending}>
+          Sign out
+        </Button>
+      </div>
+    </Panel>
   );
 }
 

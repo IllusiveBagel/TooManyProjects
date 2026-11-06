@@ -25,7 +25,7 @@ export function ProjectOverview() {
       {dash.isError && <ErrorNote error={dash.error} />}
       {dash.data && (
         <>
-          <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr]">
             <Card title="Shipped per week">
               <WeeklyChart weekly={dash.data.weekly} />
             </Card>
@@ -33,7 +33,7 @@ export function ProjectOverview() {
               <Spread columns={dash.data.columns} />
             </Card>
           </div>
-          <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr]">
             <Card title="Up next">
               {dash.data.up_next.length === 0 ? (
                 <p className="text-text-quiet text-sm">
@@ -78,7 +78,7 @@ export function ProjectOverview() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-rule bg-surface-card shadow-card rounded-lg p-4">
+    <section className="border-rule bg-surface-card shadow-card min-w-0 rounded-lg p-4">
       <h2 className="label-mono text-text-quiet mb-3">{title}</h2>
       {children}
     </section>
