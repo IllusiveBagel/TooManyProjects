@@ -64,7 +64,7 @@ export function ProjectBoardPage() {
   const byId = new Map(statuses.data.map((s) => [s.id, s]));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col pt-4">
+    <div className="flex flex-col pt-4 sm:min-h-0 sm:flex-1">
       <Board
         columns={columns}
         onMove={(taskId, columnId, afterId) => move(taskId, byId.get(columnId)!, afterId)}

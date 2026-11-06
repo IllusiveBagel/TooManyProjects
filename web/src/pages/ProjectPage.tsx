@@ -31,8 +31,9 @@ export function ProjectPage() {
   const { project, parents } = detail.data;
   const color = projectColor(project.color);
 
+  // On phones the whole page scrolls, header included; from sm up the header stays and the tab scrolls.
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex flex-col sm:min-h-0 sm:flex-1">
       <header className="border-t-8 px-4 pt-3 sm:px-5" style={{ borderTopColor: color }}>
         <nav aria-label="Family" className="label-mono text-text-quiet flex flex-wrap items-center gap-1.5 text-[11px]">
           <Link to="/" className="hover:text-text">Canvas</Link>
@@ -62,7 +63,7 @@ export function ProjectPage() {
           <NavLink to={`/projects/${id}/board`} className={tabClass}>Board</NavLink>
         </nav>
       </header>
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative flex flex-col sm:min-h-0 sm:flex-1">
         <Outlet context={{ detail: detail.data, newTask: (s?: string) => setNewTaskFor(s ?? null) } satisfies ProjectContext} />
         <TaskDrawer />
       </div>

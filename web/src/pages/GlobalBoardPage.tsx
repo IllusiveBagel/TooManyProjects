@@ -60,7 +60,7 @@ export function GlobalBoardPage() {
   });
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex flex-col sm:min-h-0 sm:flex-1">
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3 px-4 pt-4 pb-3 sm:px-5">
         <div>
           <h1 className="font-display text-[30px] leading-tight font-extrabold tracking-[-0.03em]">Everything</h1>
@@ -94,7 +94,7 @@ export function GlobalBoardPage() {
       ) : !tasks.data ? (
         <p className="label-mono text-text-quiet p-5">Loading…</p>
       ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="relative flex flex-col sm:min-h-0 sm:flex-1">
           <Board
             columns={columns}
             reorderable={false}

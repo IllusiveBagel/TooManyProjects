@@ -14,7 +14,7 @@ export function ProjectOverview() {
   const { stats } = detail.project;
 
   return (
-    <div className="flex flex-col gap-4 overflow-y-auto p-4 sm:p-5">
+    <div className="flex flex-col gap-4 p-4 sm:overflow-y-auto sm:p-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Done" value={`${stats.done_tasks}`} sub={`of ${stats.total_tasks} tasks`} />
         <Tile label="In progress" value={`${stats.in_progress_tasks}`} sub={`${stats.open_tasks} open in all`} />

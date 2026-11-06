@@ -123,7 +123,7 @@ export function Board({ columns, renderCard, onMove, reorderable = true, trailin
         setOrder(null);
       }}
     >
-      <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto px-4 pb-4 sm:px-5">
+      <div className="flex min-w-0 gap-3 overflow-x-auto px-4 pb-4 sm:min-h-0 sm:flex-1 sm:px-5">
         {columns.map((col) => (
           <Column key={col.id} column={col} ids={current[col.id] ?? []} byId={byId} renderCard={renderCard} />
         ))}
