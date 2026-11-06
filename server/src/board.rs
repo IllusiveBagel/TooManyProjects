@@ -219,7 +219,7 @@ pub async fn insert_status(
 /// A project's board columns, left to right.
 #[utoipa::path(get, path = "/projects/{id}/statuses", tag = "board", params(("id" = String, Path)),
     responses((status = 200, body = Vec<Status>), (status = 404, body = crate::error::ErrorBody)))]
-async fn list_statuses(
+pub(crate) async fn list_statuses(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,

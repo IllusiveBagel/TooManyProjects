@@ -344,7 +344,7 @@ async fn column_for_category(
 /// Every task in a project, column by column.
 #[utoipa::path(get, path = "/projects/{id}/tasks", tag = "tasks", params(("id" = String, Path)),
     responses((status = 200, body = Vec<Task>), (status = 404, body = crate::error::ErrorBody)))]
-async fn list_project_tasks(
+pub(crate) async fn list_project_tasks(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -358,7 +358,7 @@ async fn list_project_tasks(
 #[utoipa::path(post, path = "/projects/{id}/tasks", tag = "tasks", params(("id" = String, Path)),
     request_body = CreateTaskRequest,
     responses((status = 201, body = Task), (status = 400, body = crate::error::ErrorBody)))]
-async fn create_task(
+pub(crate) async fn create_task(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -449,8 +449,8 @@ async fn log_task(
     payload: serde_json::Value,
 ) -> AppResult<()> {
     sqlx::query(
-        "INSERT INTO activity (id, project_id, task_id, user_id, kind, payload, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO activity (id, project_id, task_id, user_id, kind, payload, via, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(time::new_id())
     .bind(project_id)
@@ -458,6 +458,7 @@ async fn log_task(
     .bind(user_id)
     .bind(kind)
     .bind(payload.to_string())
+    .bind(crate::projects::via())
     .bind(time::now())
     .execute(conn)
     .await?;
@@ -467,7 +468,7 @@ async fn log_task(
 /// One task with its checklist and history.
 #[utoipa::path(get, path = "/tasks/{id}", tag = "tasks", params(("id" = String, Path)),
     responses((status = 200, body = TaskDetail), (status = 404, body = crate::error::ErrorBody)))]
-async fn get_task(
+pub(crate) async fn get_task(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -494,7 +495,7 @@ async fn get_task(
     request_body = UpdateTaskRequest,
     responses((status = 200, body = Task), (status = 400, body = crate::error::ErrorBody),
         (status = 404, body = crate::error::ErrorBody)))]
-async fn update_task(
+pub(crate) async fn update_task(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -657,7 +658,7 @@ async fn delete_task(
 /// left out, and so are tasks finished more than `done_days` ago.
 #[utoipa::path(get, path = "/tasks", tag = "tasks", params(GlobalQuery),
     responses((status = 200, body = Vec<Task>)))]
-async fn global_tasks(
+pub(crate) async fn global_tasks(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Query(q): Query<GlobalQuery>,

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { TaskDetail } from "../api/client";
 import { lastActive } from "../canvas/format";
-import { Button, ErrorNote } from "../components/ui";
+import { Button, ErrorNote, ViaBadge } from "../components/ui";
 import { projectColor } from "../theme/resolve";
 import { activityText, CATEGORY_COLOR, PRIORITIES, PRIORITY_LABEL, taskRef } from "./format";
 import {
@@ -282,6 +282,7 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
                   </span>
                   <span>
                     <b>{a.user_name ?? "Someone"}</b> {activityText(a)}
+                    <ViaBadge via={a.via} />
                   </span>
                 </li>
               ))}

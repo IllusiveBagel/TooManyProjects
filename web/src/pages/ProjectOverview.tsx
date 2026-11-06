@@ -1,6 +1,6 @@
 import type { Dashboard } from "../api/client";
 import { dueLabel, lastActive } from "../canvas/format";
-import { ErrorNote } from "../components/ui";
+import { ErrorNote, ViaBadge } from "../components/ui";
 import { activityText, CATEGORY_COLOR, PRIORITY_LABEL, taskRef } from "../tasks/format";
 import { useDashboard } from "../tasks/queries";
 import { useOpenTask } from "../tasks/TaskDrawer";
@@ -182,10 +182,12 @@ function ActivityList({ items, onOpen }: { items: Dashboard["activity"]; onOpen:
           {a.task_id && a.kind !== "task.deleted" ? (
             <button type="button" className="hover:text-accent cursor-pointer text-left" onClick={() => onOpen(a.task_id!)}>
               <b>{a.user_name ?? "Someone"}</b> {activityText(a)}
+                    <ViaBadge via={a.via} />
             </button>
           ) : (
             <span>
               <b>{a.user_name ?? "Someone"}</b> {activityText(a)}
+                    <ViaBadge via={a.via} />
             </span>
           )}
         </li>

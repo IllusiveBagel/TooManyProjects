@@ -69,3 +69,13 @@ export function Panel({ title, children, className = "" }: { title?: string; chi
     </section>
   );
 }
+
+/** Marks a change made by an AI assistant through the MCP server. */
+export function ViaBadge({ via }: { via?: string }) {
+  if (via !== "ai") return null;
+  return (
+    <span className="label-mono border-rule text-accent ml-1.5 inline-block rounded-sm border-current px-1 py-px align-[1px] text-[9.5px]">
+      via AI
+    </span>
+  );
+}
