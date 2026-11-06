@@ -61,6 +61,7 @@ export function ProjectPage() {
         <nav aria-label="Project" className="border-rule mt-3 flex gap-5 border-x-0 border-t-0">
           <NavLink to={`/projects/${id}`} end className={tabClass}>Overview</NavLink>
           <NavLink to={`/projects/${id}/board`} className={tabClass}>Board</NavLink>
+          <NavLink to={`/projects/${id}/notes`} className={tabClass}>Notes</NavLink>
         </nav>
       </header>
       <div className="relative flex flex-col sm:min-h-0 sm:flex-1">

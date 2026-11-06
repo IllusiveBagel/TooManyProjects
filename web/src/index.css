@@ -175,3 +175,86 @@
 .tmp-flow .react-flow__edge.selected .react-flow__edge-path {
   filter: drop-shadow(0 0 3px var(--tmp-accent));
 }
+
+/* A rendered note: the reading face for prose, the display face for headings. */
+.note-prose {
+  font-family: var(--tmp-font-reading);
+  font-size: 19px;
+  line-height: 1.6;
+  max-width: 46rem;
+  overflow-wrap: anywhere;
+}
+.note-prose > * + * {
+  margin-top: 0.8em;
+}
+.note-prose h1,
+.note-prose h2,
+.note-prose h3,
+.note-prose h4 {
+  font-family: var(--tmp-font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-top: 1.3em;
+}
+.note-prose h1 { font-size: 30px; }
+.note-prose h2 { font-size: 25px; }
+.note-prose h3 { font-size: 20px; }
+.note-prose h4 { font-size: 17px; }
+.note-prose ul,
+.note-prose ol {
+  padding-left: 1.4em;
+}
+.note-prose ul { list-style: disc; }
+.note-prose ol { list-style: decimal; }
+.note-prose li + li { margin-top: 0.25em; }
+.note-prose li::marker { color: var(--tmp-accent); }
+.note-prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4em; }
+.note-prose blockquote {
+  border-left: 3px solid var(--tmp-accent);
+  padding-left: 1em;
+  color: var(--tmp-text-quiet);
+  font-style: italic;
+}
+.note-prose code {
+  font-family: var(--tmp-font-mono);
+  font-size: 0.8em;
+  background: var(--tmp-surface-raised);
+  border-radius: var(--tmp-radius-sm);
+  padding: 0.1em 0.35em;
+}
+.note-prose pre {
+  background: var(--tmp-surface-raised);
+  border: var(--tmp-rule-width) solid var(--tmp-line);
+  border-radius: var(--tmp-radius-md);
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.note-prose pre code { background: none; padding: 0; }
+.note-prose hr { border: 0; border-top: var(--tmp-rule-width) solid var(--tmp-line); }
+.note-prose table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-family: var(--tmp-font-interface);
+  font-size: 14px;
+}
+.note-prose th,
+.note-prose td {
+  border-bottom: var(--tmp-rule-width) solid var(--tmp-line);
+  padding: 8px 12px;
+  text-align: left;
+  /* The table scrolls sideways instead of breaking numbers across lines. */
+  white-space: nowrap;
+}
+.note-prose th {
+  font-family: var(--tmp-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tmp-text-quiet);
+}
+.note-prose img { max-width: 100%; border-radius: var(--tmp-radius-md); }

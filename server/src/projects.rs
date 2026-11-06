@@ -18,7 +18,7 @@ use crate::{
     auth::CurrentUser,
     canvas,
     error::{AppError, AppResult},
-    links, time,
+    links, notes, time,
 };
 
 pub fn router() -> OpenApiRouter<AppState> {
@@ -463,6 +463,10 @@ async fn update_project(
         .await?;
     let project = visible_project(&mut tx, &user.id, &id).await?;
     tx.commit().await?;
+    if title != current.title {
+        // Notes name projects by title; the owner's vault follows the rename.
+        notes::project_renamed(&state, &current.owner_id, &current.title, &title).await?;
+    }
     Ok(Json(project))
 }
 

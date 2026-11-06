@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use toomanyprojects::{AppState, Config, app, build_router, db, themes::ThemeStore};
+use toomanyprojects::{AppState, Config, app, build_router, db, notes, themes::ThemeStore};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -36,6 +36,18 @@ async fn main() -> anyhow::Result<()> {
 
     let bind = config.bind;
     let state = AppState { db, config: Arc::new(config), themes: Arc::new(themes) };
+    // Pick up notes edited outside the app (another editor, a synced folder).
+    // Polling, because file watching is unreliable on Docker volumes.
+    let scan_state = state.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(15));
+        loop {
+            tick.tick().await;
+            if let Err(e) = notes::vault::scan_all(&scan_state.db, &scan_state.config.data_dir).await {
+                tracing::warn!(error = %e, "scanning note vaults");
+            }
+        }
+    });
     let listener = tokio::net::TcpListener::bind(bind).await.with_context(|| format!("binding {bind}"))?;
     tracing::info!(%bind, "listening");
     axum::serve(listener, build_router(state)).with_graceful_shutdown(shutdown()).await?;

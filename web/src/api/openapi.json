@@ -806,6 +806,447 @@
         }
       }
     },
+    "/notes": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Your notes, newest first, or the best matches for `q`.",
+        "operationId": "list_notes",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Full-text search over titles and bodies.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "description": "First folder of the path, such as `Inbox`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Default 200, at most 500.",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NoteSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Write a new note to the vault.",
+        "operationId": "create_note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/export": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Every file in your vault, notes and attachments, as one zip.",
+        "operationId": "export_vault",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/import": {
+      "post": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Import a zip of markdown files. Notes keep their folders; a note whose\npath is taken gets ` 2` added. Hidden folders such as `.obsidian` and\nNotion's CSV databases are skipped.",
+        "operationId": "import_vault",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "description": "Where the zip came from: `obsidian` (a zipped vault folder) or\n`notion` (Export, Markdown & CSV).",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "obsidian",
+                "notion"
+              ]
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "description": "Folder to put everything under, such as `Imported`. Empty means the\nvault root.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/rescan": {
+      "post": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Re-read the vault now, picking up files changed outside the app.",
+        "operationId": "rescan",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/tags": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Every tag in use, most used first.",
+        "operationId": "list_tags",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagCount"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/{id}": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "One note with its body, backlinks and resolved links.",
+        "operationId": "get_note",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Delete a note's file for good.",
+        "operationId": "delete_note",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Edit a note. A new title renames the file and fixes links to it.",
+        "operationId": "update_note",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notes/{id}/download": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "The note's file as it is on disk, front matter included.",
+        "operationId": "download_note",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects": {
       "get": {
         "tags": [
@@ -1134,6 +1575,47 @@
             }
           },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/notes": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "A project's notes, and other notes that mention it.",
+        "operationId": "project_notes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectNotes"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -2057,6 +2539,43 @@
           }
         }
       },
+      "CreateNoteRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`inbox`, `knowledge`, or a folder path. Defaults to the first\nproject's folder when `project_ids` is set, else Knowledge."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Defaults to \"Untitled\" (or the date, for the Inbox)."
+          }
+        }
+      },
       "CreateProjectRequest": {
         "type": "object",
         "required": [
@@ -2280,6 +2799,37 @@
           }
         }
       },
+      "ImportResult": {
+        "type": "object",
+        "required": [
+          "notes",
+          "attachments",
+          "skipped",
+          "renamed"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "integer",
+            "description": "Other files kept, such as images and PDFs.",
+            "minimum": 0
+          },
+          "notes": {
+            "type": "integer",
+            "description": "Markdown notes written to the vault.",
+            "minimum": 0
+          },
+          "renamed": {
+            "type": "integer",
+            "description": "Notes that were renamed because a note with that name already existed.",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "description": "Entries left out: settings folders, databases (CSV), oversized files.",
+            "minimum": 0
+          }
+        }
+      },
       "Invite": {
         "type": "object",
         "required": [
@@ -2473,6 +3023,140 @@
           }
         }
       },
+      "NoteDetail": {
+        "type": "object",
+        "required": [
+          "note",
+          "body",
+          "backlinks",
+          "links"
+        ],
+        "properties": {
+          "backlinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteSummary"
+            },
+            "description": "Notes that link here."
+          },
+          "body": {
+            "type": "string",
+            "description": "Markdown, without the front matter."
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteLink"
+            }
+          },
+          "note": {
+            "$ref": "#/components/schemas/NoteSummary"
+          }
+        }
+      },
+      "NoteLink": {
+        "type": "object",
+        "description": "Where a `[[link]]` in the note leads.",
+        "required": [
+          "kind",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Missing when nothing has that title yet."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`note` or `project`."
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "NoteProject": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "color"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "NoteSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "path",
+          "folder",
+          "tags",
+          "projects",
+          "excerpt",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "The first line of text."
+          },
+          "folder": {
+            "type": "string",
+            "description": "First folder of the path: `Inbox`, `Knowledge`, `Projects` or another."
+          },
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path inside the vault, such as `Knowledge/Cars/Bleeding brakes.md`."
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteProject"
+            }
+          },
+          "snippet": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Search results only: the matching words in context, with `[` and `]`\naround each hit."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string",
+            "description": "The file name without `.md`."
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
       "Position": {
         "type": "object",
         "required": [
@@ -2613,6 +3297,29 @@
           }
         }
       },
+      "ProjectNotes": {
+        "type": "object",
+        "required": [
+          "notes",
+          "mentions"
+        ],
+        "properties": {
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteSummary"
+            },
+            "description": "Other notes that mention it with `[[@Project]]`."
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteSummary"
+            },
+            "description": "Notes that list the project in their front matter."
+          }
+        }
+      },
       "ProjectRef": {
         "type": "object",
         "description": "A parent or child, as shown in a project's breadcrumbs.",
@@ -2700,6 +3407,19 @@
           }
         }
       },
+      "ScanResult": {
+        "type": "object",
+        "required": [
+          "indexed"
+        ],
+        "properties": {
+          "indexed": {
+            "type": "integer",
+            "description": "Files read again because they were new or had changed.",
+            "minimum": 0
+          }
+        }
+      },
       "SetupRequest": {
         "type": "object",
         "required": [
@@ -2749,6 +3469,22 @@
             "type": "string"
           },
           "project_id": {
+            "type": "string"
+          }
+        }
+      },
+      "TagCount": {
+        "type": "object",
+        "required": [
+          "tag",
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tag": {
             "type": "string"
           }
         }
@@ -2943,6 +3679,50 @@
           "reverse": {
             "type": "boolean",
             "description": "Swap source and target."
+          }
+        }
+      },
+      "UpdateNoteRequest": {
+        "type": "object",
+        "description": "Fields left out stay as they are.",
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Moves the file to this folder."
+          },
+          "project_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Renames the file and updates links to it in other notes."
           }
         }
       },
@@ -3186,6 +3966,10 @@
     {
       "name": "tasks",
       "description": "Tasks, checklists, the global board and project dashboards"
+    },
+    {
+      "name": "notes",
+      "description": "Markdown notes in your vault, search, backlinks, import and export"
     },
     {
       "name": "system",

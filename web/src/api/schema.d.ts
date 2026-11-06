@@ -300,6 +300,132 @@ export interface paths {
         patch: operations["update_preferences"];
         trace?: never;
     };
+    "/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your notes, newest first, or the best matches for `q`. */
+        get: operations["list_notes"];
+        put?: never;
+        /** Write a new note to the vault. */
+        post: operations["create_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notes/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every file in your vault, notes and attachments, as one zip. */
+        get: operations["export_vault"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notes/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a zip of markdown files. Notes keep their folders; a note whose
+         *     path is taken gets ` 2` added. Hidden folders such as `.obsidian` and
+         *     Notion's CSV databases are skipped.
+         */
+        post: operations["import_vault"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notes/rescan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-read the vault now, picking up files changed outside the app. */
+        post: operations["rescan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notes/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every tag in use, most used first. */
+        get: operations["list_tags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One note with its body, backlinks and resolved links. */
+        get: operations["get_note"];
+        put?: never;
+        post?: never;
+        /** Delete a note's file for good. */
+        delete: operations["delete_note"];
+        options?: never;
+        head?: never;
+        /** Edit a note. A new title renames the file and fixes links to it. */
+        patch: operations["update_note"];
+        trace?: never;
+    };
+    "/notes/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The note's file as it is on disk, front matter included. */
+        get: operations["download_note"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects": {
         parameters: {
             query?: never;
@@ -366,6 +492,23 @@ export interface paths {
         put?: never;
         /** Make a label for this project's tasks. */
         post: operations["create_label"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's notes, and other notes that mention it. */
+        get: operations["project_notes"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -607,6 +750,18 @@ export interface components {
             source_id: string;
             target_id: string;
         };
+        CreateNoteRequest: {
+            body?: string | null;
+            /**
+             * @description `inbox`, `knowledge`, or a folder path. Defaults to the first
+             *     project's folder when `project_ids` is set, else Knowledge.
+             */
+            folder?: string | null;
+            project_ids?: string[];
+            tags?: string[];
+            /** @description Defaults to "Untitled" (or the date, for the Inbox). */
+            title?: string | null;
+        };
         CreateProjectRequest: {
             /** @description Defaults to the next unused-looking slot. */
             color?: string | null;
@@ -664,6 +819,16 @@ export interface components {
             status: string;
             version: string;
         };
+        ImportResult: {
+            /** @description Other files kept, such as images and PDFs. */
+            attachments: number;
+            /** @description Markdown notes written to the vault. */
+            notes: number;
+            /** @description Notes that were renamed because a note with that name already existed. */
+            renamed: number;
+            /** @description Entries left out: settings folders, databases (CSV), oversized files. */
+            skipped: number;
+        };
         Invite: {
             accepted_at?: string | null;
             /** @description Name of the person who accepted it. */
@@ -714,6 +879,47 @@ export interface components {
             /** Format: double */
             y: number;
         };
+        NoteDetail: {
+            /** @description Notes that link here. */
+            backlinks: components["schemas"]["NoteSummary"][];
+            /** @description Markdown, without the front matter. */
+            body: string;
+            links: components["schemas"]["NoteLink"][];
+            note: components["schemas"]["NoteSummary"];
+        };
+        /** @description Where a `[[link]]` in the note leads. */
+        NoteLink: {
+            /** @description Missing when nothing has that title yet. */
+            id?: string | null;
+            /** @description `note` or `project`. */
+            kind: string;
+            title: string;
+        };
+        NoteProject: {
+            color: string;
+            id: string;
+            title: string;
+        };
+        NoteSummary: {
+            created_at: string;
+            /** @description The first line of text. */
+            excerpt: string;
+            /** @description First folder of the path: `Inbox`, `Knowledge`, `Projects` or another. */
+            folder: string;
+            id: string;
+            /** @description Path inside the vault, such as `Knowledge/Cars/Bleeding brakes.md`. */
+            path: string;
+            projects: components["schemas"]["NoteProject"][];
+            /**
+             * @description Search results only: the matching words in context, with `[` and `]`
+             *     around each hit.
+             */
+            snippet?: string | null;
+            tags: string[];
+            /** @description The file name without `.md`. */
+            title: string;
+            updated_at: string;
+        };
         Position: {
             /** Format: double */
             x: number;
@@ -751,6 +957,12 @@ export interface components {
             parents: components["schemas"]["ProjectRef"][];
             project: components["schemas"]["Project"];
         };
+        ProjectNotes: {
+            /** @description Other notes that mention it with `[[@Project]]`. */
+            mentions: components["schemas"]["NoteSummary"][];
+            /** @description Notes that list the project in their front matter. */
+            notes: components["schemas"]["NoteSummary"][];
+        };
         /** @description A parent or child, as shown in a project's breadcrumbs. */
         ProjectRef: {
             color: string;
@@ -781,6 +993,10 @@ export interface components {
             /** @description Up to 500 cards at once, sent after a drag. */
             nodes: components["schemas"]["NodePosition"][];
         };
+        ScanResult: {
+            /** @description Files read again because they were new or had changed. */
+            indexed: number;
+        };
         SetupRequest: {
             email: string;
             name: string;
@@ -794,6 +1010,11 @@ export interface components {
             name: string;
             position: string;
             project_id: string;
+        };
+        TagCount: {
+            /** Format: int64 */
+            count: number;
+            tag: string;
         };
         Task: {
             /** @description The column's category: `todo`, `in_progress`, `blocked` or `done`. */
@@ -848,6 +1069,16 @@ export interface components {
             label?: string | null;
             /** @description Swap source and target. */
             reverse?: boolean;
+        };
+        /** @description Fields left out stay as they are. */
+        UpdateNoteRequest: {
+            body?: string | null;
+            /** @description Moves the file to this folder. */
+            folder?: string | null;
+            project_ids?: string[] | null;
+            tags?: string[] | null;
+            /** @description Renames the file and updates links to it in other notes. */
+            title?: string | null;
         };
         /** @description Fields left out stay as they are. Send `null` to clear an optional field. */
         UpdateProjectRequest: {
@@ -1532,6 +1763,290 @@ export interface operations {
             };
         };
     };
+    list_notes: {
+        parameters: {
+            query?: {
+                /** @description Full-text search over titles and bodies. */
+                q?: string | null;
+                tag?: string | null;
+                project_id?: string | null;
+                /** @description First folder of the path, such as `Inbox`. */
+                folder?: string | null;
+                /** @description Default 200, at most 500. */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteSummary"][];
+                };
+            };
+        };
+    };
+    create_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNoteRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    export_vault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": number[];
+                };
+            };
+        };
+    };
+    import_vault: {
+        parameters: {
+            query: {
+                /**
+                 * @description Where the zip came from: `obsidian` (a zipped vault folder) or
+                 *     `notion` (Export, Markdown & CSV).
+                 */
+                source: "obsidian" | "notion";
+                /**
+                 * @description Folder to put everything under, such as `Imported`. Empty means the
+                 *     vault root.
+                 */
+                folder?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/zip": number[];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    rescan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanResult"];
+                };
+            };
+        };
+    };
+    list_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCount"][];
+                };
+            };
+        };
+    };
+    get_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteDetail"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNoteRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    download_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": string;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_projects: {
         parameters: {
             query?: {
@@ -1765,6 +2280,35 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    project_notes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectNotes"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

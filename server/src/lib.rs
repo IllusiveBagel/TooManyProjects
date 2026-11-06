@@ -10,6 +10,7 @@ pub mod db;
 pub mod error;
 pub mod invites;
 pub mod links;
+pub mod notes;
 pub mod openapi;
 pub mod position;
 pub mod projects;

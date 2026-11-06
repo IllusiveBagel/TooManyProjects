@@ -15,6 +15,8 @@ use tower::ServiceExt;
 
 pub struct TestApp {
     pub router: Router,
+    pub data_dir: std::path::PathBuf,
+    pub state: AppState,
     _dir: tempfile::TempDir,
 }
 
@@ -30,7 +32,7 @@ impl TestApp {
         let config = Config::for_tests(dir.path().to_path_buf());
         let db = db::connect(&config.data_dir).await.unwrap();
         let state = AppState { db, config: Arc::new(config), themes: Arc::new(ThemeStore::bundled()) };
-        Self { router: build_router(state), _dir: dir }
+        Self { router: build_router(state.clone()), data_dir: dir.path().to_path_buf(), state, _dir: dir }
     }
 
     pub async fn call(&self, method: &str, path: &str, cookie: Option<&str>, body: Option<Value>) -> Res {
@@ -53,6 +55,28 @@ impl TestApp {
         let bytes = res.into_body().collect().await.unwrap().to_bytes();
         let body = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
         Res { status, cookie, body }
+    }
+
+    /// A request with a raw body; returns the status and the raw response.
+    pub async fn call_raw(
+        &self,
+        method: &str,
+        path: &str,
+        cookie: &str,
+        content_type: &str,
+        body: Vec<u8>,
+    ) -> (StatusCode, Vec<u8>) {
+        let req = Request::builder()
+            .method(method)
+            .uri(path)
+            .header(header::HOST, "localhost:8080")
+            .header(header::COOKIE, cookie)
+            .header(header::CONTENT_TYPE, content_type)
+            .body(Body::from(body))
+            .unwrap();
+        let res = self.router.clone().oneshot(req).await.unwrap();
+        let status = res.status();
+        (status, res.into_body().collect().await.unwrap().to_bytes().to_vec())
     }
 
     pub async fn setup_owner(&self) -> String {
