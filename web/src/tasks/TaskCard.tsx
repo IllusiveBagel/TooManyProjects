@@ -1,5 +1,6 @@
 import type { Task } from "../api/client";
 import { dueLabel } from "../canvas/format";
+import { initials } from "../sharing/format";
 import { projectColor } from "../theme/resolve";
 import { PRIORITY_LABEL, taskRef } from "./format";
 
@@ -53,6 +54,14 @@ export function TaskCard({
         )}
         {task.due_date && !done && (
           <span className={`ml-auto ${task.overdue ? "text-late font-semibold" : ""}`}>{dueLabel(task.due_date)}</span>
+        )}
+        {task.assignee_name && (
+          <span
+            title={`Assigned to ${task.assignee_name}`}
+            className={`bg-surface-raised text-text grid size-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${task.due_date && !done ? "" : "ml-auto"}`}
+          >
+            {initials(task.assignee_name)}
+          </span>
         )}
       </span>
     </div>

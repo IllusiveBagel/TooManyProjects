@@ -811,7 +811,7 @@
         "tags": [
           "notes"
         ],
-        "summary": "Your notes, newest first, or the best matches for `q`.",
+        "summary": "Your notes and those shared with you, newest first, or the best matches for `q`.",
         "operationId": "list_notes",
         "parameters": [
           {
@@ -851,11 +851,23 @@
           {
             "name": "folder",
             "in": "query",
-            "description": "First folder of the path, such as `Inbox`.",
+            "description": "First folder of the path, such as `Inbox`. Your own notes only.",
             "required": false,
             "schema": {
               "type": [
                 "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "shared",
+            "in": "query",
+            "description": "True: only notes others have shared with you. False: only yours.\nLeft out: both.",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
                 "null"
               ]
             }
@@ -1118,7 +1130,7 @@
         "tags": [
           "notes"
         ],
-        "summary": "Delete a note's file for good.",
+        "summary": "Delete a note's file for good. Only from your own vault.",
         "operationId": "delete_note",
         "parameters": [
           {
@@ -1247,12 +1259,36 @@
         }
       }
     },
+    "/people": {
+      "get": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Everyone else with an account here, to share with.",
+        "operationId": "list_people",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Person"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects": {
       "get": {
         "tags": [
           "projects"
         ],
-        "summary": "Your projects with their card stats, oldest first.",
+        "summary": "Your projects and the ones shared with you, with their card stats, oldest first.",
         "operationId": "list_projects",
         "parameters": [
           {
@@ -1628,6 +1664,50 @@
         }
       }
     },
+    "/projects/{id}/people": {
+      "get": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Everyone who can see a project, owner first.",
+        "operationId": "project_people",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}/statuses": {
       "get": {
         "tags": [
@@ -1814,6 +1894,179 @@
         }
       }
     },
+    "/shares": {
+      "get": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Shares you have made and shares made with you.",
+        "operationId": "list_shares",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyShares"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Share your whole account, or one of your projects, with someone here.",
+        "operationId": "create_share",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Share"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shares/{id}": {
+      "delete": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Stop sharing. The person who shared can remove it, and so can the person\nit was shared with, to leave.",
+        "operationId": "delete_share",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Change a share's role or what it takes in. Only the person who shared.",
+        "operationId": "update_share",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Share"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/statuses/{id}": {
       "delete": {
         "tags": [
@@ -1962,6 +2215,15 @@
                 "null"
               ],
               "format": "int64"
+            }
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "description": "Only tasks assigned to you.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -2529,6 +2791,7 @@
           "canvas",
           "nodes",
           "projects",
+          "locked",
           "links"
         ],
         "properties": {
@@ -2540,7 +2803,14 @@
             "items": {
               "$ref": "#/components/schemas/Link"
             },
-            "description": "Links whose two ends are both in `projects`."
+            "description": "Links whose ends are both in `projects` or `locked`, at least one in `projects`."
+          },
+          "locked": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LockedProject"
+            },
+            "description": "Linked projects that aren't shared with you."
           },
           "nodes": {
             "type": "array",
@@ -2552,7 +2822,8 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Project"
-            }
+            },
+            "description": "Your projects and the ones shared with you."
           }
         }
       },
@@ -2638,12 +2909,39 @@
             "format": "int64",
             "description": "1 to 30. Defaults to 7."
           },
+          "include_children": {
+            "type": "boolean"
+          },
+          "include_notes": {
+            "type": "boolean"
+          },
           "note": {
             "type": [
               "string",
               "null"
             ],
             "description": "A reminder of who it is for, shown in the list."
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Required for a `project` invite. You must own it."
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`viewer` (the default) or `editor`."
+          },
+          "scope": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`server` (the default), `account` or `project`."
           }
         }
       },
@@ -2770,6 +3068,37 @@
           }
         }
       },
+      "CreateShareRequest": {
+        "type": "object",
+        "required": [
+          "grantee_id"
+        ],
+        "properties": {
+          "grantee_id": {
+            "type": "string"
+          },
+          "include_children": {
+            "type": "boolean"
+          },
+          "include_notes": {
+            "type": "boolean"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Share this project. Leave out to share your whole account."
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`viewer` (the default) or `editor`."
+          }
+        }
+      },
       "CreateStatusRequest": {
         "type": "object",
         "required": [
@@ -2797,6 +3126,13 @@
           "title"
         ],
         "properties": {
+          "assignee_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Someone who can see the project."
+          },
           "at_top": {
             "type": "boolean",
             "description": "Add at the top of the column instead of the bottom."
@@ -3004,6 +3340,8 @@
           "id",
           "scope",
           "role",
+          "include_children",
+          "include_notes",
           "created_at",
           "expires_at"
         ],
@@ -3030,7 +3368,25 @@
           "id": {
             "type": "string"
           },
+          "include_children": {
+            "type": "boolean"
+          },
+          "include_notes": {
+            "type": "boolean"
+          },
           "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_title": {
             "type": [
               "string",
               "null"
@@ -3043,10 +3399,12 @@
             ]
           },
           "role": {
-            "type": "string"
+            "type": "string",
+            "description": "For `account` and `project` invites: `viewer` or `editor`."
           },
           "scope": {
-            "type": "string"
+            "type": "string",
+            "description": "`server` (join only), `account` or `project`."
           }
         }
       },
@@ -3054,7 +3412,9 @@
         "type": "object",
         "required": [
           "invited_by",
-          "expires_at"
+          "expires_at",
+          "scope",
+          "role"
         ],
         "properties": {
           "expires_at": {
@@ -3062,6 +3422,19 @@
           },
           "invited_by": {
             "type": "string"
+          },
+          "project_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "description": "`server`, `account` or `project`."
           }
         }
       },
@@ -3141,6 +3514,22 @@
           }
         }
       },
+      "LockedProject": {
+        "type": "object",
+        "description": "A project you can't see that is linked to one you can. The canvas shows it\nas a locked card, so the arrow has somewhere to go, without its title.",
+        "required": [
+          "id",
+          "owner_name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "required": [
@@ -3153,6 +3542,66 @@
           },
           "password": {
             "type": "string"
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "description": "Someone who can see a project, and why.",
+        "required": [
+          "user_id",
+          "name",
+          "email",
+          "role",
+          "via"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "description": "`owner`, `editor` or `viewer`."
+          },
+          "share_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The share to change or remove, for `project` and `account`."
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "description": "`owner`, `project` (shared directly), `account` (the owner shared\neverything) or `family` (shared through a parent project)."
+          }
+        }
+      },
+      "MyShares": {
+        "type": "object",
+        "required": [
+          "given",
+          "received"
+        ],
+        "properties": {
+          "given": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Share"
+            },
+            "description": "Shares you have made."
+          },
+          "received": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Share"
+            },
+            "description": "Shares others have made with you."
           }
         }
       },
@@ -3276,9 +3725,14 @@
           "projects",
           "excerpt",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "can_edit"
         ],
         "properties": {
+          "can_edit": {
+            "type": "boolean",
+            "description": "False when it is shared with you to read only."
+          },
           "created_at": {
             "type": "string"
           },
@@ -3292,6 +3746,13 @@
           },
           "id": {
             "type": "string"
+          },
+          "owner_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Whose vault it is in, when that isn't yours."
           },
           "path": {
             "type": "string",
@@ -3321,6 +3782,26 @@
             "description": "The file name without `.md`."
           },
           "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "Person": {
+        "type": "object",
+        "description": "Someone with an account on this install.",
+        "required": [
+          "id",
+          "name",
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           }
         }
@@ -3370,6 +3851,8 @@
           "color",
           "created_at",
           "updated_at",
+          "role",
+          "owner_name",
           "stats"
         ],
         "properties": {
@@ -3404,6 +3887,13 @@
           },
           "owner_id": {
             "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "description": "What you can do with it: `owner`, `editor` or `viewer`."
           },
           "started_at": {
             "type": [
@@ -3607,6 +4097,74 @@
           }
         }
       },
+      "Share": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "owner_id",
+          "owner_name",
+          "grantee_id",
+          "grantee_name",
+          "grantee_email",
+          "role",
+          "include_children",
+          "include_notes",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "grantee_email": {
+            "type": "string"
+          },
+          "grantee_id": {
+            "type": "string"
+          },
+          "grantee_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "include_children": {
+            "type": "boolean",
+            "description": "Project shares: projects spawned from it come too."
+          },
+          "include_notes": {
+            "type": "boolean",
+            "description": "Account shares: knowledge notes come too, not only project notes."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`account` (everything the owner has) or `project` (one project)."
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set for a project share."
+          },
+          "project_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "description": "`viewer` or `editor`."
+          }
+        }
+      },
       "Status": {
         "type": "object",
         "required": [
@@ -3677,6 +4235,19 @@
           "project_color"
         ],
         "properties": {
+          "assignee_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who is doing it, someone the project is shared with."
+          },
+          "assignee_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "category": {
             "type": "string",
             "description": "The column's category: `todo`, `in_progress`, `blocked` or `done`."
@@ -3949,6 +4520,29 @@
           }
         }
       },
+      "UpdateShareRequest": {
+        "type": "object",
+        "properties": {
+          "include_children": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "include_notes": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "UpdateStatusRequest": {
         "type": "object",
         "properties": {
@@ -3989,6 +4583,13 @@
               "null"
             ],
             "description": "Place the card after this task in its column, or at the top when `null`.\nLeft out, a moved card goes to the bottom and an unmoved one stays put."
+          },
+          "assignee_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Someone who can see the project, or `null` for nobody."
           },
           "category": {
             "type": [

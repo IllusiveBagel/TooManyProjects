@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
-import { api, unwrap, type CreatedInvite } from "../api/client";
+import { api, unwrap, type CreatedInvite, type Invite } from "../api/client";
 import { useLogout, useMe, useUpdatePreferences } from "../auth/queries";
 import { useImportNotes, useRescan } from "../notes/queries";
 import { AiAccessPanel } from "./AiAccessPanel";
+import { SharingPanel } from "./SharingPanel";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
@@ -14,6 +15,7 @@ export function SettingsPage() {
     <main className="mx-auto flex w-full max-w-[880px] flex-col gap-6 px-4 py-8">
       <h1 className="font-display text-[32px] font-extrabold tracking-[-0.02em]">Settings</h1>
       <AppearancePanel />
+      <SharingPanel />
       <NotesPanel />
       <AiAccessPanel />
       {me.role === "owner" && <InvitesPanel />}
@@ -190,11 +192,13 @@ function AppearancePanel() {
 function InvitesPanel() {
   const qc = useQueryClient();
   const [note, setNote] = useState("");
+  const [scope, setScope] = useState<"server" | "account">("server");
+  const [role, setRole] = useState<"viewer" | "editor">("viewer");
   const [created, setCreated] = useState<CreatedInvite | null>(null);
   const [copied, setCopied] = useState(false);
   const invites = useQuery({ queryKey: ["invites"], queryFn: () => unwrap(api.GET("/invites")) });
   const create = useMutation({
-    mutationFn: () => unwrap(api.POST("/invites", { body: { note: note || null } })),
+    mutationFn: () => unwrap(api.POST("/invites", { body: { note: note || null, scope, role } })),
     onSuccess: (data) => {
       setCreated(data);
       setCopied(false);
@@ -220,12 +224,29 @@ function InvitesPanel() {
   return (
     <Panel title="Invites">
       <p className="text-text-quiet mb-4 text-sm leading-relaxed">
-        People join only through a link you send them. Each link works once and lasts 7 days.
+        People join only through a link you send them. Each link works once and lasts 7 days. To invite someone straight
+        into one project, use Share on that project.
       </p>
-      <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
+      <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="min-w-48 flex-1">
           <Field label="Who is it for (optional)" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
         </div>
+        <label className="flex flex-col gap-1.5">
+          <span className="label-mono text-text-quiet">They get</span>
+          <select
+            value={`${scope}:${role}`}
+            onChange={(e) => {
+              const [s, r] = e.target.value.split(":");
+              setScope(s as "server" | "account");
+              setRole(r as "viewer" | "editor");
+            }}
+            className="border-rule bg-surface min-h-11 rounded-md px-2 font-mono text-[13px] outline-none focus:border-accent"
+          >
+            <option value="server:viewer">An account, nothing shared</option>
+            <option value="account:viewer">Everything of yours, view only</option>
+            <option value="account:editor">Everything of yours, can edit</option>
+          </select>
+        </label>
         <Button variant="primary" type="submit" disabled={create.isPending}>Make invite link</Button>
       </form>
       <ErrorNote error={create.error ?? revoke.error} />
@@ -253,7 +274,10 @@ function InvitesPanel() {
             const open = state.startsWith("Open");
             return (
               <li key={inv.id} className="border-rule flex min-h-12 items-center gap-3 border-x-0 border-t-0 py-2 last:border-b-0">
-                <span className="flex-1 truncate">{inv.note ?? "Invite"}</span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">{inv.note ?? "Invite"}</span>
+                  <span className="label-mono text-text-quiet truncate text-[10px]">{inviteScope(inv)}</span>
+                </span>
                 <span className={`label-mono ${open ? "text-accent" : "text-text-quiet"}`}>{state}</span>
                 {open && (
                   <button type="button" className="label-mono text-late min-h-11 cursor-pointer px-2" onClick={() => revoke.mutate(inv.id)}>
@@ -267,4 +291,11 @@ function InvitesPanel() {
       )}
     </Panel>
   );
+}
+
+function inviteScope(inv: Invite): string {
+  const can = inv.role === "editor" ? "can edit" : "view only";
+  if (inv.scope === "project") return `${inv.project_title ?? "A project"} · ${can}`;
+  if (inv.scope === "account") return `Everything · ${can}`;
+  return "Account only";
 }

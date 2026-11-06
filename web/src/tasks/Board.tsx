@@ -35,6 +35,8 @@ interface BoardProps {
   reorderable?: boolean;
   /** Shown after the last column, such as "+ Column". */
   trailing?: ReactNode;
+  /** False for cards that can't move, such as tasks in a project you can only view. */
+  canDrag?: (task: Task) => boolean;
 }
 
 /**
@@ -42,7 +44,7 @@ interface BoardProps {
  * order; after a drop it keeps that order until new columns arrive from the
  * cache, so a card never flicks back to where it came from.
  */
-export function Board({ columns, renderCard, onMove, reorderable = true, trailing }: BoardProps) {
+export function Board({ columns, renderCard, onMove, reorderable = true, trailing, canDrag }: BoardProps) {
   // Keyed on the ids alone, so re-rendered headers don't count as new data.
   const signature = columns.map((c) => `${c.id}:${c.tasks.map((t) => t.id).join(",")}`).join("|");
   const fromProps = useMemo(
@@ -125,7 +127,7 @@ export function Board({ columns, renderCard, onMove, reorderable = true, trailin
     >
       <div className="flex min-w-0 gap-3 overflow-x-auto px-4 pb-4 sm:min-h-0 sm:flex-1 sm:px-5">
         {columns.map((col) => (
-          <Column key={col.id} column={col} ids={current[col.id] ?? []} byId={byId} renderCard={renderCard} />
+          <Column key={col.id} column={col} ids={current[col.id] ?? []} byId={byId} renderCard={renderCard} canDrag={canDrag} />
         ))}
         {trailing}
       </div>
@@ -139,11 +141,13 @@ function Column({
   ids,
   byId,
   renderCard,
+  canDrag,
 }: {
   column: BoardColumn;
   ids: string[];
   byId: Map<string, Task>;
   renderCard: BoardProps["renderCard"];
+  canDrag: BoardProps["canDrag"];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   return (
@@ -157,7 +161,9 @@ function Column({
         <ol ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
           {ids.map((id) => {
             const task = byId.get(id);
-            return task ? <SortableCard key={id} task={task} renderCard={renderCard} /> : null;
+            return task ? (
+              <SortableCard key={id} task={task} renderCard={renderCard} disabled={canDrag ? !canDrag(task) : false} />
+            ) : null;
           })}
         </ol>
       </SortableContext>
@@ -166,8 +172,8 @@ function Column({
   );
 }
 
-function SortableCard({ task, renderCard }: { task: Task; renderCard: BoardProps["renderCard"] }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+function SortableCard({ task, renderCard, disabled }: { task: Task; renderCard: BoardProps["renderCard"]; disabled: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled });
   return (
     <li
       ref={setNodeRef}

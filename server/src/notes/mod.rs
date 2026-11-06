@@ -23,7 +23,7 @@ use crate::{
     AppState,
     auth::CurrentUser,
     error::{AppError, AppResult},
-    projects::visible_project,
+    projects::{editable_project, visible_project},
     time,
 };
 use markdown::FrontMatter;
@@ -68,11 +68,17 @@ pub struct NoteSummary {
     pub snippet: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// Whose vault it is in, when that isn't yours.
+    pub owner_name: Option<String>,
+    /// False when it is shared with you to read only.
+    pub can_edit: bool,
 }
 
 #[derive(FromRow)]
 struct NoteRow {
     id: String,
+    /// Whose vault holds the file.
+    user_id: String,
     title: String,
     path: String,
     folder: String,
@@ -84,7 +90,8 @@ struct NoteRow {
     snippet: Option<String>,
 }
 
-const NOTE_COLUMNS: &str = "n.id, n.title, n.path, n.folder, n.tags, n.excerpt, n.created_at, n.updated_at";
+const NOTE_COLUMNS: &str =
+    "n.id, n.user_id, n.title, n.path, n.folder, n.tags, n.excerpt, n.created_at, n.updated_at";
 
 /// Where a `[[link]]` in the note leads.
 #[derive(Serialize, ToSchema)]
@@ -138,8 +145,11 @@ pub struct ListNotesQuery {
     pub q: Option<String>,
     pub tag: Option<String>,
     pub project_id: Option<String>,
-    /// First folder of the path, such as `Inbox`.
+    /// First folder of the path, such as `Inbox`. Your own notes only.
     pub folder: Option<String>,
+    /// True: only notes others have shared with you. False: only yours.
+    /// Left out: both.
+    pub shared: Option<bool>,
     /// Default 200, at most 500.
     pub limit: Option<i64>,
 }
@@ -167,14 +177,42 @@ pub struct ScanResult {
 // ---------------------------------------------------------------------------
 // Helpers
 
-/// Turns index rows into summaries, with each note's projects.
-async fn summaries(conn: &mut SqliteConnection, rows: Vec<NoteRow>) -> AppResult<Vec<NoteSummary>> {
+/// Turns index rows into summaries, with each note's projects (those the
+/// viewer can see) and what the viewer may do with it.
+async fn summaries(
+    conn: &mut SqliteConnection,
+    viewer: &str,
+    rows: Vec<NoteRow>,
+) -> AppResult<Vec<NoteSummary>> {
     let mut projects: HashMap<String, Vec<NoteProject>> = HashMap::new();
+    let mut access: HashMap<String, String> = HashMap::new();
+    let mut owners: HashMap<String, String> = HashMap::new();
     if !rows.is_empty() {
+        let mut q: QueryBuilder<Sqlite> =
+            QueryBuilder::new("SELECT note_id, role FROM note_access WHERE user_id = ");
+        q.push_bind(viewer);
+        q.push(" AND note_id IN (");
+        let mut sep = q.separated(", ");
+        for r in &rows {
+            sep.push_bind(&r.id);
+        }
+        q.push(")");
+        access = q.build_query_as::<(String, String)>().fetch_all(&mut *conn).await?.into_iter().collect();
+        for r in rows.iter().filter(|r| r.user_id != viewer) {
+            if !owners.contains_key(&r.user_id) {
+                let name: String = sqlx::query_scalar("SELECT name FROM users WHERE id = ?")
+                    .bind(&r.user_id)
+                    .fetch_one(&mut *conn)
+                    .await?;
+                owners.insert(r.user_id.clone(), name);
+            }
+        }
         let mut q: QueryBuilder<Sqlite> = QueryBuilder::new(
             "SELECT np.note_id, p.id, p.title, p.color FROM note_projects np JOIN projects p ON p.id = np.project_id
-             WHERE np.note_id IN (",
+             JOIN project_access a ON a.project_id = p.id AND a.user_id = ",
         );
+        q.push_bind(viewer);
+        q.push(" WHERE np.note_id IN (");
         let mut sep = q.separated(", ");
         for r in &rows {
             sep.push_bind(&r.id);
@@ -188,6 +226,8 @@ async fn summaries(conn: &mut SqliteConnection, rows: Vec<NoteRow>) -> AppResult
     Ok(rows
         .into_iter()
         .map(|r| NoteSummary {
+            owner_name: owners.get(&r.user_id).filter(|_| r.user_id != viewer).cloned(),
+            can_edit: access.get(&r.id).is_some_and(|role| role != "viewer"),
             projects: projects.remove(&r.id).unwrap_or_default(),
             tags: serde_json::from_str(&r.tags).unwrap_or_default(),
             id: r.id,
@@ -202,9 +242,11 @@ async fn summaries(conn: &mut SqliteConnection, rows: Vec<NoteRow>) -> AppResult
         .collect())
 }
 
+/// A note the person may read, else 404.
 async fn note_row(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<NoteRow> {
     sqlx::query_as::<_, NoteRow>(&format!(
-        "SELECT {NOTE_COLUMNS} FROM notes n WHERE n.id = ? AND n.user_id = ?"
+        "SELECT {NOTE_COLUMNS} FROM notes n
+         WHERE n.id = ? AND EXISTS (SELECT 1 FROM note_access na WHERE na.note_id = n.id AND na.user_id = ?)"
     ))
     .bind(id)
     .bind(user_id)
@@ -213,9 +255,21 @@ async fn note_row(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppRe
     .ok_or(AppError::NotFound)
 }
 
-async fn summary(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<NoteSummary> {
+/// A note the person may change, else 404 or 403.
+async fn editable_note(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<NoteRow> {
     let row = note_row(conn, user_id, id).await?;
-    Ok(summaries(conn, vec![row]).await?.remove(0))
+    let role: String = sqlx::query_scalar("SELECT role FROM note_access WHERE note_id = ? AND user_id = ?")
+        .bind(id)
+        .bind(user_id)
+        .fetch_one(&mut *conn)
+        .await?;
+    if role == "viewer" {
+        return Err(AppError::Forbidden(format!(
+            "“{}” is shared with you to read, not to change.",
+            row.title
+        )));
+    }
+    Ok(row)
 }
 
 fn clean_tags(tags: &[String]) -> AppResult<Vec<String>> {
@@ -253,16 +307,25 @@ fn check_body(body: &str) -> AppResult<()> {
     Ok(())
 }
 
-/// Titles of the given projects, checking each is visible.
+/// Titles of the given projects. Filing a note under a project shares it
+/// with everyone on that project, so a project not already on the note
+/// (`keep`) needs edit rights.
 async fn project_titles(
     conn: &mut SqliteConnection,
     user_id: &str,
     ids: &[String],
+    keep: &[String],
 ) -> AppResult<Vec<String>> {
     let mut titles = vec![];
     for id in ids {
-        let p = visible_project(conn, user_id, id).await.map_err(|_| {
-            AppError::BadRequest("invalid_project", "One of those projects doesn't exist.".into())
+        let found = if keep.contains(id) {
+            visible_project(conn, user_id, id).await
+        } else {
+            editable_project(conn, user_id, id).await
+        };
+        let p = found.map_err(|e| match e {
+            AppError::Forbidden(m) => AppError::Forbidden(m),
+            _ => AppError::BadRequest("invalid_project", "One of those projects doesn't exist.".into()),
         })?;
         if !titles.contains(&p.title) {
             titles.push(p.title);
@@ -350,7 +413,7 @@ pub async fn project_renamed(state: &AppState, user_id: &str, old: &str, new: &s
 // ---------------------------------------------------------------------------
 // Handlers
 
-/// Your notes, newest first, or the best matches for `q`.
+/// Your notes and those shared with you, newest first, or the best matches for `q`.
 #[utoipa::path(get, path = "/notes", tag = "notes", params(ListNotesQuery),
     responses((status = 200, body = Vec<NoteSummary>)))]
 pub(crate) async fn list_notes(
@@ -367,8 +430,20 @@ pub(crate) async fn list_notes(
     } else {
         sql.push(" FROM notes n");
     }
-    sql.push(" WHERE n.user_id = ");
+    sql.push(" WHERE EXISTS (SELECT 1 FROM note_access na WHERE na.note_id = n.id AND na.user_id = ");
     sql.push_bind(&user.id);
+    sql.push(")");
+    match q.shared {
+        Some(true) => {
+            sql.push(" AND n.user_id <> ");
+            sql.push_bind(&user.id);
+        }
+        Some(false) => {
+            sql.push(" AND n.user_id = ");
+            sql.push_bind(&user.id);
+        }
+        None => {}
+    }
     if let Some(s) = &search {
         sql.push(" AND notes_fts MATCH ");
         sql.push_bind(s.clone());
@@ -384,6 +459,8 @@ pub(crate) async fn list_notes(
         sql.push(")");
     }
     if let Some(f) = q.folder.as_deref().filter(|f| !f.is_empty()) {
+        sql.push(" AND n.user_id = ");
+        sql.push_bind(&user.id);
         sql.push(" AND n.folder = ");
         sql.push_bind(f.to_string());
         sql.push(" COLLATE NOCASE");
@@ -396,7 +473,7 @@ pub(crate) async fn list_notes(
     sql.push(" LIMIT ");
     sql.push_bind(limit);
     let rows: Vec<NoteRow> = sql.build_query_as().fetch_all(&mut *conn).await?;
-    Ok(Json(summaries(&mut conn, rows).await?))
+    Ok(Json(summaries(&mut conn, &user.id, rows).await?))
 }
 
 /// Each word as a quoted prefix term, so punctuation can't break the query
@@ -428,7 +505,7 @@ pub(crate) async fn create_note(
     check_body(&body)?;
     let tags = clean_tags(&req.tags)?;
     let mut conn = state.db.acquire().await?;
-    let projects = project_titles(&mut conn, &user.id, &req.project_ids).await?;
+    let projects = project_titles(&mut conn, &user.id, &req.project_ids, &[]).await?;
     let folder = folder_for(req.folder.as_deref(), projects.first().map(String::as_str));
 
     let root = vault::root(&state.config.data_dir, &user.id);
@@ -444,41 +521,57 @@ pub(crate) async fn create_note(
     };
     vault::write_file(&root, &rel, &markdown::render(&fm, &body)).await?;
     let id = vault::index_file(&mut conn, &root, &user.id, &rel).await?;
-    Ok((StatusCode::CREATED, Json(detail(&mut conn, &root, &user.id, &id).await?)))
+    Ok((StatusCode::CREATED, Json(detail(&mut conn, &state.config.data_dir, &user.id, &id).await?)))
 }
 
+/// A note as `viewer` sees it. Its links resolve inside the vault it lives in,
+/// and only to notes and projects the viewer can see.
 async fn detail(
     conn: &mut SqliteConnection,
-    root: &std::path::Path,
-    user_id: &str,
+    data_dir: &std::path::Path,
+    viewer: &str,
     id: &str,
 ) -> AppResult<NoteDetail> {
-    let note = summary(conn, user_id, id).await?;
-    let text = vault::read_file(root, &note.path).await?;
+    let row = note_row(conn, viewer, id).await?;
+    let root = vault::root(data_dir, &row.user_id);
+    let vault_owner = row.user_id.clone();
+    let note = summaries(conn, viewer, vec![row]).await?.remove(0);
+    let text = vault::read_file(&root, &note.path).await?;
     let (_, body) = markdown::split(&text);
     let backlinks = sqlx::query_as::<_, NoteRow>(&format!(
         "SELECT DISTINCT {NOTE_COLUMNS} FROM note_links l JOIN notes n ON n.id = l.note_id
+         JOIN note_access na ON na.note_id = n.id AND na.user_id = ?
          WHERE n.user_id = ? AND l.target_kind = 'note' AND l.target_title = ? AND n.id <> ?
          ORDER BY n.updated_at DESC"
     ))
-    .bind(user_id)
+    .bind(viewer)
+    .bind(&vault_owner)
     .bind(&note.title)
     .bind(id)
     .fetch_all(&mut *conn)
     .await?;
-    let backlinks = summaries(conn, backlinks).await?;
+    let backlinks = summaries(conn, viewer, backlinks).await?;
     let mut links = vec![];
     for l in markdown::wiki_links(&body) {
         let kind = if l.project { "project" } else { "note" };
         let found: Option<String> = if l.project {
-            sqlx::query_scalar("SELECT id FROM projects WHERE owner_id = ? AND title = ? COLLATE NOCASE LIMIT 1")
+            sqlx::query_scalar(
+                "SELECT p.id FROM projects p JOIN project_access a ON a.project_id = p.id
+                 WHERE a.user_id = ? AND p.title = ? COLLATE NOCASE
+                 ORDER BY p.owner_id = ? DESC LIMIT 1",
+            )
+            .bind(viewer)
+            .bind(&l.title)
+            .bind(&vault_owner)
         } else {
             sqlx::query_scalar(
-                "SELECT id FROM notes WHERE user_id = ? AND title = ? COLLATE NOCASE ORDER BY updated_at DESC LIMIT 1",
+                "SELECT n.id FROM notes n JOIN note_access na ON na.note_id = n.id AND na.user_id = ?
+                 WHERE n.user_id = ? AND n.title = ? COLLATE NOCASE ORDER BY n.updated_at DESC LIMIT 1",
             )
+            .bind(viewer)
+            .bind(&vault_owner)
+            .bind(&l.title)
         }
-        .bind(user_id)
-        .bind(&l.title)
         .fetch_optional(&mut *conn)
         .await?;
         links.push(NoteLink { kind: kind.into(), title: l.title, id: found });
@@ -494,9 +587,8 @@ pub(crate) async fn get_note(
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
 ) -> AppResult<Json<NoteDetail>> {
-    let root = vault::root(&state.config.data_dir, &user.id);
     let mut conn = state.db.acquire().await?;
-    Ok(Json(detail(&mut conn, &root, &user.id, &id).await?))
+    Ok(Json(detail(&mut conn, &state.config.data_dir, &user.id, &id).await?))
 }
 
 /// Edit a note. A new title renames the file and fixes links to it.
@@ -510,9 +602,11 @@ pub(crate) async fn update_note(
     Path(id): Path<String>,
     Json(req): Json<UpdateNoteRequest>,
 ) -> AppResult<Json<NoteDetail>> {
-    let root = vault::root(&state.config.data_dir, &user.id);
     let mut conn = state.db.acquire().await?;
-    let current = note_row(&mut conn, &user.id, &id).await?;
+    let current = editable_note(&mut conn, &user.id, &id).await?;
+    // An editor of a shared project changes the file where it lives.
+    let owner = current.user_id.clone();
+    let root = vault::root(&state.config.data_dir, &owner);
     let text = vault::read_file(&root, &current.path).await?;
     let (mut fm, mut body) = markdown::split(&text);
 
@@ -524,7 +618,11 @@ pub(crate) async fn update_note(
         fm.tags = clean_tags(tags)?;
     }
     if let Some(ids) = &req.project_ids {
-        fm.projects = project_titles(&mut conn, &user.id, ids).await?;
+        let keep: Vec<String> = sqlx::query_scalar("SELECT project_id FROM note_projects WHERE note_id = ?")
+            .bind(&id)
+            .fetch_all(&mut *conn)
+            .await?;
+        fm.projects = project_titles(&mut conn, &user.id, ids, &keep).await?;
     }
     fm.id = Some(id.clone());
     fm.updated = Some(time::now());
@@ -564,14 +662,14 @@ pub(crate) async fn update_note(
         tokio::fs::rename(root.join(&current.path), &to).await.map_err(|e| AppError::Internal(e.into()))?;
         vault::prune_empty_dirs(&root, &current.path).await;
     }
-    vault::index_file(&mut conn, &root, &user.id, &rel).await?;
+    vault::index_file(&mut conn, &root, &owner, &rel).await?;
     if title != current.title {
-        rewrite_links(&mut conn, &root, &user.id, "note", &current.title, &title).await?;
+        rewrite_links(&mut conn, &root, &owner, "note", &current.title, &title).await?;
     }
-    Ok(Json(detail(&mut conn, &root, &user.id, &id).await?))
+    Ok(Json(detail(&mut conn, &state.config.data_dir, &user.id, &id).await?))
 }
 
-/// Delete a note's file for good.
+/// Delete a note's file for good. Only from your own vault.
 #[utoipa::path(delete, path = "/notes/{id}", tag = "notes", params(("id" = String, Path)),
     responses((status = 204), (status = 404, body = crate::error::ErrorBody)))]
 async fn delete_note(
@@ -582,6 +680,9 @@ async fn delete_note(
     let root = vault::root(&state.config.data_dir, &user.id);
     let mut conn = state.db.acquire().await?;
     let row = note_row(&mut conn, &user.id, &id).await?;
+    if row.user_id != user.id {
+        return Err(AppError::Forbidden("Only the person whose note it is can delete it.".into()));
+    }
     let _ = tokio::fs::remove_file(root.join(&row.path)).await;
     vault::prune_empty_dirs(&root, &row.path).await;
     vault::unindex(&mut conn, &id).await?;
@@ -616,7 +717,8 @@ pub(crate) async fn project_notes(
     let project = visible_project(&mut conn, &user.id, &id).await?;
     let notes = sqlx::query_as::<_, NoteRow>(&format!(
         "SELECT {NOTE_COLUMNS} FROM notes n JOIN note_projects np ON np.note_id = n.id
-         WHERE n.user_id = ? AND np.project_id = ? ORDER BY n.updated_at DESC"
+         JOIN note_access na ON na.note_id = n.id
+         WHERE na.user_id = ? AND np.project_id = ? ORDER BY n.updated_at DESC"
     ))
     .bind(&user.id)
     .bind(&id)
@@ -624,7 +726,8 @@ pub(crate) async fn project_notes(
     .await?;
     let mentions = sqlx::query_as::<_, NoteRow>(&format!(
         "SELECT DISTINCT {NOTE_COLUMNS} FROM note_links l JOIN notes n ON n.id = l.note_id
-         WHERE n.user_id = ? AND l.target_kind = 'project' AND l.target_title = ?
+         JOIN note_access na ON na.note_id = n.id
+         WHERE na.user_id = ? AND l.target_kind = 'project' AND l.target_title = ?
            AND NOT EXISTS (SELECT 1 FROM note_projects np WHERE np.note_id = n.id AND np.project_id = ?)
          ORDER BY n.updated_at DESC"
     ))
@@ -634,8 +737,8 @@ pub(crate) async fn project_notes(
     .fetch_all(&mut *conn)
     .await?;
     Ok(Json(ProjectNotes {
-        notes: summaries(&mut conn, notes).await?,
-        mentions: summaries(&mut conn, mentions).await?,
+        notes: summaries(&mut conn, &user.id, notes).await?,
+        mentions: summaries(&mut conn, &user.id, mentions).await?,
     }))
 }
 
@@ -648,9 +751,9 @@ async fn download_note(
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
 ) -> AppResult<Response> {
-    let root = vault::root(&state.config.data_dir, &user.id);
     let mut conn = state.db.acquire().await?;
     let row = note_row(&mut conn, &user.id, &id).await?;
+    let root = vault::root(&state.config.data_dir, &row.user_id);
     let text = vault::read_file(&root, &row.path).await?;
     Ok((
         [

@@ -24,6 +24,7 @@ export function GlobalBoardPage() {
     const family = params.get("family");
     if (project) f.project_id = project;
     if (family) f.family = family;
+    if (params.get("mine")) f.mine = true;
     return f;
   }, [params]);
   const tasks = useGlobalTasks(filter);
@@ -34,6 +35,8 @@ export function GlobalBoardPage() {
   const projects = canvas.data?.projects ?? [];
   const parents = new Set((canvas.data?.links ?? []).filter((l) => l.kind === "spawned").map((l) => l.source_id));
   const families = projects.filter((p) => parents.has(p.id));
+  const viewOnly = new Set(projects.filter((p) => p.role === "viewer").map((p) => p.id));
+  const shared = projects.some((p) => p.role !== "owner") || (tasks.data ?? []).some((t) => t.assignee_id);
 
   const setFilter = (key: "project" | "family", value: string) =>
     setParams((p) => {
@@ -68,7 +71,25 @@ export function GlobalBoardPage() {
             Open tasks from every active project, plus anything finished in the last two weeks. Late and soonest due sit at the top.
           </p>
         </div>
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="ml-auto flex flex-wrap items-end gap-2">
+          {(shared || filter.mine) && (
+            <label className="border-rule label-mono text-text-quiet hover:text-text flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-[11px]">
+              <input
+                type="checkbox"
+                className="accent-[var(--tmp-accent)]"
+                checked={!!filter.mine}
+                onChange={(e) =>
+                  setParams((p) => {
+                    const next = new URLSearchParams(p);
+                    if (e.target.checked) next.set("mine", "1");
+                    else next.delete("mine");
+                    return next;
+                  })
+                }
+              />
+              My tasks
+            </label>
+          )}
           <label className="flex flex-col gap-1">
             <span className="label-mono text-text-quiet text-[10px]">Project</span>
             <select className={selectClass} value={params.get("project") ?? ""} onChange={(e) => setFilter("project", e.target.value)}>
@@ -100,6 +121,7 @@ export function GlobalBoardPage() {
             reorderable={false}
             onMove={(taskId, category) => move(taskId, category)}
             renderCard={(t, lifted) => <TaskCard task={t} onOpen={openTask} showProject lifted={lifted} />}
+            canDrag={(t) => !viewOnly.has(t.project_id)}
           />
           <TaskDrawer />
         </div>

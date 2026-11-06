@@ -15,9 +15,9 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{
     AppState,
     auth::CurrentUser,
-    board::{self, Label, Status, insert_status, position_after, position_last, visible_status},
+    board::{self, Label, Status, editable_status, insert_status, position_after, position_last},
     error::{AppError, AppResult},
-    projects::{check_date, clean_text, log_activity, some, visible_project},
+    projects::{check_date, clean_text, editable_project, log_activity, require_edit, some, visible_project},
     time,
 };
 
@@ -46,6 +46,8 @@ struct TaskRow {
     priority: Option<String>,
     due_date: Option<String>,
     position: String,
+    assignee_id: Option<String>,
+    assignee_name: Option<String>,
     completed_at: Option<String>,
     created_at: String,
     updated_at: String,
@@ -57,13 +59,15 @@ struct TaskRow {
 }
 
 const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.number, t.status_id, t.title, t.description,
-        t.priority, t.due_date, t.position, t.completed_at, t.created_at, t.updated_at,
+        t.priority, t.due_date, t.position, t.assignee_id, au.name AS assignee_name,
+        t.completed_at, t.created_at, t.updated_at,
         (SELECT COUNT(*) FROM task_checklist c WHERE c.task_id = t.id AND c.done = 1) AS checklist_done,
         (SELECT COUNT(*) FROM task_checklist c WHERE c.task_id = t.id) AS checklist_total,
         s.category, p.title AS project_title, p.color AS project_color
     FROM tasks t
     JOIN statuses s ON s.id = t.status_id
-    JOIN projects p ON p.id = t.project_id";
+    JOIN projects p ON p.id = t.project_id
+    LEFT JOIN users au ON au.id = t.assignee_id";
 
 #[derive(Clone, Debug, Serialize, ToSchema)]
 pub struct Task {
@@ -81,6 +85,9 @@ pub struct Task {
     pub priority: Option<String>,
     pub due_date: Option<String>,
     pub position: String,
+    /// Who is doing it, someone the project is shared with.
+    pub assignee_id: Option<String>,
+    pub assignee_name: Option<String>,
     pub completed_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -139,6 +146,8 @@ pub struct CreateTaskRequest {
     pub due_date: Option<String>,
     #[serde(default)]
     pub label_ids: Vec<String>,
+    /// Someone who can see the project.
+    pub assignee_id: Option<String>,
     /// Add at the top of the column instead of the bottom.
     #[serde(default)]
     pub at_top: bool,
@@ -159,6 +168,10 @@ pub struct UpdateTaskRequest {
     pub due_date: Option<Option<String>>,
     /// Replaces the task's labels.
     pub label_ids: Option<Vec<String>>,
+    /// Someone who can see the project, or `null` for nobody.
+    #[serde(default, deserialize_with = "some")]
+    #[schema(value_type = Option<String>)]
+    pub assignee_id: Option<Option<String>>,
     /// Move to this column.
     pub status_id: Option<String>,
     /// Move to the first column of this category, as the global board does.
@@ -179,6 +192,9 @@ pub struct GlobalQuery {
     pub family: Option<String>,
     /// Hide tasks completed more than this many days ago. Default 14.
     pub done_days: Option<i64>,
+    /// Only tasks assigned to you.
+    #[serde(default)]
+    pub mine: bool,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -189,6 +205,29 @@ pub struct ChecklistRequest {
 
 // ---------------------------------------------------------------------------
 // Helpers
+
+/// Fails unless `assignee` can see the project.
+async fn check_assignee(
+    conn: &mut SqliteConnection,
+    project_id: &str,
+    assignee: &Option<String>,
+) -> AppResult<()> {
+    if let Some(a) = assignee {
+        let ok: Option<String> =
+            sqlx::query_scalar("SELECT role FROM project_access WHERE project_id = ? AND user_id = ?")
+                .bind(project_id)
+                .bind(a)
+                .fetch_optional(conn)
+                .await?;
+        if ok.is_none() {
+            return Err(AppError::BadRequest(
+                "invalid_assignee",
+                "Tasks can only be assigned to people the project is shared with.".into(),
+            ));
+        }
+    }
+    Ok(())
+}
 
 fn today() -> String {
     chrono::Utc::now().format("%Y-%m-%d").to_string()
@@ -228,6 +267,8 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
             priority: r.priority,
             due_date: r.due_date,
             position: r.position,
+            assignee_id: r.assignee_id,
+            assignee_name: r.assignee_name,
             completed_at: r.completed_at,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -241,13 +282,23 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
 
 /// A task the person can see, else 404.
 async fn visible_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Task> {
-    let row = sqlx::query_as::<_, TaskRow>(&format!("{TASK_SELECT} WHERE t.id = ? AND p.owner_id = ?"))
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(&mut *conn)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let row = sqlx::query_as::<_, TaskRow>(&format!(
+        "{TASK_SELECT} WHERE t.id = ?
+            AND EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ?)"
+    ))
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(AppError::NotFound)?;
     Ok(attach_labels(conn, vec![row]).await?.remove(0))
+}
+
+/// A task the person may change, else 404 or 403.
+async fn editable_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Task> {
+    let task = visible_task(conn, user_id, id).await?;
+    require_edit(conn, user_id, &task.project_id).await?;
+    Ok(task)
 }
 
 pub async fn project_tasks(conn: &mut SqliteConnection, project_id: &str) -> AppResult<Vec<Task>> {
@@ -370,10 +421,11 @@ pub(crate) async fn create_task(
     check_date(&req.due_date)?;
 
     let mut tx = state.db.begin().await?;
-    visible_project(&mut tx, &user.id, &id).await?;
+    editable_project(&mut tx, &user.id, &id).await?;
+    check_assignee(&mut tx, &id, &req.assignee_id).await?;
     let status = match &req.status_id {
         Some(s) => {
-            let status = visible_status(&mut tx, &user.id, s).await?;
+            let status = editable_status(&mut tx, &user.id, s).await?;
             if status.project_id != id {
                 return Err(AppError::BadRequest(
                     "invalid_status",
@@ -403,8 +455,8 @@ pub(crate) async fn create_task(
     let completed_at = (status.category == "done").then(|| now.clone());
     sqlx::query(
         "INSERT INTO tasks (id, project_id, number, status_id, title, description, priority, due_date, position,
-            completed_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            assignee_id, completed_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&task_id)
     .bind(&id)
@@ -415,6 +467,7 @@ pub(crate) async fn create_task(
     .bind(&req.priority)
     .bind(&req.due_date)
     .bind(&pos)
+    .bind(&req.assignee_id)
     .bind(&completed_at)
     .bind(&now)
     .bind(&now)
@@ -435,7 +488,7 @@ pub(crate) async fn create_task(
         serde_json::json!({ "title": title, "to": status.name }),
     )
     .await?;
-    let task = visible_task(&mut tx, &user.id, &task_id).await?;
+    let task = editable_task(&mut tx, &user.id, &task_id).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(task)))
 }
@@ -502,7 +555,7 @@ pub(crate) async fn update_task(
     Json(req): Json<UpdateTaskRequest>,
 ) -> AppResult<Json<Task>> {
     let mut tx = state.db.begin().await?;
-    let current = visible_task(&mut tx, &user.id, &id).await?;
+    let current = editable_task(&mut tx, &user.id, &id).await?;
 
     let title = match &req.title {
         Some(t) => clean_title(t)?,
@@ -516,11 +569,15 @@ pub(crate) async fn update_task(
     check_priority(&priority)?;
     let due_date = req.due_date.clone().unwrap_or_else(|| current.due_date.clone());
     check_date(&due_date)?;
+    let assignee_id = req.assignee_id.clone().unwrap_or_else(|| current.assignee_id.clone());
+    if assignee_id != current.assignee_id {
+        check_assignee(&mut tx, &current.project_id, &assignee_id).await?;
+    }
 
     // Where the card ends up.
     let target = match (&req.status_id, &req.category) {
         (Some(s), _) => {
-            let status = visible_status(&mut tx, &user.id, s).await?;
+            let status = editable_status(&mut tx, &user.id, s).await?;
             if status.project_id != current.project_id {
                 return Err(AppError::BadRequest(
                     "invalid_status",
@@ -560,14 +617,15 @@ pub(crate) async fn update_task(
     };
 
     sqlx::query(
-        "UPDATE tasks SET title = ?, description = ?, priority = ?, due_date = ?, status_id = ?, position = ?,
-            completed_at = ?, updated_at = ?
+        "UPDATE tasks SET title = ?, description = ?, priority = ?, due_date = ?, assignee_id = ?, status_id = ?,
+            position = ?, completed_at = ?, updated_at = ?
          WHERE id = ?",
     )
     .bind(&title)
     .bind(&description)
     .bind(&priority)
     .bind(&due_date)
+    .bind(&assignee_id)
     .bind(&status_id)
     .bind(&pos)
     .bind(&completed_at)
@@ -601,6 +659,7 @@ pub(crate) async fn update_task(
         || req.priority.is_some()
         || req.due_date.is_some()
         || req.label_ids.is_some()
+        || req.assignee_id.is_some()
     {
         let mut fields = vec![];
         for (name, changed) in [
@@ -608,6 +667,7 @@ pub(crate) async fn update_task(
             ("description", req.description.is_some() && description != current.description),
             ("priority", req.priority.is_some() && priority != current.priority),
             ("due date", req.due_date.is_some() && due_date != current.due_date),
+            ("assignee", req.assignee_id.is_some() && assignee_id != current.assignee_id),
             ("labels", req.label_ids.is_some()),
         ] {
             if changed {
@@ -626,7 +686,7 @@ pub(crate) async fn update_task(
             .await?;
         }
     }
-    let task = visible_task(&mut tx, &user.id, &id).await?;
+    let task = editable_task(&mut tx, &user.id, &id).await?;
     tx.commit().await?;
     Ok(Json(task))
 }
@@ -640,7 +700,7 @@ async fn delete_task(
     Path(id): Path<String>,
 ) -> AppResult<StatusCode> {
     let mut tx = state.db.begin().await?;
-    let task = visible_task(&mut tx, &user.id, &id).await?;
+    let task = editable_task(&mut tx, &user.id, &id).await?;
     sqlx::query("DELETE FROM tasks WHERE id = ?").bind(&id).execute(&mut *tx).await?;
     log_activity(
         &mut tx,
@@ -675,11 +735,18 @@ pub(crate) async fn global_tasks(
         );
     }
     sql.push(TASK_SELECT);
-    sql.push(" WHERE p.owner_id = ");
+    sql.push(
+        " WHERE EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ",
+    );
     sql.push_bind(&user.id);
+    sql.push(")");
     sql.push(" AND p.status <> 'archived' AND (s.category <> 'done' OR t.completed_at >= ");
     sql.push_bind(&since);
     sql.push(")");
+    if q.mine {
+        sql.push(" AND t.assignee_id = ");
+        sql.push_bind(&user.id);
+    }
     if let Some(p) = &q.project_id {
         sql.push(" AND t.project_id = ");
         sql.push_bind(p);
@@ -705,7 +772,7 @@ async fn visible_item(conn: &mut SqliteConnection, user_id: &str, id: &str) -> A
         .fetch_optional(&mut *conn)
         .await?
         .ok_or(AppError::NotFound)?;
-    visible_task(conn, user_id, &task_id).await?;
+    editable_task(conn, user_id, &task_id).await?;
     Ok(task_id)
 }
 
@@ -728,7 +795,7 @@ async fn add_checklist_item(
 ) -> AppResult<(StatusCode, Json<ChecklistItem>)> {
     let text = clean_item(req.text.as_deref().unwrap_or(""))?;
     let mut tx = state.db.begin().await?;
-    visible_task(&mut tx, &user.id, &id).await?;
+    editable_task(&mut tx, &user.id, &id).await?;
     let pos = position_last(&mut tx, "task_checklist", "task_id", &id).await?;
     let item = ChecklistItem { id: time::new_id(), text, done: req.done.unwrap_or(false), position: pos };
     sqlx::query("INSERT INTO task_checklist (id, task_id, text, done, position, created_at) VALUES (?, ?, ?, ?, ?, ?)")

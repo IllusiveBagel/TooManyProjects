@@ -11,6 +11,8 @@ type UpdateStatus = components["schemas"]["UpdateStatusRequest"];
 export interface GlobalFilter {
   project_id?: string;
   family?: string;
+  /** Only tasks assigned to you. */
+  mine?: boolean;
 }
 
 export const taskKeys = {

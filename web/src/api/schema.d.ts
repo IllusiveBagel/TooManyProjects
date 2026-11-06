@@ -307,7 +307,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Your notes, newest first, or the best matches for `q`. */
+        /** Your notes and those shared with you, newest first, or the best matches for `q`. */
         get: operations["list_notes"];
         put?: never;
         /** Write a new note to the vault. */
@@ -401,7 +401,7 @@ export interface paths {
         get: operations["get_note"];
         put?: never;
         post?: never;
-        /** Delete a note's file for good. */
+        /** Delete a note's file for good. Only from your own vault. */
         delete: operations["delete_note"];
         options?: never;
         head?: never;
@@ -426,6 +426,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone else with an account here, to share with. */
+        get: operations["list_people"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects": {
         parameters: {
             query?: never;
@@ -433,7 +450,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Your projects with their card stats, oldest first. */
+        /** Your projects and the ones shared with you, with their card stats, oldest first. */
         get: operations["list_projects"];
         put?: never;
         /** Make a project, optionally spawned from another and placed on the canvas. */
@@ -515,6 +532,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{id}/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone who can see a project, owner first. */
+        get: operations["project_people"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{id}/statuses": {
         parameters: {
             query?: never;
@@ -549,6 +583,45 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Shares you have made and shares made with you. */
+        get: operations["list_shares"];
+        put?: never;
+        /** Share your whole account, or one of your projects, with someone here. */
+        post: operations["create_share"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shares/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop sharing. The person who shared can remove it, and so can the person
+         *     it was shared with, to leave.
+         */
+        delete: operations["delete_share"];
+        options?: never;
+        head?: never;
+        /** Change a share's role or what it takes in. Only the person who shared. */
+        patch: operations["update_share"];
         trace?: never;
     };
     "/statuses/{id}": {
@@ -755,9 +828,12 @@ export interface components {
         /** @description Everything the canvas draws, in one call. */
         CanvasView: {
             canvas: components["schemas"]["Canvas"];
-            /** @description Links whose two ends are both in `projects`. */
+            /** @description Links whose ends are both in `projects` or `locked`, at least one in `projects`. */
             links: components["schemas"]["Link"][];
+            /** @description Linked projects that aren't shared with you. */
+            locked: components["schemas"]["LockedProject"][];
             nodes: components["schemas"]["CanvasNode"][];
+            /** @description Your projects and the ones shared with you. */
             projects: components["schemas"]["Project"][];
         };
         ChecklistItem: {
@@ -785,8 +861,16 @@ export interface components {
              * @description 1 to 30. Defaults to 7.
              */
             expires_in_days?: number | null;
+            include_children?: boolean;
+            include_notes?: boolean;
             /** @description A reminder of who it is for, shown in the list. */
             note?: string | null;
+            /** @description Required for a `project` invite. You must own it. */
+            project_id?: string | null;
+            /** @description `viewer` (the default) or `editor`. */
+            role?: string | null;
+            /** @description `server` (the default), `account` or `project`. */
+            scope?: string | null;
         };
         CreateLinkRequest: {
             kind: string;
@@ -819,12 +903,23 @@ export interface components {
             target_date?: string | null;
             title: string;
         };
+        CreateShareRequest: {
+            grantee_id: string;
+            include_children?: boolean;
+            include_notes?: boolean;
+            /** @description Share this project. Leave out to share your whole account. */
+            project_id?: string | null;
+            /** @description `viewer` (the default) or `editor`. */
+            role?: string | null;
+        };
         CreateStatusRequest: {
             category: string;
             color?: string | null;
             name: string;
         };
         CreateTaskRequest: {
+            /** @description Someone who can see the project. */
+            assignee_id?: string | null;
             /** @description Add at the top of the column instead of the bottom. */
             at_top?: boolean;
             description?: string | null;
@@ -891,14 +986,24 @@ export interface components {
             created_at: string;
             expires_at: string;
             id: string;
+            include_children: boolean;
+            include_notes: boolean;
             note?: string | null;
+            project_id?: string | null;
+            project_title?: string | null;
             revoked_at?: string | null;
+            /** @description For `account` and `project` invites: `viewer` or `editor`. */
             role: string;
+            /** @description `server` (join only), `account` or `project`. */
             scope: string;
         };
         InviteLookup: {
             expires_at: string;
             invited_by: string;
+            project_title?: string | null;
+            role: string;
+            /** @description `server`, `account` or `project`. */
+            scope: string;
         };
         Label: {
             color?: string | null;
@@ -919,9 +1024,38 @@ export interface components {
             source_id: string;
             target_id: string;
         };
+        /**
+         * @description A project you can't see that is linked to one you can. The canvas shows it
+         *     as a locked card, so the arrow has somewhere to go, without its title.
+         */
+        LockedProject: {
+            id: string;
+            owner_name: string;
+        };
         LoginRequest: {
             email: string;
             password: string;
+        };
+        /** @description Someone who can see a project, and why. */
+        Member: {
+            email: string;
+            name: string;
+            /** @description `owner`, `editor` or `viewer`. */
+            role: string;
+            /** @description The share to change or remove, for `project` and `account`. */
+            share_id?: string | null;
+            user_id: string;
+            /**
+             * @description `owner`, `project` (shared directly), `account` (the owner shared
+             *     everything) or `family` (shared through a parent project).
+             */
+            via: string;
+        };
+        MyShares: {
+            /** @description Shares you have made. */
+            given: components["schemas"]["Share"][];
+            /** @description Shares others have made with you. */
+            received: components["schemas"]["Share"][];
         };
         NodePosition: {
             /** Format: double */
@@ -956,12 +1090,16 @@ export interface components {
             title: string;
         };
         NoteSummary: {
+            /** @description False when it is shared with you to read only. */
+            can_edit: boolean;
             created_at: string;
             /** @description The first line of text. */
             excerpt: string;
             /** @description First folder of the path: `Inbox`, `Knowledge`, `Projects` or another. */
             folder: string;
             id: string;
+            /** @description Whose vault it is in, when that isn't yours. */
+            owner_name?: string | null;
             /** @description Path inside the vault, such as `Knowledge/Cars/Bleeding brakes.md`. */
             path: string;
             projects: components["schemas"]["NoteProject"][];
@@ -974,6 +1112,12 @@ export interface components {
             /** @description The file name without `.md`. */
             title: string;
             updated_at: string;
+        };
+        /** @description Someone with an account on this install. */
+        Person: {
+            email: string;
+            id: string;
+            name: string;
         };
         Position: {
             /** Format: double */
@@ -996,6 +1140,9 @@ export interface components {
             icon?: string | null;
             id: string;
             owner_id: string;
+            owner_name: string;
+            /** @description What you can do with it: `owner`, `editor` or `viewer`. */
+            role: string;
             started_at?: string | null;
             stats: components["schemas"]["ProjectStats"];
             /** @description `idea`, `active`, `paused`, `done` or `archived`. */
@@ -1057,6 +1204,26 @@ export interface components {
             name: string;
             password: string;
         };
+        Share: {
+            created_at: string;
+            grantee_email: string;
+            grantee_id: string;
+            grantee_name: string;
+            id: string;
+            /** @description Project shares: projects spawned from it come too. */
+            include_children: boolean;
+            /** @description Account shares: knowledge notes come too, not only project notes. */
+            include_notes: boolean;
+            /** @description `account` (everything the owner has) or `project` (one project). */
+            kind: string;
+            owner_id: string;
+            owner_name: string;
+            /** @description Set for a project share. */
+            project_id?: string | null;
+            project_title?: string | null;
+            /** @description `viewer` or `editor`. */
+            role: string;
+        };
         Status: {
             /** @description `todo`, `in_progress`, `blocked` or `done`. */
             category: string;
@@ -1072,6 +1239,9 @@ export interface components {
             tag: string;
         };
         Task: {
+            /** @description Who is doing it, someone the project is shared with. */
+            assignee_id?: string | null;
+            assignee_name?: string | null;
             /** @description The column's category: `todo`, `in_progress`, `blocked` or `done`. */
             category: string;
             /** Format: int64 */
@@ -1147,6 +1317,11 @@ export interface components {
             target_date?: string | null;
             title?: string | null;
         };
+        UpdateShareRequest: {
+            include_children?: boolean | null;
+            include_notes?: boolean | null;
+            role?: string | null;
+        };
         UpdateStatusRequest: {
             /** @description Move the column: put it after this column, or first when `null`. */
             after_id?: string | null;
@@ -1161,6 +1336,8 @@ export interface components {
              *     Left out, a moved card goes to the bottom and an unmoved one stays put.
              */
             after_id?: string | null;
+            /** @description Someone who can see the project, or `null` for nobody. */
+            assignee_id?: string | null;
             /**
              * @description Move to the first column of this category, as the global board does.
              *     Adds the column if the project has none.
@@ -1825,8 +2002,13 @@ export interface operations {
                 q?: string | null;
                 tag?: string | null;
                 project_id?: string | null;
-                /** @description First folder of the path, such as `Inbox`. */
+                /** @description First folder of the path, such as `Inbox`. Your own notes only. */
                 folder?: string | null;
+                /**
+                 * @description True: only notes others have shared with you. False: only yours.
+                 *     Left out: both.
+                 */
+                shared?: boolean | null;
                 /** @description Default 200, at most 500. */
                 limit?: number | null;
             };
@@ -2102,6 +2284,25 @@ export interface operations {
             };
         };
     };
+    list_people: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"][];
+                };
+            };
+        };
+    };
     list_projects: {
         parameters: {
             query?: {
@@ -2373,6 +2574,35 @@ export interface operations {
             };
         };
     };
+    project_people: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_statuses: {
         parameters: {
             query?: never;
@@ -2497,6 +2727,140 @@ export interface operations {
             };
         };
     };
+    list_shares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyShares"];
+                };
+            };
+        };
+    };
+    create_share: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShareRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_share: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_share: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateShareRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Share"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     delete_status: {
         parameters: {
             query?: {
@@ -2578,6 +2942,8 @@ export interface operations {
                 family?: string | null;
                 /** @description Hide tasks completed more than this many days ago. Default 14. */
                 done_days?: number | null;
+                /** @description Only tasks assigned to you. */
+                mine?: boolean;
             };
             header?: never;
             path?: never;

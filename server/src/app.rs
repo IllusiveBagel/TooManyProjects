@@ -26,7 +26,7 @@ use crate::{
     error::AppError,
     invites, links, mcp, notes,
     openapi::ApiDoc,
-    projects, tasks,
+    projects, sharing, tasks,
     themes::{self, ThemeStore},
     tokens,
 };
@@ -64,6 +64,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(tasks::router())
         .merge(dashboard::router())
         .merge(notes::router())
+        .merge(sharing::router())
         .merge(tokens::router())
         .split_for_parts();
     // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.

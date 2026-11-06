@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import type { ProjectDetail } from "../api/client";
 import { ColorPicker, StatusPicker } from "../components/Pickers";
 import { Button, ErrorNote } from "../components/ui";
+import { SharedNote } from "../sharing/SharedNote";
 import { projectColor } from "../theme/resolve";
 import { lastActive, progress } from "./format";
 import { useDeleteProject, useProjectDetail, useUpdateProject } from "./queries";
@@ -57,6 +58,7 @@ function DrawerBody({ detail, onJump }: { detail: ProjectDetail; onJump: (id: st
   const save = (fields: Parameters<typeof update.mutate>[0]) => update.mutate(fields);
   const archived = project.status === "archived";
   const color = projectColor(project.color);
+  const canEdit = project.role !== "viewer";
 
   return (
     <>
@@ -67,6 +69,7 @@ function DrawerBody({ detail, onJump }: { detail: ProjectDetail; onJump: (id: st
             className="font-display text-text w-full bg-transparent text-[26px] leading-tight font-extrabold tracking-[-0.02em] outline-none"
             value={title}
             maxLength={200}
+            readOnly={!canEdit}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={() => title.trim() && title !== project.title && save({ id: project.id, title })}
           />
@@ -82,6 +85,7 @@ function DrawerBody({ detail, onJump }: { detail: ProjectDetail; onJump: (id: st
       </div>
 
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 pt-2 pb-6">
+        <SharedNote project={project} />
         <div className="label-mono text-text-quiet grid grid-cols-3 gap-2">
           <Stat label="Done" value={`${project.stats.done_tasks}/${project.stats.total_tasks}`} />
           <Stat label="Progress" value={`${progress(project)}%`} />
@@ -110,66 +114,71 @@ function DrawerBody({ detail, onJump }: { detail: ProjectDetail; onJump: (id: st
           </div>
         )}
 
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-text-quiet">Summary</span>
-          <input
-            className={inputClass}
-            value={summary}
-            maxLength={500}
-            placeholder="One line on what this is"
-            onChange={(e) => setSummary(e.target.value)}
-            onBlur={() => summary !== (project.summary ?? "") && save({ id: project.id, summary: summary || null })}
-          />
-        </label>
+        {/* A viewer sees the same fields, read-only. */}
+        <fieldset disabled={!canEdit} className="flex min-w-0 flex-col gap-5">
+          <label className="flex flex-col gap-1.5">
+            <span className="label-mono text-text-quiet">Summary</span>
+            <input
+              className={inputClass}
+              value={summary}
+              maxLength={500}
+              placeholder="One line on what this is"
+              onChange={(e) => setSummary(e.target.value)}
+              onBlur={() => summary !== (project.summary ?? "") && save({ id: project.id, summary: summary || null })}
+            />
+          </label>
 
-        <StatusPicker value={project.status} includeArchived onChange={(status) => save({ id: project.id, status })} />
-        <ColorPicker value={project.color} onChange={(c) => save({ id: project.id, color: c })} />
+          <StatusPicker value={project.status} includeArchived onChange={(status) => save({ id: project.id, status })} />
+          <ColorPicker value={project.color} onChange={(c) => save({ id: project.id, color: c })} />
 
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-text-quiet">Target date</span>
-          <input
-            type="date"
-            className={`${inputClass} font-mono text-[13px]`}
-            value={project.target_date ?? ""}
-            onChange={(e) => save({ id: project.id, target_date: e.target.value || null })}
-          />
-        </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-mono text-text-quiet">Target date</span>
+            <input
+              type="date"
+              className={`${inputClass} font-mono text-[13px]`}
+              value={project.target_date ?? ""}
+              onChange={(e) => save({ id: project.id, target_date: e.target.value || null })}
+            />
+          </label>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-text-quiet">Description · markdown</span>
-          <textarea
-            className={`${inputClass} font-reading min-h-40 text-[15px] leading-relaxed`}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={() =>
-              description !== (project.description ?? "") && save({ id: project.id, description: description || null })
-            }
-          />
-        </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-mono text-text-quiet">Description · markdown</span>
+            <textarea
+              className={`${inputClass} font-reading min-h-40 text-[15px] leading-relaxed`}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={() =>
+                description !== (project.description ?? "") && save({ id: project.id, description: description || null })
+              }
+            />
+          </label>
+        </fieldset>
 
         <ErrorNote error={update.error ?? remove.error} />
 
-        <div className="border-rule flex flex-wrap gap-2 border-x-0 border-b-0 pt-4">
-          <Button type="button" onClick={() => save({ id: project.id, status: archived ? "active" : "archived" })}>
-            {archived ? "Restore" : "Archive"}
-          </Button>
-          {confirmDelete ? (
-            <>
-              <Button
-                type="button"
-                className="text-late border-current"
-                onClick={() => remove.mutate(project.id, { onSuccess: () => openProject(null) })}
-              >
-                Delete for good
-              </Button>
-              <Button type="button" onClick={() => setConfirmDelete(false)}>Keep it</Button>
-            </>
-          ) : (
-            <Button type="button" className="text-late" onClick={() => setConfirmDelete(true)}>
-              Delete…
+        {canEdit && (
+          <div className="border-rule flex flex-wrap gap-2 border-x-0 border-b-0 pt-4">
+            <Button type="button" onClick={() => save({ id: project.id, status: archived ? "active" : "archived" })}>
+              {archived ? "Restore" : "Archive"}
             </Button>
-          )}
-        </div>
+            {project.role !== "owner" ? null : confirmDelete ? (
+              <>
+                <Button
+                  type="button"
+                  className="text-late border-current"
+                  onClick={() => remove.mutate(project.id, { onSuccess: () => openProject(null) })}
+                >
+                  Delete for good
+                </Button>
+                <Button type="button" onClick={() => setConfirmDelete(false)}>Keep it</Button>
+              </>
+            ) : (
+              <Button type="button" className="text-late" onClick={() => setConfirmDelete(true)}>
+                Delete…
+              </Button>
+            )}
+          </div>
+        )}
         {confirmDelete && (
           <p className="text-text-quiet text-sm">
             Deleting removes the project, its tasks and its links. Archiving hides it and keeps everything.
