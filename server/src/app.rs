@@ -49,12 +49,15 @@ async fn health() -> Json<Health> {
 
 /// The `/api/v1` routes and their OpenAPI description.
 pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
-    OpenApiRouter::with_openapi(ApiDoc::openapi())
+    let (router, mut doc) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .routes(routes!(health))
         .merge(auth::router())
         .merge(invites::router())
         .merge(themes::router())
-        .split_for_parts()
+        .split_for_parts();
+    // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.
+    doc.info.license = None;
+    (router, doc)
 }
 
 pub fn openapi_json() -> String {
