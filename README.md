@@ -4,11 +4,11 @@ A self-hosted canvas for every project you have on the go. Projects live as
 cards on one infinite canvas, projects that grow out of other projects are
 joined by arrows, and each one opens into a dashboard with its tasks and board.
 
-> **Status: phase 2 (tasks and boards).** Accounts, invites, theming, the
-> canvas with spawned, related and blocking links, and now tasks: each project
-> has its own board with columns you can rename, add and reorder, a dashboard
-> with stats and activity, and there is one global board across every
-> project. Notes, sharing and the MCP server come in later phases.
+> **Status: phase 3a (notes).** Accounts, invites, theming, the canvas with
+> spawned, related and blocking links, tasks with per-project and global
+> boards, and now a notes vault: markdown files you can open in Obsidian, with
+> wiki links, backlinks, tags and search. The MCP server, sharing and project
+> databases come next.
 
 ### Boards
 
@@ -23,6 +23,32 @@ joined by arrows, and each one opens into a dashboard with its tasks and board.
   column of the category (adding one if the project has none). Filter by one
   project or by a project and everything spawned from it.
 
+### Notes
+
+- **Your vault is plain files.** Each person's notes are markdown files under
+  `/data/vaults/<account id>/`, with YAML front matter for `id`, `tags`,
+  `projects`, `created` and `updated`. The database only indexes them, so you
+  can point Obsidian (or any editor, or a sync tool) at that folder. The app
+  rescans every 15 seconds and on **Settings → Notes → Rescan vault**.
+- **Folders:** `Inbox/` for quick notes, `Knowledge/` for everything general,
+  and `Projects/<project title>/` for notes filed under a project. Any other
+  folders you make are kept.
+- **Links:** `[[Note title]]`, `[[Note title|shown text]]`, `[[Note#heading]]`,
+  and `[[@Project title]]` for a project. Renaming a note or a project rewrites
+  the links to it. A link to a note that doesn't exist yet creates it when
+  clicked.
+- **Notes screen** (`/notes`): folders and tags on the left, search with
+  Ctrl K, a note opens rendered with an **Edit** toggle (Ctrl E) and autosave.
+  Typing `[[` suggests notes, `[[@` suggests projects. Each project has a
+  **Notes** tab listing its notes and the notes that mention it.
+- **Quick note:** Alt N anywhere (or **+ New** on the Notes screen on a
+  phone) drops a note into the Inbox, or straight under a project.
+- **Import and export** (**Settings → Notes**): import a zipped Obsidian vault
+  or a Notion *Markdown & CSV* export (page ids are stripped and links turned
+  into wiki links; Notion databases are skipped until project databases land).
+  Nothing is overwritten: a clashing name gets a number. Export downloads the
+  whole vault as a zip.
+
 ## Run it
 
 ```sh
@@ -34,7 +60,8 @@ the **owner** account. After that, people join only through invite links the
 owner makes under **Settings → Invites**.
 
 Everything the app stores lives in the `/data` volume: the SQLite database
-(`toomanyprojects.db`) and the theme files (`themes/`). Back up that folder and
+(`toomanyprojects.db`), the theme files (`themes/`) and everyone's notes
+(`vaults/`). Back up that folder and
 you have backed up everything.
 
 ### Settings
@@ -93,12 +120,15 @@ server/            Rust: Axum, SQLx, SQLite
   src/board.rs     columns and labels
   src/tasks.rs     tasks, checklists, the global board
   src/dashboard.rs a project's overview in one call
+  src/notes/       the notes vault: files and index (vault.rs), markdown and
+                   wiki links (markdown.rs), zip import and export (transfer.rs)
   tests/           API tests against a real SQLite file
 web/               React 19, TypeScript, Vite, Tailwind v4
   src/api/         generated OpenAPI types and the typed client
   src/theme/       theme engine: resolves tokens into CSS variables
   src/canvas/      the canvas, cards and links (React Flow)
   src/tasks/       boards (dnd-kit), task cards and the task drawer
+  src/notes/       note editor (CodeMirror 6), rendering, quick note
   src/pages/       one file per route
 themes/            bundled themes and their JSON schema
 ```

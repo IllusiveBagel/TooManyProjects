@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useLogout, useMe } from "../auth/queries";
 import { useCanvas } from "../canvas/queries";
 import { useCanvasUi } from "../canvas/store";
+import { QuickNoteDialog, useQuickNote, useQuickNoteShortcut } from "../notes/QuickNote";
 import { Button, Wordmark } from "./ui";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -14,6 +15,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 const TABS = [
   { to: "/", label: "Canvas", end: true, icon: "M4 4h6v6H4zM14 14h6v6h-6zM10 7h4v10" },
   { to: "/board", label: "Board", end: false, icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
+  { to: "/notes", label: "Notes", end: false, icon: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" },
   { to: "/settings", label: "Settings", end: false, icon: "M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4" },
 ];
 
@@ -24,6 +26,10 @@ export function AppShell() {
   const { pathname } = useLocation();
   const startNewProject = useCanvasUi((s) => s.startNewProject);
   const count = useCanvas(false).data?.projects.length;
+  const startQuickNote = useQuickNote((s) => s.start);
+  useQuickNoteShortcut();
+  // In Notes, the top bar's New button makes a note; everywhere else, a project.
+  const inNotes = pathname.startsWith("/notes");
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-rule bg-surface flex items-center gap-x-6 border-x-0 border-t-0 px-4 py-2.5 sm:px-5">
@@ -33,6 +39,7 @@ export function AppShell() {
         <nav className="hidden gap-5 sm:flex" aria-label="Main">
           <NavLink to="/" end className={navClass}>Canvas</NavLink>
           <NavLink to="/board" className={navClass}>Board</NavLink>
+          <NavLink to="/notes" className={navClass}>Notes</NavLink>
           <NavLink to="/settings" className={navClass}>Settings</NavLink>
         </nav>
         <div className="ml-auto flex items-center gap-3">
@@ -40,12 +47,13 @@ export function AppShell() {
             variant="primary"
             className="min-h-10 px-3 text-sm"
             onClick={() => {
+              if (inNotes) return startQuickNote();
               navigate("/");
               startNewProject();
             }}
           >
             <span className="sm:hidden">+ New</span>
-            <span className="hidden sm:inline">+ New project</span>
+            <span className="hidden sm:inline">{inNotes ? "+ Quick note" : "+ New project"}</span>
           </Button>
           <span className="label-mono text-text-quiet hidden sm:inline">{me.name}</span>
           <button
@@ -60,6 +68,7 @@ export function AppShell() {
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         <Outlet />
       </div>
+      <QuickNoteDialog />
       <nav
         aria-label="Main"
         className="border-rule bg-surface flex border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)] sm:hidden"

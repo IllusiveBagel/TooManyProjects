@@ -24,7 +24,7 @@ use crate::{
     config::Config,
     dashboard,
     error::AppError,
-    invites, links,
+    invites, links, notes,
     openapi::ApiDoc,
     projects, tasks,
     themes::{self, ThemeStore},
@@ -62,6 +62,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(board::router())
         .merge(tasks::router())
         .merge(dashboard::router())
+        .merge(notes::router())
         .split_for_parts();
     // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.
     doc.info.license = None;
@@ -91,9 +92,14 @@ async fn same_origin(req: Request, next: Next) -> Response {
 
 pub fn build_router(state: AppState) -> Router {
     let (api, _) = api();
-    let api = api.fallback(|| async { AppError::NotFound }).layer(middleware::from_fn(same_origin)).layer(
-        SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
-    );
+    let api = api
+        .layer(axum::extract::DefaultBodyLimit::max(notes::transfer::MAX_IMPORT_BYTES + 1024))
+        .fallback(|| async { AppError::NotFound })
+        .layer(middleware::from_fn(same_origin))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        ));
 
     let mut router = Router::new().nest("/api/v1", api).route("/api/health", get(health)).route(
         "/api/openapi.json",

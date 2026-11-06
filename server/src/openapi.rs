@@ -16,6 +16,7 @@ use utoipa::OpenApi;
         (name = "canvas", description = "Card positions and everything the canvas draws"),
         (name = "board", description = "Columns and labels on a project's board"),
         (name = "tasks", description = "Tasks, checklists, the global board and project dashboards"),
+        (name = "notes", description = "Markdown notes in your vault, search, backlinks, import and export"),
         (name = "system", description = "Health"),
     )
 )]

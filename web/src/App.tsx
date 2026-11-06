@@ -11,6 +11,8 @@ import { ProjectOverview } from "./pages/ProjectOverview";
 import { ProjectPage } from "./pages/ProjectPage";
 import { InvitePage } from "./pages/InvitePage";
 import { LoginPage } from "./pages/LoginPage";
+import { NotesIndex, NotesLayout } from "./pages/NotesPage";
+import { ProjectNotesPage } from "./pages/ProjectNotesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { ThemeSync } from "./theme/ThemeSync";
@@ -49,6 +51,16 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <ProjectOverview /> },
           { path: "board", element: <ProjectBoardPage /> },
+          { path: "notes", element: <ProjectNotesPage /> },
+        ],
+      },
+      {
+        path: "notes",
+        element: <NotesLayout />,
+        children: [
+          { index: true, element: <NotesIndex /> },
+          // The editor and markdown renderer load only when a note opens.
+          { path: ":id", lazy: async () => ({ Component: (await import("./pages/NotePage")).NotePage }) },
         ],
       },
       { path: "settings", element: <SettingsPage /> },

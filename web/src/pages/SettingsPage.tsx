@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, unwrap, type CreatedInvite } from "../api/client";
 import { useLogout, useMe, useUpdatePreferences } from "../auth/queries";
+import { useImportNotes, useRescan } from "../notes/queries";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
@@ -12,9 +13,94 @@ export function SettingsPage() {
     <main className="mx-auto flex w-full max-w-[880px] flex-col gap-6 px-4 py-8">
       <h1 className="font-display text-[32px] font-extrabold tracking-[-0.02em]">Settings</h1>
       <AppearancePanel />
+      <NotesPanel />
       {me.role === "owner" && <InvitesPanel />}
       <AccountPanel />
     </main>
+  );
+}
+
+/** Bring an Obsidian vault or Notion export in, or take everything out. */
+function NotesPanel() {
+  const [source, setSource] = useState<"obsidian" | "notion">("obsidian");
+  const [folder, setFolder] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const importNotes = useImportNotes();
+  const rescan = useRescan();
+  const result = importNotes.data;
+
+  return (
+    <Panel title="Notes">
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-text-quiet min-w-0 flex-1 text-sm">
+            Your notes are markdown files in your vault folder on the server, so any editor can open them. Download them all
+            as a zip that opens as an Obsidian vault.
+          </p>
+          <a
+            href="/api/v1/notes/export"
+            className="border-rule hover:bg-surface-raised inline-flex min-h-11 items-center rounded-md px-4 font-bold"
+          >
+            Export zip
+          </a>
+        </div>
+        <form
+          className="border-rule flex flex-col gap-3 border-x-0 border-b-0 pt-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (file) importNotes.mutate({ file, source, folder });
+          }}
+        >
+          <h3 className="font-display font-extrabold">Import</h3>
+          <p className="text-text-quiet text-sm">
+            {source === "obsidian"
+              ? "Zip your vault folder. Notes keep their folders; settings in .obsidian are left out."
+              : "In Notion, use Export with Markdown & CSV. Page ids are taken off names, links become [[wiki links]]. Databases (CSV) are skipped for now."}{" "}
+            A note whose name is taken gets a number added, so nothing is overwritten.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="label-mono text-text-quiet">From</span>
+              <select
+                value={source}
+                onChange={(e) => setSource(e.target.value as "obsidian" | "notion")}
+                className="border-rule bg-surface min-h-11 rounded-md px-2 font-mono text-[13px] outline-none focus:border-accent"
+              >
+                <option value="obsidian">Obsidian vault</option>
+                <option value="notion">Notion export</option>
+              </select>
+            </label>
+            <Field label="Into folder" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="Vault root" />
+            <label className="flex flex-col gap-1.5">
+              <span className="label-mono text-text-quiet">Zip file</span>
+              <input
+                type="file"
+                accept=".zip,application/zip"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="border-rule bg-surface file:label-mono file:bg-surface-raised file:text-text min-h-11 min-w-0 rounded-md px-2 py-2 font-mono text-[12px] file:mr-2 file:rounded-sm file:border-0 file:px-2 file:py-1"
+              />
+            </label>
+          </div>
+          <ErrorNote error={importNotes.error} />
+          {result && (
+            <p role="status" className="text-sm">
+              Imported {result.notes} {result.notes === 1 ? "note" : "notes"} and {result.attachments}{" "}
+              {result.attachments === 1 ? "attachment" : "attachments"}.
+              {result.renamed > 0 && ` ${result.renamed} got a number added to avoid a clash.`}
+              {result.skipped > 0 && ` ${result.skipped} left out (settings, databases or files over the size limit).`}
+            </p>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
+              {rescan.data ? `Rescanned: ${rescan.data.indexed} changed` : "Rescan vault"}
+            </Button>
+            <Button type="submit" variant="primary" disabled={!file || importNotes.isPending}>
+              {importNotes.isPending ? "Importing…" : "Import"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </Panel>
   );
 }
 
