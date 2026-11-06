@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TooManyProjects theme",
+  "type": "object",
+  "required": ["id", "name", "version", "fonts", "primitives", "modes", "shape"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+    "name": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "description": { "type": "string" },
+    "fonts": {
+      "type": "object",
+      "required": ["display", "interface", "mono", "reading"],
+      "additionalProperties": { "type": "string" }
+    },
+    "primitives": {
+      "description": "Raw values. Only this file refers to them, as {name}.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "modes": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "dark": { "$ref": "#/$defs/mode" },
+        "light": { "$ref": "#/$defs/mode" }
+      },
+      "additionalProperties": false
+    },
+    "shape": { "type": "object", "additionalProperties": { "type": "string" } }
+  },
+  "$defs": {
+    "mode": {
+      "type": "object",
+      "required": ["label", "semantic", "slots", "component"],
+      "properties": {
+        "label": { "type": "string" },
+        "semantic": {
+          "type": "object",
+          "required": ["surface", "surface-card", "surface-raised", "line", "text", "text-quiet", "accent", "on-accent", "late", "done", "focus", "shadow"],
+          "additionalProperties": { "type": "string" }
+        },
+        "slots": { "type": "array", "items": { "type": "string" }, "minItems": 8, "maxItems": 8 },
+        "component": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    }
+  }
+}

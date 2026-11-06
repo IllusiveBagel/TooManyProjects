@@ -1,0 +1,128 @@
+@import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque/index.css";
+@import "@fontsource-variable/newsreader/index.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/600.css";
+
+/*
+ * Tailwind reads only theme tokens. The --tmp-* variables are set at runtime
+ * from the active theme file (src/theme/store.ts), so no component ever holds
+ * a hex code. Tailwind's own palette, radii and shadows are switched off.
+ */
+@theme inline {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+
+  --color-surface: var(--tmp-surface);
+  --color-surface-card: var(--tmp-surface-card);
+  --color-surface-raised: var(--tmp-surface-raised);
+  --color-line: var(--tmp-line);
+  --color-text: var(--tmp-text);
+  --color-text-quiet: var(--tmp-text-quiet);
+  --color-accent: var(--tmp-accent);
+  --color-on-accent: var(--tmp-on-accent);
+  --color-late: var(--tmp-late);
+  --color-done: var(--tmp-done);
+  --color-focus: var(--tmp-focus);
+  --color-shadow: var(--tmp-shadow);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-slot-1: var(--tmp-slot-1);
+  --color-slot-2: var(--tmp-slot-2);
+  --color-slot-3: var(--tmp-slot-3);
+  --color-slot-4: var(--tmp-slot-4);
+  --color-slot-5: var(--tmp-slot-5);
+  --color-slot-6: var(--tmp-slot-6);
+  --color-slot-7: var(--tmp-slot-7);
+  --color-slot-8: var(--tmp-slot-8);
+
+  --font-display: var(--tmp-font-display);
+  --font-sans: var(--tmp-font-interface);
+  --font-mono: var(--tmp-font-mono);
+  --font-reading: var(--tmp-font-reading);
+
+  --radius-sm: var(--tmp-radius-sm);
+  --radius-md: var(--tmp-radius-md);
+  --radius-lg: var(--tmp-radius-lg);
+
+  --shadow-card: var(--tmp-card-shadow);
+  --shadow-card-selected: var(--tmp-card-shadow-selected);
+  --shadow-button: var(--tmp-button-shadow);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--tmp-surface);
+    color: var(--tmp-text);
+    font-family: var(--tmp-font-interface);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--tmp-focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--tmp-accent);
+    color: var(--tmp-on-accent);
+  }
+}
+
+/* A 1.5px rule in the line colour: the house border. */
+@utility border-rule {
+  border-width: var(--tmp-rule-width);
+  border-style: solid;
+  border-color: var(--tmp-line);
+}
+
+/* Uppercase mono label, used for tags, counters and field labels. */
+@utility label-mono {
+  font-family: var(--tmp-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Graph paper: a 16px minor grid with a 128px major grid. */
+@utility canvas-grid {
+  background-color: var(--tmp-surface);
+  background-image:
+    linear-gradient(var(--tmp-canvas-grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tmp-canvas-grid-minor) 1px, transparent 1px),
+    linear-gradient(var(--tmp-canvas-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tmp-canvas-grid-major) 1px, transparent 1px);
+  background-size:
+    16px 16px,
+    16px 16px,
+    128px 128px,
+    128px 128px;
+}
+
+/* Segmented gauge progress bar track. Set --gauge-color and --gauge-value (0-100). */
+@utility gauge {
+  position: relative;
+  height: 8px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--tmp-line) 0 var(--tmp-gauge-segment),
+    transparent var(--tmp-gauge-segment) calc(var(--tmp-gauge-segment) + var(--tmp-gauge-gap))
+  );
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(var(--gauge-value, 0) * 1%);
+    background: repeating-linear-gradient(
+      90deg,
+      var(--gauge-color, var(--tmp-accent)) 0 var(--tmp-gauge-segment),
+      transparent var(--tmp-gauge-segment) calc(var(--tmp-gauge-segment) + var(--tmp-gauge-gap))
+    );
+  }
+}

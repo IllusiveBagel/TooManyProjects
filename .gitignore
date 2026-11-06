@@ -1,0 +1,19 @@
+# Rust
+server/target/
+
+# Node
+node_modules/
+web/dist/
+
+# Local data
+data/
+server/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
