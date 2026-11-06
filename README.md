@@ -1,146 +1,118 @@
-# too many projects
+<p align="center">
+  <img src="docs/images/banner.png" alt="too many projects: a self-hosted canvas for every project you have on the go" width="100%">
+</p>
 
-A self-hosted canvas for every project you have on the go. Projects live as
-cards on one infinite canvas, projects that grow out of other projects are
-joined by arrows, and each one opens into a dashboard with its tasks and board.
+<p align="center">
+  <a href="https://github.com/IllusiveBagel/TooManyProjects/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/IllusiveBagel/TooManyProjects/ci.yml?branch=main&style=flat-square&label=CI&labelColor=1A1917" alt="CI status"></a>
+  <a href="https://github.com/IllusiveBagel/TooManyProjects/releases"><img src="https://img.shields.io/github/v/release/IllusiveBagel/TooManyProjects?style=flat-square&labelColor=1A1917&color=B8C4A0&label=release" alt="Latest release"></a>
+  <a href="https://github.com/IllusiveBagel/TooManyProjects/pkgs/container/toomanyprojects"><img src="https://img.shields.io/badge/docker-ghcr.io-5FA8B0?style=flat-square&labelColor=1A1917&logo=docker&logoColor=F2EFE8" alt="Docker image on ghcr.io"></a>
+  <a href="#ai-assistants-mcp"><img src="https://img.shields.io/badge/MCP-ready-A193C4?style=flat-square&labelColor=1A1917" alt="MCP ready"></a>
+  <img src="https://img.shields.io/badge/self--hosted-one_container-D98A5F?style=flat-square&labelColor=1A1917" alt="Self-hosted in one container">
+</p>
 
-> **Status: phase 3d (project databases).** Accounts, invites, theming, the
-> canvas with spawned, related and blocking links, tasks with per-project and
-> global boards, a notes vault of markdown files you can open in Obsidian, an
-> MCP server so an AI assistant can read and update your projects, sharing
-> between people on the same server, and now a database of your own tables in
-> each project.
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#ai-assistants-mcp">AI assistants</a> ·
+  <a href="docs/guide.md">User guide</a> ·
+  <a href="docs/development.md">Development</a>
+</p>
 
-### Boards
+---
 
-- **Project board** (`/projects/:id/board`): drag cards between and within
-  columns. Every column counts as *to do*, *in progress*, *blocked* or *done*,
-  which is what the stats, the canvas cards and the global board read.
-- **Task drawer**: click a card to edit its title, column, due date,
-  priority, labels, notes and checklist, and to see its history. The open
-  task is in the URL (`?task=`), so it can be linked.
-- **Global board** (`/board`): four fixed columns. Each project's columns fold
-  into them by category, and dropping a card moves it to that project's first
-  column of the category (adding one if the project has none). Filter by one
-  project or by a project and everything spawned from it.
+**too many projects** is a home for people who start more things than they
+finish. Every project sits as a card on one infinite canvas. When a project
+grows another one (a car restoration that turns into a video series that turns
+into a set of Blender animations), the new card is joined to its parent with an
+arrow, so you can see how everything you're doing fits together.
 
-### Notes
+Click into any card for a proper dashboard: tasks, a kanban board, notes,
+and tables of your own. It runs on your server as a single Docker container,
+keeps your notes as plain markdown files, and lets an AI assistant read and
+update your projects through MCP.
 
-- **Your vault is plain files.** Each person's notes are markdown files under
-  `/data/vaults/<account id>/`, with YAML front matter for `id`, `tags`,
-  `projects`, `created` and `updated`. The database only indexes them, so you
-  can point Obsidian (or any editor, or a sync tool) at that folder. The app
-  rescans every 15 seconds and on **Settings → Notes → Rescan vault**.
-- **Folders:** `Inbox/` for quick notes, `Knowledge/` for everything general,
-  and `Projects/<project title>/` for notes filed under a project. Any other
-  folders you make are kept.
-- **Links:** `[[Note title]]`, `[[Note title|shown text]]`, `[[Note#heading]]`,
-  and `[[@Project title]]` for a project. Renaming a note or a project rewrites
-  the links to it. A link to a note that doesn't exist yet creates it when
-  clicked.
-- **Notes screen** (`/notes`): folders and tags on the left, search with
-  Ctrl K, a note opens rendered with an **Edit** toggle (Ctrl E) and autosave.
-  Typing `[[` suggests notes, `[[@` suggests projects. Each project has a
-  **Notes** tab listing its notes and the notes that mention it.
-- **Quick note:** Alt N anywhere (or **+ New** on the Notes screen on a
-  phone) drops a note into the Inbox, or straight under a project.
-- **Import and export** (**Settings → Notes**): import a zipped Obsidian vault
-  or a Notion *Markdown & CSV* export (page ids are stripped and links turned
-  into wiki links; Notion databases are skipped here: import their CSV from a
-  project's **Data** tab instead).
-  Nothing is overwritten: a clashing name gets a number. Export downloads the
-  whole vault as a zip.
+## Features
 
-### Sharing
+### 🗺️ One canvas for everything
 
-Everyone on a server has their own canvas, projects and vault. Share with
-someone who already has an account here, or invite them.
+Projects are cards showing live progress, late tasks and last activity.
+Spawned projects hang off their parents, and *related* and *blocks* links show
+what depends on what. Drag, zoom, and lay it out however your head works.
 
-- **One project:** open it and use **Share**. Pick a person and *Can edit* or
-  *View only*, and whether projects spawned from it come too (on by default).
-  The dialog lists everyone who can see the project and why: owner, shared
-  this project, shared everything, or through a parent project.
-- **Everything:** **Settings → Sharing** shares every project you have, now and
-  later, with *Can edit* or *View only*. Tick the box to include your knowledge
-  notes as well, not only project notes. The same panel lists what you share
-  and what's shared with you, where you can change a role, stop sharing, or
-  leave.
-- **Viewers** see the board, tasks and notes but can't change them. **Editors**
-  can do everything except delete the project or change who has it. A project
-  an editor spawns from a shared project belongs to its owner, and the editor
-  keeps access to it.
-- **Canvas:** shared projects sit on your canvas with the owner's initials
-  (dashed for view only), and you lay them out yourself. A link to a project
-  you can't see shows a *Private project* card, so the arrow still makes sense.
-- **Notes follow projects:** a note filed under a shared project is shared with
-  it, under **Notes → Shared with me**. Editors edit it in place in the owner's
-  vault; only the owner can delete it.
-- **Assignees:** a task can be assigned to anyone who can see its project, and
-  **My tasks** on the global board shows yours.
-- **Invites:** the server's owner can make an invite that also shares
-  everything, or (from a project's Share dialog) one project.
-- **AI access:** a token sees what its person sees, shared projects included.
+<p align="center">
+  <img src="docs/images/canvas.png" alt="The canvas: project cards joined by spawned, related and blocking links" width="100%">
+</p>
 
-### Project databases
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>📊 A dashboard for every project</h3>
+      Open a card for its overview: what's done, what's late, what shipped
+      each week, where tasks sit, what's up next and who changed what.
+    </td>
+    <td width="50%" valign="top">
+      <h3>📋 Boards, per project and global</h3>
+      Each project gets its own kanban columns. The global board folds every
+      project into <em>to do</em>, <em>in progress</em>, <em>blocked</em> and
+      <em>done</em>, filterable by project or a whole family of them.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <img src="docs/images/overview.png" alt="A project's overview dashboard">
+    </td>
+    <td valign="top">
+      <img src="docs/images/board.png" alt="A project's kanban board">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>📝 A notes vault you own</h3>
+      Notes are markdown files on disk, so Obsidian can open the same folder.
+      Wiki links, backlinks, tags, quick capture, and import from Obsidian or
+      Notion.
+    </td>
+    <td width="50%" valign="top">
+      <h3>🗃️ Databases inside projects</h3>
+      Build a parts list, an episode tracker or a budget with typed columns,
+      then view it as a table, board or calendar. Embed live views in notes and
+      link rows to tasks.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <img src="docs/images/notes.png" alt="A note with a live database view embedded">
+    </td>
+    <td valign="top">
+      <img src="docs/images/database.png" alt="A project database in table view">
+    </td>
+  </tr>
+</table>
 
-Each project has a **Data** tab with tables you define, like a parts list,
-an episode tracker or a budget.
+And the rest:
 
-- **Columns:** text, number, currency, select, multi-select, date, checkbox,
-  URL, person, and relation (to tasks, notes, projects or rows of another
-  database). The first column is the row's name. Changing a column's type
-  converts what it can, and text turned into a select keeps its values as
-  choices.
-- **Views:** a table (edit cells in place, totals under number and currency
-  columns), a board with a lane per choice of a select column, or a calendar by
-  a date column. Each view keeps its own filters, sorts and hidden columns.
-  Click **↗** on a row for the whole row as a form.
-- **Pin to overview:** a pinned view shows live on the project's overview.
-- **In notes:** `![[Parts list#To order]]` on its own line embeds that view,
-  live and editable; type `/database` in the editor to pick one.
-- **In tasks:** rows that link to a task show in its drawer with their total,
-  where you can link another row or add one.
-- **CSV:** **+ Database → Import CSV** takes a Notion database export (or any
-  CSV) and guesses the column types. **Export** downloads a zip with the CSV and
-  one markdown file per row.
-- **Limits:** 50 databases a project, 60 columns, 20 views and 10,000 rows a
-  database.
+- **🤝 Sharing.** Invite-only accounts. Share one project (and what it
+  spawns) or everything, as *Can edit* or *View only*, and assign tasks to
+  each other.
+- **🤖 AI assistants.** A built-in [MCP](https://modelcontextprotocol.io)
+  server gives Claude and other assistants a briefing on any project, and can
+  create tasks, notes and rows with a read-write token.
+- **📱 Works on your phone.** Every screen has a phone layout with bottom tabs
+  and full-screen drawers.
+- **🎨 Themeable.** Every colour, font and shadow comes from one theme file.
+  The default *Workshop* theme has dark and light *Paper* modes.
+- **📦 Easy to run and back up.** One container, SQLite, no external services.
+  Everything lives in one `/data` folder.
 
-### AI access (MCP)
+<p align="center">
+  <img src="docs/images/phone-overview.png" alt="A project's overview on a phone" width="30%">
+  &nbsp;
+  <img src="docs/images/phone-board.png" alt="A project board on a phone" width="30%">
+  &nbsp;
+  <img src="docs/images/phone-note.png" alt="A note with an embedded database on a phone" width="30%">
+</p>
 
-The server speaks the [Model Context Protocol](https://modelcontextprotocol.io)
-at `/mcp`, so an assistant such as Claude can read your projects and notes and,
-if you let it, add to them.
-
-- **Tokens:** make one under **Settings → AI access**. It acts as you, and is
-  either *read only* or *read and write*. The secret (`tmp_…`) is shown once;
-  only a hash is kept. Revoke a token there and anything using it stops at
-  once.
-- **Connect Claude Code:**
-
-  ```sh
-  claude mcp add --transport http toomanyprojects https://your-host/mcp \
-    --header "Authorization: Bearer tmp_…"
-  ```
-
-  Other clients that let you set a header take the JSON config shown when you
-  make a token. The token goes in an `Authorization: Bearer` header; OAuth sign
-  in isn't supported yet, so connectors that only do OAuth (such as custom
-  connectors in the Claude web app) can't connect.
-- **Tools:** `list_projects`, `get_project_context` (a full briefing, with the
-  family on request), `search` (projects, tasks and notes), `list_notes`,
-  `get_note`, `query_database` (a saved view or a search as a markdown table, with
-  totals), and with a read-write token `create_task`, `update_task` (move,
-  finish, reopen or edit by `T-12` or id), `add_note`, `append_to_note`,
-  `add_row` (values by column name) and `spawn_project`. Projects and notes
-  can be named by title or id.
-- **Resources and prompts:** each project (`tmp://projects/{id}`) and note
-  (`tmp://notes/{id}`) is a resource, and there are `project_briefing` and
-  `weekly_review` prompts.
-- **History:** anything changed through a token shows as *via AI* in the
-  project's activity and the task's history.
-
-## Run it
+## Quick start
 
 Each release is published as a Docker image at
 `ghcr.io/illusivebagel/toomanyprojects`. On your server, save
@@ -151,134 +123,62 @@ address you'll open the app at, then:
 docker compose up -d
 ```
 
-To upgrade, `docker compose pull && docker compose up -d`. To build the image
-from source instead, run `docker build -t ghcr.io/illusivebagel/toomanyprojects .`
-in a clone of this repo.
-
 Open <http://localhost:8080>. The first person to open a new install creates
 the **owner** account. After that, people join only through invite links the
 owner makes under **Settings → Invites**.
 
-Everything the app stores lives in the `/data` volume: the SQLite database
-(`toomanyprojects.db`), the theme files (`themes/`) and everyone's notes
-(`vaults/`). Back up that folder and
-you have backed up everything.
+To upgrade, `docker compose pull && docker compose up -d`. To build the image
+from source instead, run `docker build -t ghcr.io/illusivebagel/toomanyprojects .`
+in a clone of this repo.
 
-### Settings
+> [!TIP]
+> Everything the app stores lives in the `/data` volume: the SQLite database,
+> the theme files and everyone's notes. Back up that one folder and you have
+> backed up everything.
+
+### Configuration
 
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `TMP_PUBLIC_URL` | unset | The address people reach the app at, such as `https://projects.example.com`. Used for invite links. When it starts with `https://`, session cookies are marked secure. |
 | `TMP_COOKIE_SECURE` | from `TMP_PUBLIC_URL` | Force secure cookies on (`true`) or off (`false`). |
 | `TMP_SESSION_DAYS` | `30` | How long a sign-in lasts. |
-| `TMP_DATA_DIR` | `/data` in Docker | Where the database and themes live. |
+| `TMP_DATA_DIR` | `/data` in Docker | Where the database, themes and notes live. |
 | `TMP_BIND` | `0.0.0.0:8080` | Address and port to listen on. |
 | `RUST_LOG` | `toomanyprojects=info` | Log level. |
 
 Put the app behind your usual reverse proxy for HTTPS.
 
-## Releases
+## AI assistants (MCP)
 
-Push a version tag and GitHub does the rest:
-
-```sh
-git checkout main && git pull
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The **Release** workflow runs the same checks as CI, publishes the image as
-`1.0.0`, `1.0` and `latest`, and creates a GitHub Release with notes made from
-the merged pull requests. A tag with a dash, such as `v1.1.0-rc.1`, becomes a
-pre-release and doesn't move `latest`. The image is built for x86-64 (`amd64`)
-servers.
-
-The first time, GitHub makes the package private. Either make it public
-(the package page → **Package settings** → **Change visibility**), or sign in
-on the server with `docker login ghcr.io` using a personal access token with
-the `read:packages` scope.
-
-## Develop
-
-You need Rust (stable) and Node 22.
+The server speaks the Model Context Protocol at `/mcp`. Make a token under
+**Settings → AI access** (read only, or read and write), then connect Claude
+Code:
 
 ```sh
-# Terminal 1: API on :8080, data in server/data
-cd server && cargo run
-
-# Terminal 2: web app on :5173 with hot reload, proxying /api to :8080
-cd web && npm install && npm run dev
+claude mcp add --transport http toomanyprojects https://your-host/mcp \
+  --header "Authorization: Bearer tmp_…"
 ```
 
-Checks, as CI runs them:
+Your assistant can then list and search projects, pull a full briefing on one,
+read notes, query databases and, with a read-write token, add tasks, notes and
+rows or spawn new projects. Anything it changes is marked *via AI* in the
+project's activity. The [user guide](docs/guide.md#ai-access-mcp) has the full
+list of tools, resources and prompts.
 
-```sh
-cd server && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
-cd web && npm test && npm run build
-```
+## Documentation
 
-### API client
+- **[User guide](docs/guide.md):** boards, notes, sharing, databases, AI access
+  and theming, in detail.
+- **[Development](docs/development.md):** running it locally, the checks CI
+  runs, the code layout, and how releases are made.
 
-The server describes its API with OpenAPI (utoipa). The web app's types are
-generated from it, so the two cannot drift. After changing an endpoint:
+## Built with
 
-```sh
-cd web && npm run api:generate
-```
-
-CI fails if `web/src/api/openapi.json` or `schema.d.ts` is out of date. The
-live description is also served at `/api/openapi.json`.
-
-## Layout
-
-```
-server/            Rust: Axum, SQLx, SQLite
-  migrations/      SQL migrations, run automatically on start-up
-  src/auth.rs      setup, login, sessions, preferences
-  src/invites.rs   invite links
-  src/sharing.rs   shares and who can see a project (the project_access view)
-  src/themes.rs    theme files
-  src/projects.rs  projects; links.rs and canvas.rs for the canvas
-  src/board.rs     columns and labels
-  src/tasks.rs     tasks, checklists, the global board
-  src/dashboard.rs a project's overview in one call
-  src/notes/       the notes vault: files and index (vault.rs), markdown and
-                   wiki links (markdown.rs), zip import and export (transfer.rs)
-  src/databases/   project databases: routes (mod.rs), value rules and filters
-                   (values.rs), CSV parsing (csv.rs), import and export
-                   (transfer.rs)
-  src/tokens.rs    API tokens for AI assistants
-  src/mcp/         the MCP server: tools, resources, prompts (mod.rs) and the
-                   markdown briefings they return (brief.rs)
-  tests/           API tests against a real SQLite file
-web/               React 19, TypeScript, Vite, Tailwind v4
-  src/api/         generated OpenAPI types and the typed client
-  src/theme/       theme engine: resolves tokens into CSS variables
-  src/canvas/      the canvas, cards and links (React Flow)
-  src/tasks/       boards (dnd-kit), task cards and the task drawer
-  src/notes/       note editor (CodeMirror 6), rendering, quick note
-  src/data/        database views (table, board, calendar), cells, embeds
-  src/sharing/     Share dialog, sharing queries and labels
-  src/pages/       one file per route
-themes/            bundled themes and their JSON schema
-```
-
-## Theming
-
-Every colour, font, radius and shadow comes from a theme file. The default,
-**Workshop** (`themes/workshop.json`), has a dark mode and a light **Paper**
-mode. Tokens come in three layers:
-
-- **Primitives**, raw values like `graphite-900: #121110`. Only the theme file refers to them, as `{graphite-900}`.
-- **Semantic** tokens components use: `surface`, `surface-card`, `line`, `text`, `text-quiet`, `accent`, `late` and so on, plus project colour **slots 1 to 8**.
-- **Component** tokens for signature details: card shadows, the canvas grid.
-
-The web app turns the active theme into `--tmp-*` CSS variables, and Tailwind's
-`@theme` maps utilities onto them (`bg-surface-card`, `text-accent`,
-`shadow-card`). Tailwind's own palette is switched off, so components cannot
-use a raw colour. Projects store a slot (`slot-3`), never a hex code, so a new
-theme recolours everything at once.
-
-To add a theme, copy `workshop.json` into `/data/themes/` under a new `id` and
-restart. It then appears under **Settings → Appearance**. Fonts are bundled
-with the app; nothing loads from the internet.
+[Rust](https://www.rust-lang.org) and [Axum](https://github.com/tokio-rs/axum)
+with [SQLx](https://github.com/launchbadge/sqlx) on SQLite for the server;
+[React 19](https://react.dev), TypeScript, [Vite](https://vite.dev),
+[Tailwind v4](https://tailwindcss.com), [React Flow](https://reactflow.dev),
+[dnd-kit](https://dndkit.com) and [CodeMirror 6](https://codemirror.net) for
+the web app. The API is described with OpenAPI and the web client's types are
+generated from it.
