@@ -348,6 +348,666 @@
         }
       }
     },
+    "/databases": {
+      "get": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Every database you can see, in any project, with its views. For embeds\nand pickers.",
+        "operationId": "list_all_databases",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseRef"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}": {
+      "get": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "A database with its columns and views.",
+        "operationId": "get_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Delete a database and every row in it.",
+        "operationId": "delete_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Rename or move a database.",
+        "operationId": "update_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/columns": {
+      "post": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Add a column at the right.",
+        "operationId": "create_column",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateColumnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Column"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/export": {
+      "get": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "A database as a zip: `<name>.csv` and `<name>/<row>.md` with the row's\nvalues in front matter.",
+        "operationId": "export_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/rows": {
+      "get": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "A database's rows. With `view`, its filters and sorts apply.",
+        "operationId": "list_rows",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "description": "Apply this view's filters and sorts.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Only rows with this text in any cell.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Row"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Add a row.",
+        "operationId": "create_row",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Row"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/views": {
+      "post": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Save a new view.",
+        "operationId": "create_view",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateViewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/db-columns/{id}": {
+      "delete": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Remove a column and its values. The name column can't be removed.",
+        "operationId": "delete_column",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Rename, retype, change the choices of, or move a column. Changing the\ntype converts the values that fit and clears the rest.",
+        "operationId": "update_column",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateColumnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Column"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/db-rows/{id}": {
+      "delete": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Delete a row.",
+        "operationId": "delete_row",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Change some cells, replace some relations, or move a row.",
+        "operationId": "update_row",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Row"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/db-views/{id}": {
+      "delete": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Remove a view. A database keeps at least one.",
+        "operationId": "delete_view",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "409": {
+            "description": "Last view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Change a view's name, type, filters, sorts, columns, pin or place.",
+        "operationId": "update_view",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateViewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -1540,6 +2200,172 @@
         }
       }
     },
+    "/projects/{id}/databases": {
+      "get": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "A project's databases, in order, each with its views.",
+        "operationId": "list_databases",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseDetail"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Make a database with a Name column and an All view.",
+        "operationId": "create_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDatabaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name taken in this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/databases/import": {
+      "post": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Make a database from a CSV file, such as a Notion database export. The\nfirst column becomes the name; the others get a type guessed from their\nvalues.",
+        "operationId": "import_database",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "The new database's name. Defaults to \"Imported\".",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}/labels": {
       "get": {
         "tags": [
@@ -2417,6 +3243,50 @@
         }
       }
     },
+    "/tasks/{id}/rows": {
+      "get": {
+        "tags": [
+          "databases"
+        ],
+        "summary": "Rows that link to a task, grouped by database. Databases in the task's\nproject with a relation column to tasks come back even with no rows yet,\nso you can add one.",
+        "operationId": "task_rows",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedRows"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/themes": {
       "get": {
         "tags": [
@@ -2867,6 +3737,67 @@
           }
         }
       },
+      "Choice": {
+        "type": "object",
+        "description": "One option of a select or multi-select column.",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A theme slot, `slot-1` to `slot-8`."
+          },
+          "id": {
+            "type": "string",
+            "description": "Left empty when adding a choice; the server gives it one."
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "Column": {
+        "type": "object",
+        "required": [
+          "id",
+          "database_id",
+          "name",
+          "kind",
+          "options",
+          "is_title",
+          "position"
+        ],
+        "properties": {
+          "database_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_title": {
+            "type": "boolean",
+            "description": "The row's name. Every database has exactly one, and it stays text."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`text`, `number`, `currency`, `select`, `multi_select`, `date`,\n`checkbox`, `url`, `person` or `relation`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "$ref": "#/components/schemas/ColumnOptions"
+          },
+          "position": {
+            "type": "string"
+          }
+        }
+      },
       "ColumnCount": {
         "type": "object",
         "required": [
@@ -2894,6 +3825,71 @@
             "type": "string"
           },
           "status_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ColumnOptions": {
+        "type": "object",
+        "required": [
+          "choices"
+        ],
+        "properties": {
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Choice"
+            },
+            "description": "Select and multi-select: the choices, in order."
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Currency: an ISO code such as `GBP`."
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Relation: `task`, `note`, `project` or `row`."
+          },
+          "target_database_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Relation to rows: the database they're in."
+          }
+        }
+      },
+      "CreateColumnRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "$ref": "#/components/schemas/ColumnOptions"
+          }
+        }
+      },
+      "CreateDatabaseRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
             "type": "string"
           }
         }
@@ -3068,6 +4064,39 @@
           }
         }
       },
+      "CreateRowRequest": {
+        "type": "object",
+        "properties": {
+          "after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Put it after this row; at the end when left out."
+          },
+          "relations": {
+            "type": "object",
+            "description": "Relation column id to its links.",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RelationTarget"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "values": {
+            "type": "object",
+            "description": "Column id to value.",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "CreateShareRequest": {
         "type": "object",
         "required": [
@@ -3192,6 +4221,24 @@
           }
         }
       },
+      "CreateViewRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ViewConfig"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "CreatedInvite": {
         "type": "object",
         "required": [
@@ -3270,6 +4317,112 @@
           }
         }
       },
+      "Database": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "position",
+          "row_count",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "row_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "DatabaseDetail": {
+        "type": "object",
+        "description": "A database with its columns and views.",
+        "required": [
+          "database",
+          "project_title",
+          "columns",
+          "views",
+          "can_edit"
+        ],
+        "properties": {
+          "can_edit": {
+            "type": "boolean",
+            "description": "False when the project is shared with you to view."
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Column"
+            }
+          },
+          "database": {
+            "$ref": "#/components/schemas/Database"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/View"
+            }
+          }
+        }
+      },
+      "DatabaseRef": {
+        "type": "object",
+        "description": "A database somewhere you can see, for pickers and embeds.",
+        "required": [
+          "id",
+          "name",
+          "project_id",
+          "project_title",
+          "project_color",
+          "views"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "project_color": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/View"
+            }
+          }
+        }
+      },
       "ErrorBody": {
         "type": "object",
         "description": "Body of every error response.",
@@ -3286,6 +4439,23 @@
             "type": "string",
             "description": "A sentence fit to show a person."
           }
+        }
+      },
+      "Filter": {
+        "type": "object",
+        "required": [
+          "column_id",
+          "op"
+        ],
+        "properties": {
+          "column_id": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "description": "`is`, `is_not`, `contains`, `empty`, `not_empty`, `gt` or `lt`."
+          },
+          "value": {}
         }
       },
       "Health": {
@@ -3511,6 +4681,37 @@
           },
           "target_id": {
             "type": "string"
+          }
+        }
+      },
+      "LinkedRows": {
+        "type": "object",
+        "description": "Rows of one database that link to a task.",
+        "required": [
+          "database",
+          "columns",
+          "rows",
+          "column_id"
+        ],
+        "properties": {
+          "column_id": {
+            "type": "string",
+            "description": "The relation column that points at the task."
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Column"
+            }
+          },
+          "database": {
+            "$ref": "#/components/schemas/DatabaseRef"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Row"
+            }
           }
         }
       },
@@ -4050,6 +5251,107 @@
           }
         }
       },
+      "RelationRef": {
+        "type": "object",
+        "description": "A relation cell's link, with what's needed to show and open it.",
+        "required": [
+          "kind",
+          "id",
+          "title"
+        ],
+        "properties": {
+          "database_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Rows: their database."
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Tasks and rows: the project they're in."
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "RelationTarget": {
+        "type": "object",
+        "description": "Where a relation cell points.",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`task`, `note`, `project` or `row`."
+          }
+        }
+      },
+      "Row": {
+        "type": "object",
+        "required": [
+          "id",
+          "database_id",
+          "values",
+          "relations",
+          "position",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "database_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "relations": {
+            "type": "object",
+            "description": "Relation column id to its links, in order.",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RelationRef"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object",
+            "description": "Column id to value. See the column kinds for each value's shape.",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "SaveNodesRequest": {
         "type": "object",
         "required": [
@@ -4162,6 +5464,20 @@
           "role": {
             "type": "string",
             "description": "`viewer` or `editor`."
+          }
+        }
+      },
+      "Sort": {
+        "type": "object",
+        "required": [
+          "column_id"
+        ],
+        "properties": {
+          "column_id": {
+            "type": "string"
+          },
+          "desc": {
+            "type": "boolean"
           }
         }
       },
@@ -4399,6 +5715,58 @@
           }
         }
       },
+      "UpdateColumnRequest": {
+        "type": "object",
+        "properties": {
+          "after_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Change the type. Values are converted where they can be, else cleared."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "options": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ColumnOptions"
+              }
+            ]
+          }
+        }
+      },
+      "UpdateDatabaseRequest": {
+        "type": "object",
+        "properties": {
+          "after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Put it after this database, or first when `null`."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "UpdateLinkRequest": {
         "type": "object",
         "properties": {
@@ -4517,6 +5885,44 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "UpdateRowRequest": {
+        "type": "object",
+        "properties": {
+          "after_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relations": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Replaces the links of each relation column named.",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RelationTarget"
+              }
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "values": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Only the columns named change; `null` clears a cell.",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
           }
         }
       },
@@ -4641,6 +6047,45 @@
           }
         }
       },
+      "UpdateViewRequest": {
+        "type": "object",
+        "properties": {
+          "after_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ViewConfig"
+              }
+            ]
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
       "User": {
         "type": "object",
         "required": [
@@ -4681,6 +6126,88 @@
           "theme_mode": {
             "type": "string",
             "description": "`system`, `dark` or `light`."
+          }
+        }
+      },
+      "View": {
+        "type": "object",
+        "required": [
+          "id",
+          "database_id",
+          "name",
+          "kind",
+          "config",
+          "pinned",
+          "position"
+        ],
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ViewConfig"
+          },
+          "database_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`table`, `board` or `calendar`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Shown on the project's overview."
+          },
+          "position": {
+            "type": "string"
+          }
+        }
+      },
+      "ViewConfig": {
+        "type": "object",
+        "required": [
+          "filters",
+          "sorts",
+          "hidden"
+        ],
+        "properties": {
+          "date_column": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Calendar: the date column rows sit on."
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Filter"
+            },
+            "description": "Every filter must pass."
+          },
+          "group_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Board: the select column that makes the lanes."
+          },
+          "hidden": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Columns the view leaves out."
+          },
+          "sorts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Sort"
+            },
+            "description": "First sort first. With none, rows keep their own order."
           }
         }
       },
@@ -4739,6 +6266,10 @@
     {
       "name": "notes",
       "description": "Markdown notes in your vault, search, backlinks, import and export"
+    },
+    {
+      "name": "databases",
+      "description": "Project databases: columns, rows, views, import and export"
     },
     {
       "name": "tokens",

@@ -359,3 +359,75 @@ async fn a_token_sees_only_its_owner() {
     let theirs = app.call("GET", "/api/v1/tokens", Some(&owner), None).await;
     assert_eq!(theirs.body, json!([]));
 }
+
+#[tokio::test]
+async fn reads_and_adds_database_rows() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let car =
+        app.call("POST", "/api/v1/projects", Some(&me), Some(json!({"title": "Beetle"}))).await.body["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+    app.call(
+        "POST",
+        &format!("/api/v1/projects/{car}/tasks"),
+        Some(&me),
+        Some(json!({"title": "Fit brake lines"})),
+    )
+    .await;
+    let csv = "Part,Cost,Status\r\nKit,42,To order\r\nCalipers,118.5,Ordered\r\nFluid,9.99,To order\r\nPads,30,Ordered\r\n";
+    let (status, body) = app
+        .call_raw(
+            "POST",
+            &format!("/api/v1/projects/{car}/databases/import?name=Parts"),
+            &me,
+            "text/csv",
+            csv.into(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let db: Value = serde_json::from_slice(&body).unwrap();
+    let db_id = db["database"]["id"].as_str().unwrap().to_string();
+    app.call(
+        "POST",
+        &format!("/api/v1/databases/{db_id}/columns"),
+        Some(&me),
+        Some(json!({"name": "For task", "kind": "relation", "options": {"target": "task"}})),
+    )
+    .await;
+
+    let read = make_token(&app, &me, "read").await;
+    initialize(&app, &read).await;
+    let (err, out) = tool(&app, &read, "query_database", json!({"database": "parts"})).await;
+    assert!(!err, "{out}");
+    assert!(out.contains("| Part | Cost | Status | For task |"), "{out}");
+    assert!(out.contains("| Calipers | 118.5 | Ordered |  |"), "{out}");
+    assert!(out.contains("Totals across all 4 rows: Cost 200.49"), "{out}");
+    let (err, out) =
+        tool(&app, &read, "add_row", json!({"database": "Parts", "values": {"Part": "Hoses"}})).await;
+    assert!(err && out.contains("read-only"), "{out}");
+    let (_, brief) = tool(&app, &read, "get_project_context", json!({"project": "Beetle"})).await;
+    assert!(brief.contains("- Parts: 4 rows"), "{brief}");
+
+    let write = make_token(&app, &me, "write").await;
+    let (err, out) = tool(
+        &app,
+        &write,
+        "add_row",
+        json!({"database": "Parts", "values": {"Part": "Hoses", "cost": "12.5", "Status": "nope"}}),
+    )
+    .await;
+    assert!(err && out.contains("Status is one of: To order, Ordered"), "{out}");
+    let (err, out) = tool(
+        &app,
+        &write,
+        "add_row",
+        json!({"database": "Parts", "values": {"Part": "Hoses", "cost": "12.5", "Status": "to order", "For task": "T-1"}}),
+    )
+    .await;
+    assert!(!err, "{out}");
+    assert_eq!(out, "Added “Hoses” to Parts in Beetle.");
+    let (_, out) = tool(&app, &read, "query_database", json!({"database": "Parts", "search": "hoses"})).await;
+    assert!(out.contains("| Hoses | 12.5 | To order | T-1 Fit brake lines |"), "{out}");
+}

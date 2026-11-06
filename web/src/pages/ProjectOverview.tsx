@@ -1,6 +1,9 @@
 import type { Dashboard } from "../api/client";
 import { dueLabel, lastActive } from "../canvas/format";
+import { Link } from "react-router";
 import { ErrorNote, ViaBadge } from "../components/ui";
+import { DatabaseView } from "../data/DatabaseView";
+import { useProjectDatabases } from "../data/queries";
 import { activityText, CATEGORY_COLOR, PRIORITY_LABEL, taskRef } from "../tasks/format";
 import { useDashboard } from "../tasks/queries";
 import { useOpenTask } from "../tasks/TaskDrawer";
@@ -72,9 +75,35 @@ export function ProjectOverview() {
               <ActivityList items={dash.data.activity} onOpen={openTask} />
             </Card>
           </div>
+          <PinnedViews projectId={detail.project.id} />
         </>
       )}
     </div>
+  );
+}
+
+/** Database views pinned to the overview, each a compact live table. */
+function PinnedViews({ projectId }: { projectId: string }) {
+  const dbs = useProjectDatabases(projectId).data ?? [];
+  const pinned = dbs.flatMap((d) => d.views.filter((v) => v.pinned).map((v) => ({ detail: d, view: v })));
+  if (pinned.length === 0) return null;
+  return (
+    <>
+      {pinned.map(({ detail, view }) => (
+        <section key={view.id} className="border-rule bg-surface-card shadow-card overflow-hidden rounded-lg">
+          <header className="border-rule flex items-center gap-2 border-x-0 border-t-0 px-4 py-3">
+            <h2 className="label-mono text-text-quiet">{detail.database.name} · {view.name}</h2>
+            <Link
+              to={`/projects/${projectId}/data/${detail.database.id}?view=${view.id}`}
+              className="label-mono text-text-quiet hover:text-text ml-auto text-[11px]"
+            >
+              Open ↗
+            </Link>
+          </header>
+          <DatabaseView detail={detail} view={view} compact limit={10} />
+        </section>
+      ))}
+    </>
   );
 }
 

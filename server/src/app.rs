@@ -22,7 +22,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{
     auth, board, canvas,
     config::Config,
-    dashboard,
+    dashboard, databases,
     error::AppError,
     invites, links, mcp, notes,
     openapi::ApiDoc,
@@ -63,6 +63,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(board::router())
         .merge(tasks::router())
         .merge(dashboard::router())
+        .merge(databases::router())
         .merge(notes::router())
         .merge(sharing::router())
         .merge(tokens::router())

@@ -144,6 +144,174 @@ export interface paths {
         patch: operations["update_checklist_item"];
         trace?: never;
     };
+    "/databases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every database you can see, in any project, with its views. For embeds
+         *     and pickers.
+         */
+        get: operations["list_all_databases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/databases/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A database with its columns and views. */
+        get: operations["get_database"];
+        put?: never;
+        post?: never;
+        /** Delete a database and every row in it. */
+        delete: operations["delete_database"];
+        options?: never;
+        head?: never;
+        /** Rename or move a database. */
+        patch: operations["update_database"];
+        trace?: never;
+    };
+    "/databases/{id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a column at the right. */
+        post: operations["create_column"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/databases/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A database as a zip: `<name>.csv` and `<name>/<row>.md` with the row's
+         *     values in front matter.
+         */
+        get: operations["export_database"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/databases/{id}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A database's rows. With `view`, its filters and sorts apply. */
+        get: operations["list_rows"];
+        put?: never;
+        /** Add a row. */
+        post: operations["create_row"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/databases/{id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save a new view. */
+        post: operations["create_view"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/db-columns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a column and its values. The name column can't be removed. */
+        delete: operations["delete_column"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, retype, change the choices of, or move a column. Changing the
+         *     type converts the values that fit and clears the rest.
+         */
+        patch: operations["update_column"];
+        trace?: never;
+    };
+    "/db-rows/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a row. */
+        delete: operations["delete_row"];
+        options?: never;
+        head?: never;
+        /** Change some cells, replace some relations, or move a row. */
+        patch: operations["update_row"];
+        trace?: never;
+    };
+    "/db-views/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a view. A database keeps at least one. */
+        delete: operations["delete_view"];
+        options?: never;
+        head?: never;
+        /** Change a view's name, type, filters, sorts, columns, pin or place. */
+        patch: operations["update_view"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -497,6 +665,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{id}/databases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's databases, in order, each with its views. */
+        get: operations["list_databases"];
+        put?: never;
+        /** Make a database with a Name column and an All view. */
+        post: operations["create_database"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/databases/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a database from a CSV file, such as a Notion database export. The
+         *     first column becomes the name; the others get a type guessed from their
+         *     values.
+         */
+        post: operations["import_database"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{id}/labels": {
         parameters: {
             query?: never;
@@ -698,6 +905,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{id}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rows that link to a task, grouped by database. Databases in the task's
+         *     project with a relation column to tasks come back even with no rows yet,
+         *     so you can add one.
+         */
+        get: operations["task_rows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/themes": {
         parameters: {
             query?: never;
@@ -846,6 +1074,28 @@ export interface components {
             done?: boolean | null;
             text?: string | null;
         };
+        /** @description One option of a select or multi-select column. */
+        Choice: {
+            /** @description A theme slot, `slot-1` to `slot-8`. */
+            color?: string | null;
+            /** @description Left empty when adding a choice; the server gives it one. */
+            id: string;
+            name: string;
+        };
+        Column: {
+            database_id: string;
+            id: string;
+            /** @description The row's name. Every database has exactly one, and it stays text. */
+            is_title: boolean;
+            /**
+             * @description `text`, `number`, `currency`, `select`, `multi_select`, `date`,
+             *     `checkbox`, `url`, `person` or `relation`.
+             */
+            kind: string;
+            name: string;
+            options: components["schemas"]["ColumnOptions"];
+            position: string;
+        };
         ColumnCount: {
             /** @description `todo`, `in_progress`, `blocked` or `done`. */
             category: string;
@@ -854,6 +1104,24 @@ export interface components {
             count: number;
             name: string;
             status_id: string;
+        };
+        ColumnOptions: {
+            /** @description Select and multi-select: the choices, in order. */
+            choices: components["schemas"]["Choice"][];
+            /** @description Currency: an ISO code such as `GBP`. */
+            currency?: string | null;
+            /** @description Relation: `task`, `note`, `project` or `row`. */
+            target?: string | null;
+            /** @description Relation to rows: the database they're in. */
+            target_database_id?: string | null;
+        };
+        CreateColumnRequest: {
+            kind: string;
+            name: string;
+            options?: components["schemas"]["ColumnOptions"];
+        };
+        CreateDatabaseRequest: {
+            name: string;
         };
         CreateInviteRequest: {
             /**
@@ -903,6 +1171,18 @@ export interface components {
             target_date?: string | null;
             title: string;
         };
+        CreateRowRequest: {
+            /** @description Put it after this row; at the end when left out. */
+            after_id?: string | null;
+            /** @description Relation column id to its links. */
+            relations?: {
+                [key: string]: components["schemas"]["RelationTarget"][];
+            };
+            /** @description Column id to value. */
+            values?: {
+                [key: string]: unknown;
+            };
+        };
         CreateShareRequest: {
             grantee_id: string;
             include_children?: boolean;
@@ -936,6 +1216,11 @@ export interface components {
             /** @description `read` (the default) or `write`. */
             scope?: string | null;
         };
+        CreateViewRequest: {
+            config?: components["schemas"]["ViewConfig"];
+            kind: string;
+            name: string;
+        };
         CreatedInvite: {
             invite: components["schemas"]["Invite"];
             /** @description The raw token. It is never shown again. */
@@ -958,12 +1243,46 @@ export interface components {
             /** @description Tasks finished in each of the last eight weeks, oldest first. */
             weekly: components["schemas"]["WeekCount"][];
         };
+        Database: {
+            created_at: string;
+            id: string;
+            name: string;
+            position: string;
+            project_id: string;
+            /** Format: int64 */
+            row_count: number;
+            updated_at: string;
+        };
+        /** @description A database with its columns and views. */
+        DatabaseDetail: {
+            /** @description False when the project is shared with you to view. */
+            can_edit: boolean;
+            columns: components["schemas"]["Column"][];
+            database: components["schemas"]["Database"];
+            project_title: string;
+            views: components["schemas"]["View"][];
+        };
+        /** @description A database somewhere you can see, for pickers and embeds. */
+        DatabaseRef: {
+            id: string;
+            name: string;
+            project_color: string;
+            project_id: string;
+            project_title: string;
+            views: components["schemas"]["View"][];
+        };
         /** @description Body of every error response. */
         ErrorBody: {
             /** @description Stable, machine-readable code such as `invalid_credentials`. */
             code: string;
             /** @description A sentence fit to show a person. */
             message: string;
+        };
+        Filter: {
+            column_id: string;
+            /** @description `is`, `is_not`, `contains`, `empty`, `not_empty`, `gt` or `lt`. */
+            op: string;
+            value?: unknown;
         };
         Health: {
             status: string;
@@ -1023,6 +1342,14 @@ export interface components {
             label?: string | null;
             source_id: string;
             target_id: string;
+        };
+        /** @description Rows of one database that link to a task. */
+        LinkedRows: {
+            /** @description The relation column that points at the task. */
+            column_id: string;
+            columns: components["schemas"]["Column"][];
+            database: components["schemas"]["DatabaseRef"];
+            rows: components["schemas"]["Row"][];
         };
         /**
          * @description A project you can't see that is linked to one you can. The canvas shows it
@@ -1191,6 +1518,37 @@ export interface components {
             /** Format: int64 */
             total_tasks: number;
         };
+        /** @description A relation cell's link, with what's needed to show and open it. */
+        RelationRef: {
+            /** @description Rows: their database. */
+            database_id?: string | null;
+            id: string;
+            kind: string;
+            /** @description Tasks and rows: the project they're in. */
+            project_id?: string | null;
+            title: string;
+        };
+        /** @description Where a relation cell points. */
+        RelationTarget: {
+            id: string;
+            /** @description `task`, `note`, `project` or `row`. */
+            kind: string;
+        };
+        Row: {
+            created_at: string;
+            database_id: string;
+            id: string;
+            position: string;
+            /** @description Relation column id to its links, in order. */
+            relations: {
+                [key: string]: components["schemas"]["RelationRef"][];
+            };
+            updated_at: string;
+            /** @description Column id to value. See the column kinds for each value's shape. */
+            values: {
+                [key: string]: unknown;
+            };
+        };
         SaveNodesRequest: {
             /** @description Up to 500 cards at once, sent after a drag. */
             nodes: components["schemas"]["NodePosition"][];
@@ -1223,6 +1581,10 @@ export interface components {
             project_title?: string | null;
             /** @description `viewer` or `editor`. */
             role: string;
+        };
+        Sort: {
+            column_id: string;
+            desc?: boolean;
         };
         Status: {
             /** @description `todo`, `in_progress`, `blocked` or `done`. */
@@ -1288,6 +1650,18 @@ export interface components {
             modes: components["schemas"]["ThemeModeSummary"][];
             name: string;
         };
+        UpdateColumnRequest: {
+            after_id?: string | null;
+            /** @description Change the type. Values are converted where they can be, else cleared. */
+            kind?: string | null;
+            name?: string | null;
+            options?: null | components["schemas"]["ColumnOptions"];
+        };
+        UpdateDatabaseRequest: {
+            /** @description Put it after this database, or first when `null`. */
+            after_id?: string | null;
+            name?: string | null;
+        };
         UpdateLinkRequest: {
             kind?: string | null;
             /** @description Send `null` to clear. */
@@ -1316,6 +1690,17 @@ export interface components {
             summary?: string | null;
             target_date?: string | null;
             title?: string | null;
+        };
+        UpdateRowRequest: {
+            after_id?: string | null;
+            /** @description Replaces the links of each relation column named. */
+            relations?: {
+                [key: string]: components["schemas"]["RelationTarget"][];
+            } | null;
+            /** @description Only the columns named change; `null` clears a cell. */
+            values?: {
+                [key: string]: unknown;
+            } | null;
         };
         UpdateShareRequest: {
             include_children?: boolean | null;
@@ -1352,6 +1737,13 @@ export interface components {
             status_id?: string | null;
             title?: string | null;
         };
+        UpdateViewRequest: {
+            after_id?: string | null;
+            config?: null | components["schemas"]["ViewConfig"];
+            kind?: string | null;
+            name?: string | null;
+            pinned?: boolean | null;
+        };
         User: {
             avatar?: string | null;
             created_at: string;
@@ -1363,6 +1755,29 @@ export interface components {
             theme_id: string;
             /** @description `system`, `dark` or `light`. */
             theme_mode: string;
+        };
+        View: {
+            config: components["schemas"]["ViewConfig"];
+            database_id: string;
+            id: string;
+            /** @description `table`, `board` or `calendar`. */
+            kind: string;
+            name: string;
+            /** @description Shown on the project's overview. */
+            pinned: boolean;
+            position: string;
+        };
+        ViewConfig: {
+            /** @description Calendar: the date column rows sit on. */
+            date_column?: string | null;
+            /** @description Every filter must pass. */
+            filters: components["schemas"]["Filter"][];
+            /** @description Board: the select column that makes the lanes. */
+            group_by?: string | null;
+            /** @description Columns the view leaves out. */
+            hidden: string[];
+            /** @description First sort first. With none, rows keep their own order. */
+            sorts: components["schemas"]["Sort"][];
         };
         WeekCount: {
             /** Format: int64 */
@@ -1639,6 +2054,457 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistItem"];
+                };
+            };
+        };
+    };
+    list_all_databases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseRef"][];
+                };
+            };
+        };
+    };
+    get_database: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDetail"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_database: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_database: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDatabaseRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDetail"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_column: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateColumnRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Column"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    export_database: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": number[];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_rows: {
+        parameters: {
+            query?: {
+                /** @description Apply this view's filters and sorts. */
+                view?: string | null;
+                /** @description Only rows with this text in any cell. */
+                q?: string | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Row"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_row: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRowRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Row"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateViewRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_column: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_column: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateColumnRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Column"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_row: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_row: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRowRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Row"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Last view */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateViewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };
@@ -2491,6 +3357,113 @@ export interface operations {
             };
         };
     };
+    list_databases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDetail"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_database: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDatabaseRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Name taken in this project */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    import_database: {
+        parameters: {
+            query?: {
+                /** @description The new database's name. Defaults to "Imported". */
+                name?: string | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "text/csv": string;
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDetail"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_labels: {
         parameters: {
             query?: never;
@@ -3079,6 +4052,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistItem"];
+                };
+            };
+        };
+    };
+    task_rows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkedRows"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

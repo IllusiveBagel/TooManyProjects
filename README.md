@@ -4,11 +4,12 @@ A self-hosted canvas for every project you have on the go. Projects live as
 cards on one infinite canvas, projects that grow out of other projects are
 joined by arrows, and each one opens into a dashboard with its tasks and board.
 
-> **Status: phase 3c (sharing).** Accounts, invites, theming, the canvas
-> with spawned, related and blocking links, tasks with per-project and global
-> boards, a notes vault of markdown files you can open in Obsidian, an MCP
-> server so an AI assistant can read and update your projects, and now sharing
-> between people on the same server. Project databases come next.
+> **Status: phase 3d (project databases).** Accounts, invites, theming, the
+> canvas with spawned, related and blocking links, tasks with per-project and
+> global boards, a notes vault of markdown files you can open in Obsidian, an
+> MCP server so an AI assistant can read and update your projects, sharing
+> between people on the same server, and now a database of your own tables in
+> each project.
 
 ### Boards
 
@@ -45,7 +46,8 @@ joined by arrows, and each one opens into a dashboard with its tasks and board.
   phone) drops a note into the Inbox, or straight under a project.
 - **Import and export** (**Settings → Notes**): import a zipped Obsidian vault
   or a Notion *Markdown & CSV* export (page ids are stripped and links turned
-  into wiki links; Notion databases are skipped until project databases land).
+  into wiki links; Notion databases are skipped here: import their CSV from a
+  project's **Data** tab instead).
   Nothing is overwritten: a clashing name gets a number. Export downloads the
   whole vault as a zip.
 
@@ -79,6 +81,31 @@ someone who already has an account here, or invite them.
   everything, or (from a project's Share dialog) one project.
 - **AI access:** a token sees what its person sees, shared projects included.
 
+### Project databases
+
+Each project has a **Data** tab with tables you define, like a parts list,
+an episode tracker or a budget.
+
+- **Columns:** text, number, currency, select, multi-select, date, checkbox,
+  URL, person, and relation (to tasks, notes, projects or rows of another
+  database). The first column is the row's name. Changing a column's type
+  converts what it can, and text turned into a select keeps its values as
+  choices.
+- **Views:** a table (edit cells in place, totals under number and currency
+  columns), a board with a lane per choice of a select column, or a calendar by
+  a date column. Each view keeps its own filters, sorts and hidden columns.
+  Click **↗** on a row for the whole row as a form.
+- **Pin to overview:** a pinned view shows live on the project's overview.
+- **In notes:** `![[Parts list#To order]]` on its own line embeds that view,
+  live and editable; type `/database` in the editor to pick one.
+- **In tasks:** rows that link to a task show in its drawer with their total,
+  where you can link another row or add one.
+- **CSV:** **+ Database → Import CSV** takes a Notion database export (or any
+  CSV) and guesses the column types. **Export** downloads a zip with the CSV and
+  one markdown file per row.
+- **Limits:** 50 databases a project, 60 columns, 20 views and 10,000 rows a
+  database.
+
 ### AI access (MCP)
 
 The server speaks the [Model Context Protocol](https://modelcontextprotocol.io)
@@ -102,9 +129,11 @@ if you let it, add to them.
   connectors in the Claude web app) can't connect.
 - **Tools:** `list_projects`, `get_project_context` (a full briefing, with the
   family on request), `search` (projects, tasks and notes), `list_notes`,
-  `get_note`, and with a read-write token `create_task`, `update_task` (move,
-  finish, reopen or edit by `T-12` or id), `add_note`, `append_to_note` and
-  `spawn_project`. Projects and notes can be named by title or id.
+  `get_note`, `query_database` (a saved view or a search as a markdown table, with
+  totals), and with a read-write token `create_task`, `update_task` (move,
+  finish, reopen or edit by `T-12` or id), `add_note`, `append_to_note`,
+  `add_row` (values by column name) and `spawn_project`. Projects and notes
+  can be named by title or id.
 - **Resources and prompts:** each project (`tmp://projects/{id}`) and note
   (`tmp://notes/{id}`) is a resource, and there are `project_briefing` and
   `weekly_review` prompts.
@@ -185,6 +214,9 @@ server/            Rust: Axum, SQLx, SQLite
   src/dashboard.rs a project's overview in one call
   src/notes/       the notes vault: files and index (vault.rs), markdown and
                    wiki links (markdown.rs), zip import and export (transfer.rs)
+  src/databases/   project databases: routes (mod.rs), value rules and filters
+                   (values.rs), CSV parsing (csv.rs), import and export
+                   (transfer.rs)
   src/tokens.rs    API tokens for AI assistants
   src/mcp/         the MCP server: tools, resources, prompts (mod.rs) and the
                    markdown briefings they return (brief.rs)
@@ -195,6 +227,7 @@ web/               React 19, TypeScript, Vite, Tailwind v4
   src/canvas/      the canvas, cards and links (React Flow)
   src/tasks/       boards (dnd-kit), task cards and the task drawer
   src/notes/       note editor (CodeMirror 6), rendering, quick note
+  src/data/        database views (table, board, calendar), cells, embeds
   src/sharing/     Share dialog, sharing queries and labels
   src/pages/       one file per route
 themes/            bundled themes and their JSON schema
