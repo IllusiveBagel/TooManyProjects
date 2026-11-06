@@ -2,14 +2,18 @@
 
 pub mod app;
 pub mod auth;
+pub mod board;
 pub mod canvas;
 pub mod config;
+pub mod dashboard;
 pub mod db;
 pub mod error;
 pub mod invites;
 pub mod links;
 pub mod openapi;
+pub mod position;
 pub mod projects;
+pub mod tasks;
 pub mod themes;
 pub mod time;
 

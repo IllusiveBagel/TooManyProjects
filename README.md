@@ -4,9 +4,24 @@ A self-hosted canvas for every project you have on the go. Projects live as
 cards on one infinite canvas, projects that grow out of other projects are
 joined by arrows, and each one opens into a dashboard with its tasks and board.
 
-> **Status: phase 0 (foundations).** Accounts, login, invites, the database
-> schema, theming and the Docker image are in place. The canvas, projects and
-> tasks arrive in phases 1 and 2.
+> **Status: phase 2 (tasks and boards).** Accounts, invites, theming, the
+> canvas with spawned, related and blocking links, and now tasks: each project
+> has its own board with columns you can rename, add and reorder, a dashboard
+> with stats and activity, and there is one global board across every
+> project. Notes, sharing and the MCP server come in later phases.
+
+### Boards
+
+- **Project board** (`/projects/:id/board`): drag cards between and within
+  columns. Every column counts as *to do*, *in progress*, *blocked* or *done*,
+  which is what the stats, the canvas cards and the global board read.
+- **Task drawer**: click a card to edit its title, column, due date,
+  priority, labels, notes and checklist, and to see its history. The open
+  task is in the URL (`?task=`), so it can be linked.
+- **Global board** (`/board`): four fixed columns. Each project's columns fold
+  into them by category, and dropping a card moves it to that project's first
+  column of the category (adding one if the project has none). Filter by one
+  project or by a project and everything spawned from it.
 
 ## Run it
 
@@ -74,10 +89,17 @@ server/            Rust: Axum, SQLx, SQLite
   src/auth.rs      setup, login, sessions, preferences
   src/invites.rs   invite links
   src/themes.rs    theme files
+  src/projects.rs  projects; links.rs and canvas.rs for the canvas
+  src/board.rs     columns and labels
+  src/tasks.rs     tasks, checklists, the global board
+  src/dashboard.rs a project's overview in one call
   tests/           API tests against a real SQLite file
 web/               React 19, TypeScript, Vite, Tailwind v4
   src/api/         generated OpenAPI types and the typed client
   src/theme/       theme engine: resolves tokens into CSS variables
+  src/canvas/      the canvas, cards and links (React Flow)
+  src/tasks/       boards (dnd-kit), task cards and the task drawer
+  src/pages/       one file per route
 themes/            bundled themes and their JSON schema
 ```
 

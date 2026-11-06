@@ -20,12 +20,13 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
-    auth, canvas,
+    auth, board, canvas,
     config::Config,
+    dashboard,
     error::AppError,
     invites, links,
     openapi::ApiDoc,
-    projects,
+    projects, tasks,
     themes::{self, ThemeStore},
 };
 
@@ -58,6 +59,9 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(projects::router())
         .merge(links::router())
         .merge(canvas::router())
+        .merge(board::router())
+        .merge(tasks::router())
+        .merge(dashboard::router())
         .split_for_parts();
     // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.
     doc.info.license = None;

@@ -5,6 +5,10 @@ import { AppShell } from "./components/AppShell";
 import { AuthLayout } from "./components/AuthLayout";
 import { Button } from "./components/ui";
 import { CanvasPage } from "./pages/CanvasPage";
+import { GlobalBoardPage } from "./pages/GlobalBoardPage";
+import { ProjectBoardPage } from "./pages/ProjectBoardPage";
+import { ProjectOverview } from "./pages/ProjectOverview";
+import { ProjectPage } from "./pages/ProjectPage";
 import { InvitePage } from "./pages/InvitePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -38,6 +42,15 @@ const router = createBrowserRouter([
     element: <Gate need="user"><AppShell /></Gate>,
     children: [
       { index: true, element: <CanvasPage /> },
+      { path: "board", element: <GlobalBoardPage /> },
+      {
+        path: "projects/:id",
+        element: <ProjectPage />,
+        children: [
+          { index: true, element: <ProjectOverview /> },
+          { path: "board", element: <ProjectBoardPage /> },
+        ],
+      },
       { path: "settings", element: <SettingsPage /> },
     ],
   },

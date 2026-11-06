@@ -142,7 +142,7 @@ pub struct UpdateProjectRequest {
 }
 
 /// Tells "field sent as null" (`Some(None)`) apart from "field left out" (`None`).
-fn some<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
+pub fn some<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
     Option::<T>::deserialize(d).map(Some)
 }
 
@@ -168,7 +168,7 @@ fn clean_title(title: &str) -> AppResult<String> {
     Ok(t.to_string())
 }
 
-fn clean_text(value: Option<String>, max: usize, code: &'static str) -> AppResult<Option<String>> {
+pub fn clean_text(value: Option<String>, max: usize, code: &'static str) -> AppResult<Option<String>> {
     match value.map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
         Some(v) if v.chars().count() > max => Err(bad(code, &format!("Keep it under {max} characters."))),
         other => Ok(other),
@@ -195,7 +195,7 @@ pub fn check_color(color: &str) -> AppResult<()> {
     }
 }
 
-fn check_date(date: &Option<String>) -> AppResult<()> {
+pub fn check_date(date: &Option<String>) -> AppResult<()> {
     match date {
         Some(d) if chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").is_err() => {
             Err(bad("invalid_date", "Dates look like 2026-11-06."))
@@ -241,6 +241,7 @@ pub async fn log_activity(
 /// Board columns every new project starts with.
 async fn create_default_statuses(conn: &mut SqliteConnection, project_id: &str) -> AppResult<()> {
     let now = time::now();
+    let positions = crate::position::spread(3);
     for (i, (name, category)) in
         [("To do", "todo"), ("Doing", "in_progress"), ("Done", "done")].into_iter().enumerate()
     {
@@ -251,7 +252,7 @@ async fn create_default_statuses(conn: &mut SqliteConnection, project_id: &str) 
         .bind(project_id)
         .bind(name)
         .bind(category)
-        .bind(format!("a{i}"))
+        .bind(&positions[i])
         .bind(&now)
         .execute(&mut *conn)
         .await?;
