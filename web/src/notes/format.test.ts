@@ -75,3 +75,12 @@ it("says how long ago", () => {
   expect(ago("2026-11-06T11:55:00Z", now)).toBe("5 min ago");
   expect(ago("2026-11-05T12:00:00Z", now)).toBe("yesterday");
 });
+
+describe("database embeds", () => {
+  it("turns a whole-line embed into a block the renderer shows as a view", () => {
+    expect(wikiToMarkdown("Parts:\n![[Parts list#To order]]\nDone")).toBe("Parts:\n\n```tmp-embed\nParts list#To order\n```\n\nDone");
+    // Files and inline embeds are left alone.
+    expect(wikiToMarkdown("![[photo.jpg]]")).toBe("photo.jpg");
+    expect(wikiToMarkdown("see ![[Parts list]] here")).toBe("see Parts list here");
+  });
+});

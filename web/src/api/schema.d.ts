@@ -1079,7 +1079,7 @@ export interface components {
             /** @description A theme slot, `slot-1` to `slot-8`. */
             color?: string | null;
             /** @description Left empty when adding a choice; the server gives it one. */
-            id?: string;
+            id: string;
             name: string;
         };
         Column: {
@@ -1107,7 +1107,7 @@ export interface components {
         };
         ColumnOptions: {
             /** @description Select and multi-select: the choices, in order. */
-            choices?: components["schemas"]["Choice"][];
+            choices: components["schemas"]["Choice"][];
             /** @description Currency: an ISO code such as `GBP`. */
             currency?: string | null;
             /** @description Relation: `task`, `note`, `project` or `row`. */
@@ -1179,7 +1179,9 @@ export interface components {
                 [key: string]: components["schemas"]["RelationTarget"][];
             };
             /** @description Column id to value. */
-            values?: Record<string, never>;
+            values?: {
+                [key: string]: unknown;
+            };
         };
         CreateShareRequest: {
             grantee_id: string;
@@ -1543,7 +1545,9 @@ export interface components {
             };
             updated_at: string;
             /** @description Column id to value. See the column kinds for each value's shape. */
-            values: Record<string, never>;
+            values: {
+                [key: string]: unknown;
+            };
         };
         SaveNodesRequest: {
             /** @description Up to 500 cards at once, sent after a drag. */
@@ -1694,7 +1698,9 @@ export interface components {
                 [key: string]: components["schemas"]["RelationTarget"][];
             } | null;
             /** @description Only the columns named change; `null` clears a cell. */
-            values?: Record<string, never> | null;
+            values?: {
+                [key: string]: unknown;
+            } | null;
         };
         UpdateShareRequest: {
             include_children?: boolean | null;
@@ -1765,13 +1771,13 @@ export interface components {
             /** @description Calendar: the date column rows sit on. */
             date_column?: string | null;
             /** @description Every filter must pass. */
-            filters?: components["schemas"]["Filter"][];
+            filters: components["schemas"]["Filter"][];
             /** @description Board: the select column that makes the lanes. */
             group_by?: string | null;
             /** @description Columns the view leaves out. */
-            hidden?: string[];
+            hidden: string[];
             /** @description First sort first. With none, rows keep their own order. */
-            sorts?: components["schemas"]["Sort"][];
+            sorts: components["schemas"]["Sort"][];
         };
         WeekCount: {
             /** Format: int64 */

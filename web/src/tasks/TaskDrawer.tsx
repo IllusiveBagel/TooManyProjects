@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router";
 import type { TaskDetail } from "../api/client";
 import { lastActive } from "../canvas/format";
 import { useProjectDetail } from "../canvas/queries";
+import { TaskLinkedRows } from "../data/LinkedRows";
+import { useTaskRows } from "../data/queries";
 import { useMembers } from "../sharing/queries";
 import { Button, ErrorNote, ViaBadge } from "../components/ui";
 import { projectColor } from "../theme/resolve";
@@ -84,6 +86,7 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
   const items = useChecklist(task.id);
   const role = useProjectDetail(task.project_id).data?.project.role;
   const canEdit = role !== "viewer";
+  const linkedRows = useTaskRows(task.id);
   const members = useMembers(task.project_id).data ?? [];
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
@@ -300,6 +303,7 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
             )}
           </section>
         </fieldset>
+        <TaskLinkedRows groups={linkedRows.data ?? []} taskId={task.id} canEdit={canEdit} />
 
         <ErrorNote error={update.error ?? remove.error ?? createLabel.error ?? items.add.error} />
 

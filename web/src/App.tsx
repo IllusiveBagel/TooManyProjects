@@ -7,6 +7,7 @@ import { Button } from "./components/ui";
 import { CanvasPage } from "./pages/CanvasPage";
 import { GlobalBoardPage } from "./pages/GlobalBoardPage";
 import { ProjectBoardPage } from "./pages/ProjectBoardPage";
+import { ProjectDataPage } from "./pages/ProjectDataPage";
 import { ProjectOverview } from "./pages/ProjectOverview";
 import { ProjectPage } from "./pages/ProjectPage";
 import { InvitePage } from "./pages/InvitePage";
@@ -52,6 +53,8 @@ const router = createBrowserRouter([
           { index: true, element: <ProjectOverview /> },
           { path: "board", element: <ProjectBoardPage /> },
           { path: "notes", element: <ProjectNotesPage /> },
+          { path: "data", element: <ProjectDataPage /> },
+          { path: "data/:dbId", element: <ProjectDataPage /> },
         ],
       },
       {

@@ -76,6 +76,7 @@ export function ProjectPage() {
           <NavLink to={`/projects/${id}`} end className={tabClass}>Overview</NavLink>
           <NavLink to={`/projects/${id}/board`} className={tabClass}>Board</NavLink>
           <NavLink to={`/projects/${id}/notes`} className={tabClass}>Notes</NavLink>
+          <NavLink to={`/projects/${id}/data`} className={tabClass}>Data</NavLink>
         </nav>
       </header>
       <div className="relative flex flex-col sm:min-h-0 sm:flex-1">

@@ -11,6 +11,8 @@ import { openWikiQuery } from "./format";
 export interface LinkTargets {
   notes: string[];
   projects: string[];
+  /** Database views to embed, as `Database#View`. */
+  views?: string[];
 }
 
 const theme = EditorView.theme({
@@ -82,6 +84,26 @@ function wikiCompletions(targets: () => LinkTargets) {
   };
 }
 
+/** `/database` (or any start of it) at the start of a line offers views to embed. */
+function slashCompletions(targets: () => LinkTargets) {
+  return (ctx: CompletionContext) => {
+    const line = ctx.state.doc.lineAt(ctx.pos);
+    const before = line.text.slice(0, ctx.pos - line.from);
+    const m = /^(\s*)\/([a-z ]*)$/i.exec(before);
+    if (!m || !"database view".startsWith(m[2]!.toLowerCase())) return null;
+    const views = targets().views ?? [];
+    return {
+      from: line.from + m[1]!.length,
+      options: views.map((v) => ({
+        label: `/database ${v.replace("#", " · ")}`,
+        detail: "embed",
+        apply: `![[${v}]]`,
+      })),
+      filter: false,
+    };
+  };
+}
+
 /**
  * Markdown source editor. It owns its text after mount: `value` is read once
  * (remount with a `key` to load another note) and changes go out through
@@ -118,7 +140,10 @@ export function MarkdownEditor({
           closeBrackets(),
           markdown({ base: markdownLanguage }),
           syntaxHighlighting(highlight),
-          autocompletion({ override: [wikiCompletions(() => targetsRef.current)], icons: false }),
+          autocompletion({
+            override: [wikiCompletions(() => targetsRef.current), slashCompletions(() => targetsRef.current)],
+            icons: false,
+          }),
           keymap.of([...closeBracketsKeymap, ...completionKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           EditorView.lineWrapping,
           cmPlaceholder(placeholder),

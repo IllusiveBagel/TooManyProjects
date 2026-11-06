@@ -18,17 +18,20 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Task } from "../api/client";
 import { cardAbove, findColumn, moveCard } from "./format";
 
-export interface BoardColumn {
+/** Anything with an id can be a card: tasks, or database rows. */
+type Card = { id: string };
+
+export interface BoardColumn<T extends Card = Task> {
   id: string;
   header: ReactNode;
   /** Shown under the cards, such as "+ Add". */
   footer?: ReactNode;
-  tasks: Task[];
+  tasks: T[];
 }
 
-interface BoardProps {
-  columns: BoardColumn[];
-  renderCard: (task: Task, dragging: boolean) => ReactNode;
+interface BoardProps<T extends Card = Task> {
+  columns: BoardColumn<T>[];
+  renderCard: (task: T, dragging: boolean) => ReactNode;
   /** A card was dropped: its column and the card now above it (null at the top). */
   onMove: (taskId: string, columnId: string, afterId: string | null) => void;
   /** False when the order inside a column is fixed (the global board sorts by due date). */
@@ -36,7 +39,7 @@ interface BoardProps {
   /** Shown after the last column, such as "+ Column". */
   trailing?: ReactNode;
   /** False for cards that can't move, such as tasks in a project you can only view. */
-  canDrag?: (task: Task) => boolean;
+  canDrag?: (task: T) => boolean;
 }
 
 /**
@@ -44,7 +47,7 @@ interface BoardProps {
  * order; after a drop it keeps that order until new columns arrive from the
  * cache, so a card never flicks back to where it came from.
  */
-export function Board({ columns, renderCard, onMove, reorderable = true, trailing, canDrag }: BoardProps) {
+export function Board<T extends Card = Task>({ columns, renderCard, onMove, reorderable = true, trailing, canDrag }: BoardProps<T>) {
   // Keyed on the ids alone, so re-rendered headers don't count as new data.
   const signature = columns.map((c) => `${c.id}:${c.tasks.map((t) => t.id).join(",")}`).join("|");
   const fromProps = useMemo(
@@ -136,18 +139,18 @@ export function Board({ columns, renderCard, onMove, reorderable = true, trailin
   );
 }
 
-function Column({
+function Column<T extends Card>({
   column,
   ids,
   byId,
   renderCard,
   canDrag,
 }: {
-  column: BoardColumn;
+  column: BoardColumn<T>;
   ids: string[];
-  byId: Map<string, Task>;
-  renderCard: BoardProps["renderCard"];
-  canDrag: BoardProps["canDrag"];
+  byId: Map<string, T>;
+  renderCard: BoardProps<T>["renderCard"];
+  canDrag: BoardProps<T>["canDrag"];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   return (
@@ -172,7 +175,7 @@ function Column({
   );
 }
 
-function SortableCard({ task, renderCard, disabled }: { task: Task; renderCard: BoardProps["renderCard"]; disabled: boolean }) {
+function SortableCard<T extends Card>({ task, renderCard, disabled }: { task: T; renderCard: BoardProps<T>["renderCard"]; disabled: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled });
   return (
     <li

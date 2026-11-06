@@ -60,6 +60,7 @@ pub fn router() -> OpenApiRouter<AppState> {
 pub struct Choice {
     /// Left empty when adding a choice; the server gives it one.
     #[serde(default)]
+    #[schema(required = true)]
     pub id: String,
     pub name: String,
     /// A theme slot, `slot-1` to `slot-8`.
@@ -71,6 +72,7 @@ pub struct Choice {
 pub struct ColumnOptions {
     /// Select and multi-select: the choices, in order.
     #[serde(default)]
+    #[schema(required = true)]
     pub choices: Vec<Choice>,
     /// Currency: an ISO code such as `GBP`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -145,12 +147,15 @@ pub struct Sort {
 pub struct ViewConfig {
     /// Every filter must pass.
     #[serde(default)]
+    #[schema(required = true)]
     pub filters: Vec<Filter>,
     /// First sort first. With none, rows keep their own order.
     #[serde(default)]
+    #[schema(required = true)]
     pub sorts: Vec<Sort>,
     /// Columns the view leaves out.
     #[serde(default)]
+    #[schema(required = true)]
     pub hidden: Vec<String>,
     /// Board: the select column that makes the lanes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -263,7 +268,7 @@ pub struct Row {
     pub id: String,
     pub database_id: String,
     /// Column id to value. See the column kinds for each value's shape.
-    #[schema(value_type = Object)]
+    #[schema(value_type = HashMap<String, Value>)]
     pub values: Map<String, Value>,
     /// Relation column id to its links, in order.
     pub relations: HashMap<String, Vec<RelationRef>>,
@@ -348,7 +353,7 @@ pub struct UpdateViewRequest {
 pub struct CreateRowRequest {
     /// Column id to value.
     #[serde(default)]
-    #[schema(value_type = Object)]
+    #[schema(value_type = HashMap<String, Value>)]
     pub values: Map<String, Value>,
     /// Relation column id to its links.
     #[serde(default)]
@@ -360,7 +365,7 @@ pub struct CreateRowRequest {
 #[derive(Deserialize, ToSchema)]
 pub struct UpdateRowRequest {
     /// Only the columns named change; `null` clears a cell.
-    #[schema(value_type = Option<Object>)]
+    #[schema(value_type = Option<HashMap<String, Value>>)]
     pub values: Option<Map<String, Value>>,
     /// Replaces the links of each relation column named.
     pub relations: Option<HashMap<String, Vec<RelationTarget>>>,

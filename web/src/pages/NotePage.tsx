@@ -4,6 +4,7 @@ import { useCanvas } from "../canvas/queries";
 import { Button, ErrorNote } from "../components/ui";
 import { MarkdownEditor } from "../notes/Editor";
 import { ago, parseTags, type NoteDetail } from "../notes/format";
+import { useAllDatabases } from "../data/queries";
 import { NoteMarkdown } from "../notes/Markdown";
 import { useCreateNote, useDeleteNote, useNote, useNotes, useUpdateNote } from "../notes/queries";
 import { projectColor } from "../theme/resolve";
@@ -94,12 +95,14 @@ function NoteView({ detail }: { detail: NoteDetail }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  const databases = useAllDatabases(editing);
   const targets = useMemo(
     () => ({
       notes: (allNotes.data ?? []).filter((n) => n.id !== note.id).map((n) => n.title),
       projects: projects.map((p) => p.title),
+      views: (databases.data ?? []).flatMap((d) => d.views.map((v) => `${d.name}#${v.name}`)),
     }),
-    [allNotes.data, projects, note.id],
+    [allNotes.data, projects, note.id, databases.data],
   );
 
   const createLinked = useCallback(
@@ -165,7 +168,7 @@ function NoteView({ detail }: { detail: NoteDetail }) {
           <MarkdownEditor value={body} onChange={onChange} targets={targets} autoFocus label={`${note.title}, markdown`} />
         ) : body.trim() ? (
           <div onDoubleClick={() => canEdit && setEditing(true)}>
-            <NoteMarkdown body={body} links={linksOut} onCreate={createLinked} />
+            <NoteMarkdown body={body} links={linksOut} onCreate={createLinked} projectIds={note.projects.map((p) => p.id)} />
           </div>
         ) : canEdit ? (
           <button type="button" onClick={() => setEditing(true)} className="text-text-quiet font-reading cursor-pointer self-start text-[19px] italic">

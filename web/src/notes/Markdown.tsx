@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import { Link } from "react-router";
 import remarkGfm from "remark-gfm";
-import { readWikiHref, wikiToMarkdown, type NoteLink } from "./format";
+import { NoteEmbed } from "../data/NoteEmbed";
+import { EMBED_LANG, readWikiHref, wikiToMarkdown, type NoteLink } from "./format";
 
 /**
  * A note's markdown, rendered. Wiki links go to the note or project they
@@ -13,10 +14,13 @@ export function NoteMarkdown({
   body,
   links,
   onCreate,
+  projectIds = [],
 }: {
   body: string;
   links: NoteLink[];
   onCreate: (title: string) => void;
+  /** The note's projects, so an embed finds their database first. */
+  projectIds?: string[];
 }) {
   const source = useMemo(() => wikiToMarkdown(body), [body]);
   const components: Components = useMemo(
@@ -54,12 +58,21 @@ export function NoteMarkdown({
           </button>
         );
       },
+      pre({ node, children }) {
+        const code = node?.children[0];
+        const cls = code && "properties" in code ? code.properties?.className : undefined;
+        if (Array.isArray(cls) && cls.includes(`language-${EMBED_LANG}`)) {
+          const text = code && "children" in code ? code.children.map((c) => ("value" in c ? c.value : "")).join("") : "";
+          return <NoteEmbed target={text.trim()} projectIds={projectIds} />;
+        }
+        return <pre>{children}</pre>;
+      },
       input(props) {
         // GFM task list boxes: shown, not editable here.
         return <input {...props} disabled className="accent-accent mr-2 size-4 translate-y-0.5" />;
       },
     }),
-    [links, onCreate],
+    [links, onCreate, projectIds.join(",")],
   );
 
   return (

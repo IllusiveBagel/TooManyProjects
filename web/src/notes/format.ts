@@ -51,8 +51,11 @@ const escapeLabel = (s: string) => s.replace(/([\\[\]])/g, "\\$1");
 /**
  * Turns wiki links into ordinary markdown links (`[label](wiki:Title)`) so a
  * markdown renderer can draw them. Fenced code and code spans are left alone,
- * as are `![[embeds]]`, which become plain text for now.
+ * as are `![[embeds]]` inside a line. A line that is only `![[Database#View]]`
+ * becomes a fenced block that the renderer shows as a live database view.
  */
+export const EMBED_LANG = "tmp-embed";
+
 export function wikiToMarkdown(body: string): string {
   let inFence = false;
   return body
@@ -64,6 +67,11 @@ export function wikiToMarkdown(body: string): string {
         return line;
       }
       if (inFence) return line;
+      const embed = /^\s*!\[\[([^\]|]+?)\]\]\s*$/.exec(line);
+      if (embed && !/\.[a-z0-9]{2,4}$/i.test(embed[1]!.split("#")[0]!.trim())) {
+        // A whole-line embed of something that isn't a file: a database view.
+        return `\n\`\`\`${EMBED_LANG}\n${embed[1]!.trim()}\n\`\`\`\n`;
+      }
       let out = "";
       let inCode = false;
       for (let i = 0; i < line.length; ) {

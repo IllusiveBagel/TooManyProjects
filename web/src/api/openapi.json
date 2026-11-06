@@ -3741,6 +3741,7 @@
         "type": "object",
         "description": "One option of a select or multi-select column.",
         "required": [
+          "id",
           "name"
         ],
         "properties": {
@@ -3830,6 +3831,9 @@
       },
       "ColumnOptions": {
         "type": "object",
+        "required": [
+          "choices"
+        ],
         "properties": {
           "choices": {
             "type": "array",
@@ -4085,7 +4089,11 @@
           },
           "values": {
             "type": "object",
-            "description": "Column id to value."
+            "description": "Column id to value.",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
           }
         }
       },
@@ -5336,7 +5344,11 @@
           },
           "values": {
             "type": "object",
-            "description": "Column id to value. See the column kinds for each value's shape."
+            "description": "Column id to value. See the column kinds for each value's shape.",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
           }
         }
       },
@@ -5906,7 +5918,11 @@
               "object",
               "null"
             ],
-            "description": "Only the columns named change; `null` clears a cell."
+            "description": "Only the columns named change; `null` clears a cell.",
+            "additionalProperties": {},
+            "propertyNames": {
+              "type": "string"
+            }
           }
         }
       },
@@ -6152,6 +6168,11 @@
       },
       "ViewConfig": {
         "type": "object",
+        "required": [
+          "filters",
+          "sorts",
+          "hidden"
+        ],
         "properties": {
           "date_column": {
             "type": [

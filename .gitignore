@@ -6,7 +6,7 @@ node_modules/
 web/dist/
 
 # Local data
-data/
+/data/
 server/data/
 *.db
 *.db-shm
