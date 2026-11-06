@@ -4,6 +4,7 @@
 //! can see and change exactly what they can.
 
 pub mod brief;
+mod data;
 
 use std::sync::Arc;
 
@@ -213,6 +214,31 @@ pub struct SpawnArgs {
     pub description: Option<String>,
 }
 
+#[derive(Deserialize, JsonSchema)]
+pub struct QueryDatabaseArgs {
+    /// Database id, or its name (any case).
+    pub database: String,
+    /// The project it's in (id or title), when two projects have databases with that name.
+    pub project: Option<String>,
+    /// A saved view's name, to use its filters, sorts and columns.
+    pub view: Option<String>,
+    /// Only rows with this text in any cell.
+    pub search: Option<String>,
+    /// Most rows to show. Default 50, at most 200.
+    pub limit: Option<u32>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct AddRowArgs {
+    /// Database id, or its name (any case).
+    pub database: String,
+    /// The project it's in (id or title), when two projects have databases with that name.
+    pub project: Option<String>,
+    /// Column name to value. Selects take a choice's name, multi-selects a list of names,
+    /// dates YYYY-MM-DD, people a name or email, relations titles (tasks also `T-12`).
+    pub values: std::collections::HashMap<String, serde_json::Value>,
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 
@@ -377,7 +403,8 @@ async fn descendants(conn: &mut SqliteConnection, user: &User, root: &str) -> Ap
 const INSTRUCTIONS: &str = "TooManyProjects holds the user's projects (cards on a canvas, linked when one project \
 spawned another), each with a kanban board of tasks, plus a vault of markdown notes. Start with list_projects \
 or search, then get_project_context for a full briefing on one project. Notes link with [[Note title]] and \
-[[@Project title]]. Write tools (create_task, update_task, add_note, append_to_note, spawn_project) need a \
+[[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Write tools \
+(create_task, update_task, add_note, append_to_note, spawn_project, add_row) need a \
 read-write token, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
@@ -429,6 +456,22 @@ impl Mcp {
             notes: &notes,
             other_links: &other_links,
         });
+        let dbs: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT d.name, (SELECT COUNT(*) FROM db_rows r WHERE r.database_id = d.id) FROM databases d
+             WHERE d.project_id = ? ORDER BY d.position",
+        )
+        .bind(&id)
+        .fetch_all(&mut *conn)
+        .await?;
+        if !dbs.is_empty() {
+            out.push_str("\n## Databases\n\n");
+            for (name, rows) in dbs {
+                out.push_str(&format!(
+                    "- {name}: {rows} row{} (read with query_database)\n",
+                    if rows == 1 { "" } else { "s" }
+                ));
+            }
+        }
         if family {
             let kin = descendants(&mut conn, user, &id).await?;
             if !kin.is_empty() {
@@ -878,6 +921,58 @@ impl Mcp {
                 let Json(note) = notes::update_note(st(), me(), Path(id), Json(req)).await?;
                 Ok(format!("Added to “{}” · id `{}`", note.note.title, note.note.id))
             })
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Read a project database (a table such as a parts list or episode tracker) as a markdown table, optionally through one of its saved views or with a search. Lists the columns and their choices, and totals number columns."
+    )]
+    async fn query_database(
+        &self,
+        Parameters(args): Parameters<QueryDatabaseArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            async {
+                let mut conn = self.conn().await?;
+                data::query(
+                    &mut conn,
+                    &user,
+                    &args.database,
+                    args.project.as_deref(),
+                    args.view.as_deref(),
+                    args.search.as_deref(),
+                    args.limit,
+                )
+                .await
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Add a row to a project database, with values by column name. Needs a read-write token."
+    )]
+    async fn add_row(
+        &self,
+        Parameters(args): Parameters<AddRowArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            async {
+                let mut tx = self.state.db.begin().await?;
+                let out =
+                    data::add_row(&mut tx, &user, &args.database, args.project.as_deref(), &args.values)
+                        .await?;
+                tx.commit().await?;
+                Ok(out)
+            }
             .await,
         )
     }
