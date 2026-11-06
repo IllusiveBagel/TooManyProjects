@@ -126,3 +126,52 @@
     );
   }
 }
+
+/* React Flow, drawn with theme tokens. */
+.tmp-flow {
+  --xy-edge-stroke-default: var(--tmp-text-quiet);
+  --xy-connectionline-stroke-default: var(--tmp-accent);
+  --xy-connectionline-stroke-width-default: 3;
+  background: var(--tmp-surface);
+}
+.tmp-flow .react-flow__minimap {
+  background: var(--tmp-surface-card);
+  border: var(--tmp-rule-width) solid var(--tmp-line);
+  border-radius: var(--tmp-radius-lg);
+}
+.tmp-flow .react-flow__minimap-mask {
+  stroke: var(--tmp-accent);
+  stroke-width: 6;
+}
+.tmp-flow .react-flow__node {
+  cursor: pointer;
+}
+.tmp-flow .react-flow__node.dragging {
+  cursor: grabbing;
+}
+/* Link handles: small accent squares on the card edges, shown on hover. */
+.tmp-flow .tmp-handle {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--tmp-radius-sm);
+  background: var(--tmp-accent);
+  border: 2px solid var(--tmp-surface-card);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tmp-flow .react-flow__node:hover .tmp-handle,
+.tmp-flow .react-flow__node.selected .tmp-handle,
+.tmp-flow .tmp-handle.connectingfrom,
+.tmp-flow.connecting .tmp-handle {
+  opacity: 1;
+}
+@media (hover: none) {
+  .tmp-flow .tmp-handle {
+    opacity: 1;
+    width: 22px;
+    height: 22px;
+  }
+}
+.tmp-flow .react-flow__edge.selected .react-flow__edge-path {
+  filter: drop-shadow(0 0 3px var(--tmp-accent));
+}

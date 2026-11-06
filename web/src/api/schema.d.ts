@@ -89,6 +89,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/canvases/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your home canvas: cards, their positions and the links between them.
+         *     Projects without a card yet are placed automatically.
+         */
+        get: operations["home_canvas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/canvases/{id}/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Save card positions after a drag. */
+        patch: operations["save_nodes"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -158,6 +195,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draw a link between two projects. */
+        post: operations["create_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/links/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a link. The projects stay. */
+        delete: operations["delete_link"];
+        options?: never;
+        head?: never;
+        /** Change a link's kind or label, or swap its direction. */
+        patch: operations["update_link"];
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -190,6 +262,43 @@ export interface paths {
         head?: never;
         /** Save the signed-in person's theme choice. */
         patch: operations["update_preferences"];
+        trace?: never;
+    };
+    "/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your projects with their card stats, oldest first. */
+        get: operations["list_projects"];
+        put?: never;
+        /** Make a project, optionally spawned from another and placed on the canvas. */
+        post: operations["create_project"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One project with its parents and children. */
+        get: operations["get_project"];
+        put?: never;
+        post?: never;
+        /** Delete a project, its tasks and its links for good. Owner only. */
+        delete: operations["delete_project"];
+        options?: never;
+        head?: never;
+        /** Edit a project. Archive it by setting `status` to `archived`. */
+        patch: operations["update_project"];
         trace?: never;
     };
     "/themes": {
@@ -241,6 +350,35 @@ export interface components {
             needs_setup: boolean;
             user?: null | components["schemas"]["User"];
         };
+        Canvas: {
+            id: string;
+            name: string;
+        };
+        CanvasNode: {
+            collapsed: boolean;
+            color?: string | null;
+            /** Format: double */
+            height?: number | null;
+            id: string;
+            /** @description `project`, `note` or `group`. */
+            kind: string;
+            label?: string | null;
+            project_id?: string | null;
+            /** Format: double */
+            width?: number | null;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
+        /** @description Everything the canvas draws, in one call. */
+        CanvasView: {
+            canvas: components["schemas"]["Canvas"];
+            /** @description Links whose two ends are both in `projects`. */
+            links: components["schemas"]["Link"][];
+            nodes: components["schemas"]["CanvasNode"][];
+            projects: components["schemas"]["Project"][];
+        };
         CreateInviteRequest: {
             /**
              * Format: int64
@@ -249,6 +387,25 @@ export interface components {
             expires_in_days?: number | null;
             /** @description A reminder of who it is for, shown in the list. */
             note?: string | null;
+        };
+        CreateLinkRequest: {
+            kind: string;
+            label?: string | null;
+            source_id: string;
+            target_id: string;
+        };
+        CreateProjectRequest: {
+            /** @description Defaults to the next unused-looking slot. */
+            color?: string | null;
+            description?: string | null;
+            position?: null | components["schemas"]["Position"];
+            /** @description Draw a spawned link from this project to the new one. */
+            spawned_from?: string | null;
+            /** @description Defaults to `active`. */
+            status?: string | null;
+            summary?: string | null;
+            target_date?: string | null;
+            title: string;
         };
         CreatedInvite: {
             invite: components["schemas"]["Invite"];
@@ -284,14 +441,96 @@ export interface components {
             expires_at: string;
             invited_by: string;
         };
+        Link: {
+            created_at: string;
+            id: string;
+            /** @description `spawned`, `related` or `blocks`. */
+            kind: string;
+            label?: string | null;
+            source_id: string;
+            target_id: string;
+        };
         LoginRequest: {
             email: string;
             password: string;
+        };
+        NodePosition: {
+            /** Format: double */
+            height?: number | null;
+            project_id: string;
+            /** Format: double */
+            width?: number | null;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
+        Position: {
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         PreferencesRequest: {
             theme_id?: string | null;
             /** @description `system`, `dark` or `light`. */
             theme_mode?: string | null;
+        };
+        Project: {
+            archived_at?: string | null;
+            /** @description A theme slot (`slot-1` to `slot-8`) or a one-off `#rrggbb`. */
+            color: string;
+            created_at: string;
+            /** @description Markdown. */
+            description?: string | null;
+            icon?: string | null;
+            id: string;
+            owner_id: string;
+            started_at?: string | null;
+            stats: components["schemas"]["ProjectStats"];
+            /** @description `idea`, `active`, `paused`, `done` or `archived`. */
+            status: string;
+            summary?: string | null;
+            target_date?: string | null;
+            title: string;
+            updated_at: string;
+        };
+        ProjectDetail: {
+            /** @description Projects spawned from this one. */
+            children: components["schemas"]["ProjectRef"][];
+            /** @description Projects this one was spawned from. */
+            parents: components["schemas"]["ProjectRef"][];
+            project: components["schemas"]["Project"];
+        };
+        /** @description A parent or child, as shown in a project's breadcrumbs. */
+        ProjectRef: {
+            color: string;
+            id: string;
+            /** @description The link joining the two projects. */
+            link_id: string;
+            status: string;
+            title: string;
+        };
+        /** @description Numbers shown on a project's card. */
+        ProjectStats: {
+            /** Format: int64 */
+            child_count: number;
+            /** Format: int64 */
+            done_tasks: number;
+            /** Format: int64 */
+            in_progress_tasks: number;
+            /** @description Latest activity, or the last edit when there is none. */
+            last_active_at: string;
+            /** Format: int64 */
+            open_tasks: number;
+            /** Format: int64 */
+            overdue_tasks: number;
+            /** Format: int64 */
+            total_tasks: number;
+        };
+        SaveNodesRequest: {
+            /** @description Up to 500 cards at once, sent after a drag. */
+            nodes: components["schemas"]["NodePosition"][];
         };
         SetupRequest: {
             email: string;
@@ -308,6 +547,25 @@ export interface components {
             id: string;
             modes: components["schemas"]["ThemeModeSummary"][];
             name: string;
+        };
+        UpdateLinkRequest: {
+            kind?: string | null;
+            /** @description Send `null` to clear. */
+            label?: string | null;
+            /** @description Swap source and target. */
+            reverse?: boolean;
+        };
+        /** @description Fields left out stay as they are. Send `null` to clear an optional field. */
+        UpdateProjectRequest: {
+            color?: string | null;
+            description?: string | null;
+            icon?: string | null;
+            started_at?: string | null;
+            /** @description Setting `archived` stamps `archived_at`; any other status clears it. */
+            status?: string | null;
+            summary?: string | null;
+            target_date?: string | null;
+            title?: string | null;
         };
         User: {
             avatar?: string | null;
@@ -489,6 +747,67 @@ export interface operations {
             };
         };
     };
+    home_canvas: {
+        parameters: {
+            query?: {
+                /** @description Include archived projects. Default false. */
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CanvasView"];
+                };
+            };
+        };
+    };
+    save_nodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveNodesRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -623,6 +942,122 @@ export interface operations {
             };
         };
     };
+    create_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLinkRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Link"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Duplicate, or would make a loop */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLinkRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Link"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     me: {
         parameters: {
             query?: never;
@@ -672,6 +1107,165 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_projects: {
+        parameters: {
+            query?: {
+                /** @description Include archived projects. Default false. */
+                include_archived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"][];
+                };
+            };
+        };
+    };
+    create_project: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description spawned_from not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_project: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetail"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_project: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_project: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
