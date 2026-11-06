@@ -87,7 +87,7 @@ fn priority_rank(p: Option<&str>) -> u8 {
 /// Stat tiles, weekly chart, up next and activity for a project.
 #[utoipa::path(get, path = "/projects/{id}/dashboard", tag = "tasks", params(("id" = String, Path)),
     responses((status = 200, body = Dashboard), (status = 404, body = crate::error::ErrorBody)))]
-async fn project_dashboard(
+pub(crate) async fn project_dashboard(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,

@@ -1,0 +1,361 @@
+mod common;
+
+use axum::{
+    body::Body,
+    http::{Request, StatusCode, header},
+};
+use common::TestApp;
+use http_body_util::BodyExt;
+use serde_json::{Value, json};
+use tower::ServiceExt;
+
+/// One JSON-RPC call to /mcp. Returns the HTTP status and the parsed body
+/// (JSON, or the first `data:` line of an event stream).
+async fn rpc(app: &TestApp, token: Option<&str>, method: &str, params: Value) -> (StatusCode, Value) {
+    let mut req = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header(header::HOST, "projects.example.com")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ACCEPT, "application/json, text/event-stream")
+        .header("mcp-protocol-version", "2025-06-18");
+    if let Some(t) = token {
+        req = req.header(header::AUTHORIZATION, format!("Bearer {t}"));
+    }
+    let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+    let res = app.router.clone().oneshot(req.body(Body::from(body.to_string())).unwrap()).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8_lossy(&bytes);
+    let json = serde_json::from_str(&text).unwrap_or_else(|_| {
+        text.lines()
+            .filter_map(|l| l.strip_prefix("data:"))
+            .filter_map(|d| serde_json::from_str::<Value>(d.trim()).ok())
+            .find(|v| v.get("id").is_some())
+            .unwrap_or(Value::Null)
+    });
+    (status, json)
+}
+
+async fn initialize(app: &TestApp, token: &str) -> Value {
+    let (status, body) = rpc(
+        app,
+        Some(token),
+        "initialize",
+        json!({"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "test", "version": "1"}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body
+}
+
+/// Calls a tool and returns (is_error, text).
+async fn tool(app: &TestApp, token: &str, name: &str, args: Value) -> (bool, String) {
+    let (status, body) = rpc(app, Some(token), "tools/call", json!({"name": name, "arguments": args})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let result = &body["result"];
+    assert!(result.is_object(), "{body}");
+    let text = result["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["text"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    (result["isError"].as_bool().unwrap_or(false), text)
+}
+
+async fn make_token(app: &TestApp, cookie: &str, scope: &str) -> String {
+    let res = app
+        .call("POST", "/api/v1/tokens", Some(cookie), Some(json!({"name": "Claude", "scope": scope})))
+        .await;
+    assert_eq!(res.status, StatusCode::CREATED, "{:?}", res.body);
+    let secret = res.body["secret"].as_str().unwrap().to_string();
+    assert!(secret.starts_with("tmp_"));
+    secret
+}
+
+async fn seed(app: &TestApp, me: &str) -> (String, String) {
+    let car = app
+        .call(
+            "POST",
+            "/api/v1/projects",
+            Some(me),
+            Some(json!({"title": "Car restoration", "summary": "1972 Beetle"})),
+        )
+        .await;
+    let car = car.body["id"].as_str().unwrap().to_string();
+    let vids = app
+        .call(
+            "POST",
+            "/api/v1/projects",
+            Some(me),
+            Some(json!({"title": "Restoration videos", "spawned_from": car})),
+        )
+        .await;
+    let vids = vids.body["id"].as_str().unwrap().to_string();
+    let res = app
+        .call(
+            "POST",
+            &format!("/api/v1/projects/{car}/tasks"),
+            Some(me),
+            Some(json!({"title": "Rebuild carburettor", "priority": "high", "due_date": "2020-01-01"})),
+        )
+        .await;
+    assert_eq!(res.status, StatusCode::CREATED);
+    app.call(
+        "POST",
+        &format!("/api/v1/projects/{vids}/tasks"),
+        Some(me),
+        Some(json!({"title": "Film the teardown"})),
+    )
+    .await;
+    let res = app
+        .call("POST", "/api/v1/notes", Some(me), Some(json!({"title": "Brake fluid", "body": "Use DOT 4 for the [[@Car restoration]].", "project_ids": [car], "tags": ["howto"]})))
+        .await;
+    assert_eq!(res.status, StatusCode::CREATED);
+    (car, vids)
+}
+
+#[tokio::test]
+async fn tokens_are_made_listed_and_revoked() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let secret = make_token(&app, &me, "write").await;
+    let list = app.call("GET", "/api/v1/tokens", Some(&me), None).await;
+    assert_eq!(list.body.as_array().unwrap().len(), 1);
+    assert_eq!(list.body[0]["scope"], "write");
+    assert!(
+        list.body[0].get("secret").is_none() && !list.body.to_string().contains(&secret[4..]),
+        "secrets are never listed"
+    );
+
+    let bad =
+        app.call("POST", "/api/v1/tokens", Some(&me), Some(json!({"name": "x", "scope": "admin"}))).await;
+    assert_eq!(bad.status, StatusCode::BAD_REQUEST);
+
+    initialize(&app, &secret).await;
+    let used = app.call("GET", "/api/v1/tokens", Some(&me), None).await;
+    assert!(used.body[0]["last_used_at"].is_string());
+
+    let id = list.body[0]["id"].as_str().unwrap();
+    assert_eq!(
+        app.call("DELETE", &format!("/api/v1/tokens/{id}"), Some(&me), None).await.status,
+        StatusCode::NO_CONTENT
+    );
+    let (status, _) = rpc(&app, Some(&secret), "tools/list", json!({})).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "a revoked token stops working");
+}
+
+#[tokio::test]
+async fn mcp_needs_a_live_token() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (status, body) = rpc(&app, None, "tools/list", json!({})).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    let (status, _) = rpc(&app, Some("tmp_not-a-real-token"), "tools/list", json!({})).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    // A session cookie is not enough.
+    let req = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header(header::COOKIE, &me)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from("{}"))
+        .unwrap();
+    assert_eq!(app.router.clone().oneshot(req).await.unwrap().status(), StatusCode::UNAUTHORIZED);
+    let wk = app.call("GET", "/.well-known/oauth-protected-resource", None, None).await;
+    assert_eq!(wk.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn reads_projects_notes_and_briefings() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (car, _vids) = seed(&app, &me).await;
+    let token = make_token(&app, &me, "read").await;
+
+    let init = initialize(&app, &token).await;
+    assert!(init["result"]["capabilities"]["tools"].is_object(), "{init}");
+    assert_eq!(init["result"]["serverInfo"]["name"], "toomanyprojects");
+    assert!(init["result"]["instructions"].as_str().unwrap().contains("TooManyProjects"));
+
+    let (_, tools) = rpc(&app, Some(&token), "tools/list", json!({})).await;
+    let names: Vec<&str> =
+        tools["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+    for n in [
+        "list_projects",
+        "get_project_context",
+        "search",
+        "list_notes",
+        "get_note",
+        "create_task",
+        "update_task",
+        "add_note",
+        "append_to_note",
+        "spawn_project",
+    ] {
+        assert!(names.contains(&n), "missing {n}: {names:?}");
+    }
+
+    let (err, text) = tool(&app, &token, "list_projects", json!({})).await;
+    assert!(!err);
+    assert!(text.contains("**Car restoration**") && text.contains("1 overdue"), "{text}");
+    let (_, fam) = tool(&app, &token, "list_projects", json!({"family": "car restoration"})).await;
+    assert!(fam.starts_with("2 projects"), "{fam}");
+
+    let (err, brief) = tool(
+        &app,
+        &token,
+        "get_project_context",
+        json!({"project": "Car restoration", "include_family": true}),
+    )
+    .await;
+    assert!(!err, "{brief}");
+    for want in [
+        "# Car restoration",
+        "1972 Beetle",
+        "Spawned **Restoration videos**",
+        "T-1 Rebuild carburettor",
+        "overdue",
+        "Brake fluid",
+        "## Spawned projects",
+        "Film the teardown",
+        "Recent activity",
+    ] {
+        assert!(brief.contains(want), "briefing lacks {want}:\n{brief}");
+    }
+    let (err, nope) = tool(&app, &token, "get_project_context", json!({"project": "Carr"})).await;
+    assert!(err && nope.contains("Did you mean: Car restoration"), "{nope}");
+
+    let (_, found) = tool(&app, &token, "search", json!({"query": "carb"})).await;
+    assert!(found.contains("Rebuild carburettor"), "{found}");
+    let (_, found) = tool(&app, &token, "search", json!({"query": "DOT"})).await;
+    assert!(found.contains("**Brake fluid**"), "{found}");
+
+    let (_, list) = tool(&app, &token, "list_notes", json!({"project": car})).await;
+    assert!(list.contains("Brake fluid"), "{list}");
+    let (_, note) = tool(&app, &token, "get_note", json!({"note": "brake fluid"})).await;
+    assert!(note.contains("Use DOT 4") && note.contains("#howto"), "{note}");
+
+    let (_, res) = rpc(&app, Some(&token), "resources/list", json!({})).await;
+    let uri = res["result"]["resources"][0]["uri"].as_str().unwrap().to_string();
+    assert!(uri.starts_with("tmp://projects/"), "{res}");
+    let (_, read) =
+        rpc(&app, Some(&token), "resources/read", json!({"uri": format!("tmp://projects/{car}")})).await;
+    assert!(read["result"]["contents"][0]["text"].as_str().unwrap().contains("# Car restoration"), "{read}");
+
+    let (_, prompts) = rpc(&app, Some(&token), "prompts/list", json!({})).await;
+    assert_eq!(prompts["result"]["prompts"].as_array().unwrap().len(), 2);
+    let (_, p) =
+        rpc(&app, Some(&token), "prompts/get", json!({"name": "weekly_review", "arguments": {}})).await;
+    assert!(p["result"]["messages"][0]["content"]["text"].as_str().unwrap().contains("Overdue (1)"), "{p}");
+
+    // Read-only tokens can't write.
+    let (err, text) = tool(&app, &token, "create_task", json!({"project": car, "title": "Nope"})).await;
+    assert!(err && text.contains("read-only"), "{text}");
+}
+
+#[tokio::test]
+async fn writes_are_marked_via_ai() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (car, _) = seed(&app, &me).await;
+    let token = make_token(&app, &me, "write").await;
+
+    let (err, text) = tool(&app, &token, "create_task", json!({"project": "Car restoration", "title": "Order brake lines", "column": "doing", "due_date": "2030-01-01"})).await;
+    assert!(!err, "{text}");
+    assert!(text.contains("T-2 Order brake lines"), "{text}");
+    let tasks = app.call("GET", &format!("/api/v1/projects/{car}/tasks"), Some(&me), None).await;
+    let made =
+        tasks.body.as_array().unwrap().iter().find(|t| t["title"] == "Order brake lines").unwrap().clone();
+    assert_eq!(made["category"], "in_progress");
+
+    let (err, text) =
+        tool(&app, &token, "update_task", json!({"task": "T-2", "project": car, "done": true})).await;
+    assert!(!err, "{text}");
+    let (err, text) =
+        tool(&app, &token, "update_task", json!({"task": made["id"], "column": "Nowhere"})).await;
+    assert!(err && text.contains("The columns are"), "{text}");
+    let (err, _) = tool(&app, &token, "update_task", json!({"task": "T-2"})).await;
+    assert!(err);
+
+    let detail =
+        app.call("GET", &format!("/api/v1/tasks/{}", made["id"].as_str().unwrap()), Some(&me), None).await;
+    assert_eq!(detail.body["task"]["category"], "done");
+    let history = detail.body["activity"].as_array().unwrap();
+    assert!(history.iter().all(|a| a["via"] == "ai"), "{history:?}");
+    // The web app's own changes stay `web`.
+    app.call(
+        "PATCH",
+        &format!("/api/v1/tasks/{}", made["id"].as_str().unwrap()),
+        Some(&me),
+        Some(json!({"title": "Order copper lines"})),
+    )
+    .await;
+    let detail =
+        app.call("GET", &format!("/api/v1/tasks/{}", made["id"].as_str().unwrap()), Some(&me), None).await;
+    assert!(detail.body["activity"].as_array().unwrap().iter().any(|a| a["via"] == "web"));
+
+    let (err, text) = tool(&app, &token, "add_note", json!({"title": "Carb rebuild log", "body": "Jets cleaned.", "project": "Car restoration", "tags": ["log"]})).await;
+    assert!(!err && text.contains("Projects/Car restoration/Carb rebuild log.md"), "{text}");
+    let (err, text) = tool(&app, &token, "add_note", json!({"body": "Idea: time-lapse the paint job"})).await;
+    assert!(!err && text.contains("Inbox/"), "{text}");
+    let (err, _) = tool(
+        &app,
+        &token,
+        "append_to_note",
+        json!({"note": "Carb rebuild log", "text": "Float height set to 13 mm."}),
+    )
+    .await;
+    assert!(!err);
+    let (_, note) = tool(&app, &token, "get_note", json!({"note": "Carb rebuild log"})).await;
+    assert!(note.contains("Jets cleaned.\n\nFloat height set to 13 mm."), "{note}");
+
+    let (err, text) = tool(
+        &app,
+        &token,
+        "spawn_project",
+        json!({"parent": "Car restoration", "title": "Engine rebuild", "summary": "1600 dual port"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let detail = app.call("GET", &format!("/api/v1/projects/{car}"), Some(&me), None).await;
+    assert!(detail.body["children"].as_array().unwrap().iter().any(|c| c["title"] == "Engine rebuild"));
+}
+
+#[tokio::test]
+async fn a_token_sees_only_its_owner() {
+    let app = TestApp::new().await;
+    let owner = app.setup_owner().await;
+    let (car, _) = seed(&app, &owner).await;
+    let invite = app.call("POST", "/api/v1/invites", Some(&owner), Some(json!({}))).await;
+    let sam = app
+        .call(
+            "POST",
+            "/api/v1/auth/accept-invite",
+            None,
+            Some(json!({"token": invite.body["token"], "name": "Sam", "email": "sam@example.com", "password": "sam's password"})),
+        )
+        .await
+        .cookie
+        .unwrap();
+    let token = make_token(&app, &sam, "write").await;
+
+    let (_, list) = tool(&app, &token, "list_projects", json!({})).await;
+    assert_eq!(list, "No projects match.");
+    let (err, _) = tool(&app, &token, "get_project_context", json!({"project": car})).await;
+    assert!(err);
+    let (err, _) = tool(&app, &token, "create_task", json!({"project": car, "title": "Sneaky"})).await;
+    assert!(err);
+    let (_, found) = tool(&app, &token, "search", json!({"query": "carburettor"})).await;
+    assert!(!found.contains("Rebuild"), "{found}");
+    let (err, _) = tool(&app, &token, "get_note", json!({"note": "Brake fluid"})).await;
+    assert!(err);
+    let (_, read) =
+        rpc(&app, Some(&token), "resources/read", json!({"uri": format!("tmp://projects/{car}")})).await;
+    assert!(read.get("error").is_some(), "{read}");
+    // Tokens are per person.
+    let theirs = app.call("GET", "/api/v1/tokens", Some(&owner), None).await;
+    assert_eq!(theirs.body, json!([]));
+}

@@ -30,6 +30,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 utoipa = { version = "5", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2"
 uuid = { version = "1", features = ["v7", "serde"] }
+schemars = "1"
+rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]

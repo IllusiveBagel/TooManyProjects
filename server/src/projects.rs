@@ -217,6 +217,21 @@ pub async fn visible_project(conn: &mut SqliteConnection, user_id: &str, id: &st
         .ok_or(AppError::NotFound)
 }
 
+tokio::task_local! {
+    static VIA: &'static str;
+}
+
+/// Where the current change came from, for the activity feed: `web`, or `ai`
+/// inside [`as_ai`].
+pub fn via() -> &'static str {
+    VIA.try_with(|v| *v).unwrap_or("web")
+}
+
+/// Runs `f` with every activity it logs marked as made through the MCP server.
+pub async fn as_ai<F: std::future::Future>(f: F) -> F::Output {
+    VIA.scope("ai", f).await
+}
+
 pub async fn log_activity(
     conn: &mut SqliteConnection,
     project_id: &str,
@@ -225,13 +240,14 @@ pub async fn log_activity(
     payload: serde_json::Value,
 ) -> AppResult<()> {
     sqlx::query(
-        "INSERT INTO activity (id, project_id, user_id, kind, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO activity (id, project_id, user_id, kind, payload, via, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(time::new_id())
     .bind(project_id)
     .bind(user_id)
     .bind(kind)
     .bind(payload.to_string())
+    .bind(via())
     .bind(time::now())
     .execute(conn)
     .await?;
@@ -266,7 +282,7 @@ async fn create_default_statuses(conn: &mut SqliteConnection, project_id: &str) 
 /// Your projects with their card stats, oldest first.
 #[utoipa::path(get, path = "/projects", tag = "projects", params(ListQuery),
     responses((status = 200, body = Vec<Project>)))]
-async fn list_projects(
+pub(crate) async fn list_projects(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Query(q): Query<ListQuery>,
@@ -285,7 +301,7 @@ async fn list_projects(
 #[utoipa::path(post, path = "/projects", tag = "projects", request_body = CreateProjectRequest,
     responses((status = 201, body = Project), (status = 400, body = crate::error::ErrorBody),
         (status = 404, body = crate::error::ErrorBody, description = "spawned_from not found")))]
-async fn create_project(
+pub(crate) async fn create_project(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Json(req): Json<CreateProjectRequest>,
@@ -361,7 +377,7 @@ async fn create_project(
 /// One project with its parents and children.
 #[utoipa::path(get, path = "/projects/{id}", tag = "projects", params(("id" = String, Path)),
     responses((status = 200, body = ProjectDetail), (status = 404, body = crate::error::ErrorBody)))]
-async fn get_project(
+pub(crate) async fn get_project(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,

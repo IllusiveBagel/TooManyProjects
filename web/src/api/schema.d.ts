@@ -659,6 +659,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your tokens, newest first, revoked ones included. */
+        get: operations["list_tokens"];
+        put?: never;
+        /** Make a token for an AI assistant. The secret is in the reply and nowhere else. */
+        post: operations["create_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop a token working. It stays in the list, marked revoked. */
+        delete: operations["revoke_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -681,6 +716,15 @@ export interface components {
             user_name?: string | null;
             /** @description `web` or `ai`. */
             via: string;
+        };
+        ApiToken: {
+            created_at: string;
+            id: string;
+            last_used_at?: string | null;
+            name: string;
+            revoked_at?: string | null;
+            /** @description `read` or `write`. */
+            scope: string;
         };
         AuthStatus: {
             /** @description True until the owner account exists. The web app shows setup instead of login. */
@@ -791,12 +835,23 @@ export interface components {
             status_id?: string | null;
             title: string;
         };
+        CreateTokenRequest: {
+            /** @description What it's for, such as "Claude on my laptop". */
+            name: string;
+            /** @description `read` (the default) or `write`. */
+            scope?: string | null;
+        };
         CreatedInvite: {
             invite: components["schemas"]["Invite"];
             /** @description The raw token. It is never shown again. */
             token: string;
             /** @description The link to send, when the server knows its public URL. */
             url?: string | null;
+        };
+        CreatedToken: {
+            /** @description Shown once. Only a hash is stored. */
+            secret: string;
+            token: components["schemas"]["ApiToken"];
         };
         Dashboard: {
             /** @description The latest fifteen things that happened. */
@@ -2699,6 +2754,83 @@ export interface operations {
                 content: {
                     "application/json": Record<string, never>;
                 };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiToken"][];
+                };
+            };
+        };
+    };
+    create_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTokenRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedToken"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    revoke_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: {
                 headers: {

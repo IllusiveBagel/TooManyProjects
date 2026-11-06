@@ -353,7 +353,7 @@ pub async fn project_renamed(state: &AppState, user_id: &str, old: &str, new: &s
 /// Your notes, newest first, or the best matches for `q`.
 #[utoipa::path(get, path = "/notes", tag = "notes", params(ListNotesQuery),
     responses((status = 200, body = Vec<NoteSummary>)))]
-async fn list_notes(
+pub(crate) async fn list_notes(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Query(q): Query<ListNotesQuery>,
@@ -413,7 +413,7 @@ fn fts_query(q: &str) -> String {
 /// Write a new note to the vault.
 #[utoipa::path(post, path = "/notes", tag = "notes", request_body = CreateNoteRequest,
     responses((status = 201, body = NoteDetail), (status = 400, body = crate::error::ErrorBody)))]
-async fn create_note(
+pub(crate) async fn create_note(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Json(req): Json<CreateNoteRequest>,
@@ -489,7 +489,7 @@ async fn detail(
 /// One note with its body, backlinks and resolved links.
 #[utoipa::path(get, path = "/notes/{id}", tag = "notes", params(("id" = String, Path)),
     responses((status = 200, body = NoteDetail), (status = 404, body = crate::error::ErrorBody)))]
-async fn get_note(
+pub(crate) async fn get_note(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -504,7 +504,7 @@ async fn get_note(
     request_body = UpdateNoteRequest,
     responses((status = 200, body = NoteDetail), (status = 400, body = crate::error::ErrorBody),
         (status = 404, body = crate::error::ErrorBody)))]
-async fn update_note(
+pub(crate) async fn update_note(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -590,7 +590,7 @@ async fn delete_note(
 
 /// Every tag in use, most used first.
 #[utoipa::path(get, path = "/notes/tags", tag = "notes", responses((status = 200, body = Vec<TagCount>)))]
-async fn list_tags(
+pub(crate) async fn list_tags(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> AppResult<Json<Vec<TagCount>>> {
@@ -607,7 +607,7 @@ async fn list_tags(
 /// A project's notes, and other notes that mention it.
 #[utoipa::path(get, path = "/projects/{id}/notes", tag = "notes", params(("id" = String, Path)),
     responses((status = 200, body = ProjectNotes), (status = 404, body = crate::error::ErrorBody)))]
-async fn project_notes(
+pub(crate) async fn project_notes(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,

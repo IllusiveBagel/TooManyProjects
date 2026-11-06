@@ -4,11 +4,11 @@ A self-hosted canvas for every project you have on the go. Projects live as
 cards on one infinite canvas, projects that grow out of other projects are
 joined by arrows, and each one opens into a dashboard with its tasks and board.
 
-> **Status: phase 3a (notes).** Accounts, invites, theming, the canvas with
-> spawned, related and blocking links, tasks with per-project and global
-> boards, and now a notes vault: markdown files you can open in Obsidian, with
-> wiki links, backlinks, tags and search. The MCP server, sharing and project
-> databases come next.
+> **Status: phase 3b (MCP server).** Accounts, invites, theming, the canvas
+> with spawned, related and blocking links, tasks with per-project and global
+> boards, a notes vault of markdown files you can open in Obsidian, and now an
+> MCP server so an AI assistant can read and update your projects. Sharing and
+> project databases come next.
 
 ### Boards
 
@@ -48,6 +48,38 @@ joined by arrows, and each one opens into a dashboard with its tasks and board.
   into wiki links; Notion databases are skipped until project databases land).
   Nothing is overwritten: a clashing name gets a number. Export downloads the
   whole vault as a zip.
+
+### AI access (MCP)
+
+The server speaks the [Model Context Protocol](https://modelcontextprotocol.io)
+at `/mcp`, so an assistant such as Claude can read your projects and notes and,
+if you let it, add to them.
+
+- **Tokens:** make one under **Settings → AI access**. It acts as you, and is
+  either *read only* or *read and write*. The secret (`tmp_…`) is shown once;
+  only a hash is kept. Revoke a token there and anything using it stops at
+  once.
+- **Connect Claude Code:**
+
+  ```sh
+  claude mcp add --transport http toomanyprojects https://your-host/mcp \
+    --header "Authorization: Bearer tmp_…"
+  ```
+
+  Other clients that let you set a header take the JSON config shown when you
+  make a token. The token goes in an `Authorization: Bearer` header; OAuth sign
+  in isn't supported yet, so connectors that only do OAuth (such as custom
+  connectors in the Claude web app) can't connect.
+- **Tools:** `list_projects`, `get_project_context` (a full briefing, with the
+  family on request), `search` (projects, tasks and notes), `list_notes`,
+  `get_note`, and with a read-write token `create_task`, `update_task` (move,
+  finish, reopen or edit by `T-12` or id), `add_note`, `append_to_note` and
+  `spawn_project`. Projects and notes can be named by title or id.
+- **Resources and prompts:** each project (`tmp://projects/{id}`) and note
+  (`tmp://notes/{id}`) is a resource, and there are `project_briefing` and
+  `weekly_review` prompts.
+- **History:** anything changed through a token shows as *via AI* in the
+  project's activity and the task's history.
 
 ## Run it
 
@@ -122,6 +154,9 @@ server/            Rust: Axum, SQLx, SQLite
   src/dashboard.rs a project's overview in one call
   src/notes/       the notes vault: files and index (vault.rs), markdown and
                    wiki links (markdown.rs), zip import and export (transfer.rs)
+  src/tokens.rs    API tokens for AI assistants
+  src/mcp/         the MCP server: tools, resources, prompts (mod.rs) and the
+                   markdown briefings they return (brief.rs)
   tests/           API tests against a real SQLite file
 web/               React 19, TypeScript, Vite, Tailwind v4
   src/api/         generated OpenAPI types and the typed client

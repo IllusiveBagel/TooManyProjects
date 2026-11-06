@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { api, unwrap, type CreatedInvite } from "../api/client";
 import { useLogout, useMe, useUpdatePreferences } from "../auth/queries";
 import { useImportNotes, useRescan } from "../notes/queries";
+import { AiAccessPanel } from "./AiAccessPanel";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
@@ -14,6 +15,7 @@ export function SettingsPage() {
       <h1 className="font-display text-[32px] font-extrabold tracking-[-0.02em]">Settings</h1>
       <AppearancePanel />
       <NotesPanel />
+      <AiAccessPanel />
       {me.role === "owner" && <InvitesPanel />}
       <AccountPanel />
     </main>

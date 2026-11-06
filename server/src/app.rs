@@ -24,10 +24,11 @@ use crate::{
     config::Config,
     dashboard,
     error::AppError,
-    invites, links, notes,
+    invites, links, mcp, notes,
     openapi::ApiDoc,
     projects, tasks,
     themes::{self, ThemeStore},
+    tokens,
 };
 
 #[derive(Clone)]
@@ -63,6 +64,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(tasks::router())
         .merge(dashboard::router())
         .merge(notes::router())
+        .merge(tokens::router())
         .split_for_parts();
     // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.
     doc.info.license = None;
@@ -101,10 +103,16 @@ pub fn build_router(state: AppState) -> Router {
             HeaderValue::from_static("no-store"),
         ));
 
-    let mut router = Router::new().nest("/api/v1", api).route("/api/health", get(health)).route(
-        "/api/openapi.json",
-        get(|| async { ([(header::CONTENT_TYPE, "application/json")], openapi_json()) }),
-    );
+    let mut router = Router::new()
+        .nest("/api/v1", api)
+        .merge(mcp::router(state.clone()))
+        // MCP clients look here for OAuth; say plainly there is none rather than serve the web app.
+        .route("/.well-known/{*rest}", get(|| async { AppError::NotFound }))
+        .route("/api/health", get(health))
+        .route(
+            "/api/openapi.json",
+            get(|| async { ([(header::CONTENT_TYPE, "application/json")], openapi_json()) }),
+        );
 
     if let Some(dir) = &state.config.static_dir {
         // Unknown paths get index.html so the web app's own routes work on reload.

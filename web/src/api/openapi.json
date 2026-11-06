@@ -2219,6 +2219,103 @@
           }
         }
       }
+    },
+    "/tokens": {
+      "get": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Your tokens, newest first, revoked ones included.",
+        "operationId": "list_tokens",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiToken"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Make a token for an AI assistant. The secret is in the reply and nowhere else.",
+        "operationId": "create_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tokens/{id}": {
+      "delete": {
+        "tags": [
+          "tokens"
+        ],
+        "summary": "Stop a token working. It stays in the list, marked revoked.",
+        "operationId": "revoke_token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2286,6 +2383,42 @@
           "via": {
             "type": "string",
             "description": "`web` or `ai`."
+          }
+        }
+      },
+      "ApiToken": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "description": "`read` or `write`."
           }
         }
       },
@@ -2704,6 +2837,25 @@
           }
         }
       },
+      "CreateTokenRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "What it's for, such as \"Claude on my laptop\"."
+          },
+          "scope": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`read` (the default) or `write`."
+          }
+        }
+      },
       "CreatedInvite": {
         "type": "object",
         "required": [
@@ -2724,6 +2876,22 @@
               "null"
             ],
             "description": "The link to send, when the server knows its public URL."
+          }
+        }
+      },
+      "CreatedToken": {
+        "type": "object",
+        "required": [
+          "token",
+          "secret"
+        ],
+        "properties": {
+          "secret": {
+            "type": "string",
+            "description": "Shown once. Only a hash is stored."
+          },
+          "token": {
+            "$ref": "#/components/schemas/ApiToken"
           }
         }
       },
@@ -3970,6 +4138,10 @@
     {
       "name": "notes",
       "description": "Markdown notes in your vault, search, backlinks, import and export"
+    },
+    {
+      "name": "tokens",
+      "description": "API tokens for AI assistants using the MCP server"
     },
     {
       "name": "system",

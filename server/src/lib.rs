@@ -10,6 +10,7 @@ pub mod db;
 pub mod error;
 pub mod invites;
 pub mod links;
+pub mod mcp;
 pub mod notes;
 pub mod openapi;
 pub mod position;
@@ -17,6 +18,7 @@ pub mod projects;
 pub mod tasks;
 pub mod themes;
 pub mod time;
+pub mod tokens;
 
 pub use app::{AppState, build_router};
 pub use config::Config;
