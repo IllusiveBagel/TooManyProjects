@@ -5,6 +5,10 @@ import { STATUS_LABEL, STATUS_TONE } from "../canvas/format";
 import { useProjectDetail } from "../canvas/queries";
 import { Modal } from "../components/Modal";
 import { Button, ErrorNote } from "../components/ui";
+import { initials } from "../sharing/format";
+import { useMembers } from "../sharing/queries";
+import { ShareDialog } from "../sharing/ShareDialog";
+import { SharedNote } from "../sharing/SharedNote";
 import { projectColor } from "../theme/resolve";
 import { useCreateTask, useStatuses } from "../tasks/queries";
 import { TaskDrawer, useOpenTask } from "../tasks/TaskDrawer";
@@ -14,6 +18,8 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 
 export interface ProjectContext {
   detail: ProjectDetail;
+  /** False for a project shared with you as a viewer. */
+  canEdit: boolean;
   /** Opens the New task dialog, optionally for one column. */
   newTask: (statusId?: string) => void;
 }
@@ -25,11 +31,13 @@ export function ProjectPage() {
   const { id = "" } = useParams();
   const detail = useProjectDetail(id);
   const [newTaskFor, setNewTaskFor] = useState<string | null | undefined>(undefined);
+  const [sharing, setSharing] = useState(false);
 
   if (detail.isError) return <div className="p-5"><ErrorNote error={detail.error} /></div>;
   if (!detail.data) return <p className="label-mono text-text-quiet p-5">Loading…</p>;
   const { project, parents } = detail.data;
   const color = projectColor(project.color);
+  const canEdit = project.role !== "viewer";
 
   // On phones the whole page scrolls, header included; from sm up the header stays and the tab scrolls.
   return (
@@ -53,11 +61,17 @@ export function ProjectPage() {
           <span className={`label-mono border-rule rounded-sm border-current px-2 py-1 text-[11px] ${STATUS_TONE[project.status]}`}>
             {STATUS_LABEL[project.status]}
           </span>
-          <Button variant="primary" className="ml-auto min-h-10 px-3 text-sm" onClick={() => setNewTaskFor(null)}>
-            + Task
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <People projectId={id} isOwner={project.role === "owner"} onOpen={() => setSharing(true)} />
+            {canEdit && (
+              <Button variant="primary" className="min-h-10 px-3 text-sm" onClick={() => setNewTaskFor(null)}>
+                + Task
+              </Button>
+            )}
+          </div>
         </div>
         {project.summary && <p className="font-reading text-text-quiet mt-1 text-[16px]">{project.summary}</p>}
+        <SharedNote project={project} className="mt-2" />
         <nav aria-label="Project" className="border-rule mt-3 flex gap-5 border-x-0 border-t-0">
           <NavLink to={`/projects/${id}`} end className={tabClass}>Overview</NavLink>
           <NavLink to={`/projects/${id}/board`} className={tabClass}>Board</NavLink>
@@ -65,13 +79,45 @@ export function ProjectPage() {
         </nav>
       </header>
       <div className="relative flex flex-col sm:min-h-0 sm:flex-1">
-        <Outlet context={{ detail: detail.data, newTask: (s?: string) => setNewTaskFor(s ?? null) } satisfies ProjectContext} />
+        <Outlet
+          context={{ detail: detail.data, canEdit, newTask: (s?: string) => setNewTaskFor(s ?? null) } satisfies ProjectContext}
+        />
         <TaskDrawer />
       </div>
+      {sharing && <ShareDialog project={project} onClose={() => setSharing(false)} />}
       {newTaskFor !== undefined && (
         <NewTaskDialog projectId={id} statusId={newTaskFor} onClose={() => setNewTaskFor(undefined)} />
       )}
     </div>
+  );
+}
+
+/** Faces of everyone on the project, as a button that opens the share dialog. */
+function People({ projectId, isOwner, onOpen }: { projectId: string; isOwner: boolean; onOpen: () => void }) {
+  const members = useMembers(projectId).data ?? [];
+  const others = members.length - 1;
+  if (!isOwner && members.length <= 1) return null;
+  return (
+    <Button
+      className="min-h-10 px-2.5 text-sm"
+      onClick={onOpen}
+      aria-label={others > 0 ? `Shared with ${others} ${others === 1 ? "person" : "people"}` : "Share"}
+    >
+      {others > 0 && (
+        <span className="flex -space-x-1.5" aria-hidden="true">
+          {members.slice(0, 4).map((m) => (
+            <span
+              key={m.user_id}
+              title={m.name}
+              className="bg-surface-raised border-rule label-mono grid size-7 place-items-center rounded-full border-current text-[9.5px] font-semibold"
+            >
+              {initials(m.name)}
+            </span>
+          ))}
+        </span>
+      )}
+      {isOwner ? "Share" : "People"}
+    </Button>
   );
 }
 

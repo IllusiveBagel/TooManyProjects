@@ -10,6 +10,15 @@ import { projectColor } from "../theme/resolve";
 const sideLink = (active: boolean) =>
   `flex min-h-9 items-center gap-2 rounded-md px-2.5 text-[14px] ${active ? "bg-accent text-on-accent font-bold" : "text-text hover:bg-surface-raised"}`;
 
+/** The folder value for notes others have shared with you. */
+export const SHARED_FOLDER = "@shared";
+
+/** Whether a note belongs in the chosen folder: yours by path, or the shared group. */
+function inFolder(n: NoteSummary, folder: string | null): boolean {
+  if (folder === SHARED_FOLDER) return !!n.owner_name;
+  return !folder || (!n.owner_name && n.path.startsWith(`${folder}/`));
+}
+
 /** Notes: folders and tags on the left, a list or one note on the right. */
 export function NotesLayout() {
   const noteOpen = !!useMatch("/notes/:id");
@@ -56,7 +65,8 @@ function Sidebar() {
     for (const [k, v] of Object.entries(changes)) if (v) p.set(k, v);
     navigate(`/notes${p.size ? `?${p}` : ""}`);
   };
-  const tree = useMemo(() => folderTree((all.data ?? []).map((n) => n.path)), [all.data]);
+  const tree = useMemo(() => folderTree((all.data ?? []).filter((n) => !n.owner_name).map((n) => n.path)), [all.data]);
+  const sharedCount = (all.data ?? []).filter((n) => n.owner_name).length;
   const colorFor = (name: string) => projects.find((p) => p.title.toLowerCase() === name.toLowerCase())?.color;
 
   const renderFolder = (node: FolderNode, depth: number, project: boolean) => {
@@ -87,6 +97,18 @@ function Sidebar() {
             </button>
           </li>
           {tree.map((n) => renderFolder(n, 0, false))}
+          {sharedCount > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={() => go({ folder: SHARED_FOLDER })}
+                className={`${sideLink(folder === SHARED_FOLDER && !tag)} w-full cursor-pointer text-left`}
+              >
+                <span className="min-w-0 flex-1 truncate">Shared with me</span>
+                <span className={`label-mono text-[10px] ${folder === SHARED_FOLDER && !tag ? "" : "text-text-quiet"}`}>{sharedCount}</span>
+              </button>
+            </li>
+          )}
         </ul>
       </nav>
       {(tags.data?.length ?? 0) > 0 && (
@@ -138,12 +160,13 @@ export function NotesIndex() {
   }, []);
 
   const notes = useNotes({ q: q || undefined, tag: tag ?? undefined, limit: 500 });
-  const shown = (notes.data ?? []).filter((n) => !folder || n.path.startsWith(`${folder}/`));
-  const heading = q ? `Search` : tag ? `#${tag}` : folder ? folder.split("/").pop()! : "Notes";
+  const shown = (notes.data ?? []).filter((n) => inFolder(n, folder));
+  const shared = folder === SHARED_FOLDER;
+  const heading = q ? `Search` : tag ? `#${tag}` : shared ? "Shared with me" : folder ? folder.split("/").pop()! : "Notes";
 
   const newNote = () =>
     create.mutate(
-      { folder: folder ?? undefined, tags: tag ? [tag] : [] },
+      { folder: shared ? undefined : (folder ?? undefined), tags: tag ? [tag] : [] },
       { onSuccess: (n) => navigate(`/notes/${n.note.id}?edit=1`) },
     );
 
@@ -151,7 +174,7 @@ export function NotesIndex() {
     <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 sm:py-5">
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 flex-1">
-          {folder && <p className="label-mono text-text-quiet truncate text-[11px]">{folder}</p>}
+          {folder && !shared && <p className="label-mono text-text-quiet truncate text-[11px]">{folder}</p>}
           <h1 className="font-display truncate text-[30px] leading-tight font-extrabold tracking-[-0.03em]">{heading}</h1>
         </div>
         <Button onClick={() => startQuick()} className="min-h-10 px-3 text-sm">Quick note</Button>
@@ -199,7 +222,8 @@ function PhoneFilters() {
   const folders = useMemo(() => {
     const out: string[] = [];
     const walk = (nodes: FolderNode[]) => nodes.forEach((n) => (out.push(n.path), walk(n.children)));
-    walk(folderTree((all.data ?? []).map((n) => n.path)));
+    walk(folderTree((all.data ?? []).filter((n) => !n.owner_name).map((n) => n.path)));
+    if ((all.data ?? []).some((n) => n.owner_name)) out.push(SHARED_FOLDER);
     return out;
   }, [all.data]);
   const select = "border-rule bg-surface min-h-10 min-w-0 flex-1 rounded-md px-2 font-mono text-[12px] outline-none";
@@ -208,7 +232,7 @@ function PhoneFilters() {
       <select aria-label="Folder" className={select} value={folder ?? ""} onChange={(e) => set({ folder: e.target.value || null })}>
         <option value="">All folders</option>
         {folders.map((f) => (
-          <option key={f} value={f}>{f}</option>
+          <option key={f} value={f}>{f === SHARED_FOLDER ? "Shared with me" : f}</option>
         ))}
       </select>
       <select aria-label="Tag" className={select} value={tag ?? ""} onChange={(e) => set({ tag: e.target.value || null })}>
@@ -249,6 +273,11 @@ export function NoteCard({ note, compact }: { note: NoteSummary; compact?: boole
         <span className="font-display min-w-0 flex-1 truncate text-[16px] font-extrabold tracking-[-0.01em]">{note.title}</span>
         <span className="label-mono text-text-quiet shrink-0 text-[10px]">{ago(note.updated_at)}</span>
       </span>
+      {note.owner_name && (
+        <span className="label-mono text-text-quiet text-[10px]">
+          {note.owner_name}’s · {note.can_edit ? "you can edit" : "view only"}
+        </span>
+      )}
       {!compact && (
         <span className="text-text-quiet line-clamp-2 text-[13.5px]">
           {note.snippet

@@ -12,7 +12,7 @@ const selectClass = "border-rule bg-surface min-h-10 w-full rounded-md px-2 font
 
 /** The Board tab: the project's own columns, drag cards between them. */
 export function ProjectBoardPage() {
-  const { detail, newTask } = useProject();
+  const { detail, newTask, canEdit } = useProject();
   const projectId = detail.project.id;
   const statuses = useStatuses(projectId);
   const tasks = useProjectTasks(projectId);
@@ -36,17 +36,19 @@ export function ProjectBoardPage() {
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: CATEGORY_COLOR[s.category] }} aria-hidden="true" />
               <h2 className="font-display flex-1 truncate text-[15px] font-extrabold">{s.name}</h2>
               <span className="label-mono text-text-quiet text-[11px]">{mine.length}</span>
-              <button
-                type="button"
-                aria-label={`Edit ${s.name} column`}
-                onClick={() => setEditing(s.id)}
-                className="text-text-quiet hover:text-text size-8 cursor-pointer rounded-sm text-lg leading-none"
-              >
-                ⋯
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  aria-label={`Edit ${s.name} column`}
+                  onClick={() => setEditing(s.id)}
+                  className="text-text-quiet hover:text-text size-8 cursor-pointer rounded-sm text-lg leading-none"
+                >
+                  ⋯
+                </button>
+              )}
             </div>
           ),
-        footer: (
+        footer: canEdit && (
           <button
             type="button"
             onClick={() => newTask(s.id)}
@@ -57,7 +59,7 @@ export function ProjectBoardPage() {
         ),
       };
     });
-  }, [statuses.data, tasks.data, editing, newTask]);
+  }, [statuses.data, tasks.data, editing, newTask, canEdit]);
 
   if (statuses.isError || tasks.isError) return <div className="p-5"><ErrorNote error={statuses.error ?? tasks.error} /></div>;
   if (!statuses.data || !tasks.data) return <p className="label-mono text-text-quiet p-5">Loading…</p>;
@@ -69,7 +71,8 @@ export function ProjectBoardPage() {
         columns={columns}
         onMove={(taskId, columnId, afterId) => move(taskId, byId.get(columnId)!, afterId)}
         renderCard={(t, lifted) => <TaskCard task={t} onOpen={openTask} lifted={lifted} />}
-        trailing={<AddColumn projectId={projectId} />}
+        trailing={canEdit && <AddColumn projectId={projectId} />}
+        canDrag={() => canEdit}
       />
     </div>
   );

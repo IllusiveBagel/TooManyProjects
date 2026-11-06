@@ -6,7 +6,7 @@ import { useProject } from "./ProjectPage";
 
 /** A project's notes, plus notes elsewhere that mention it. */
 export function ProjectNotesPage() {
-  const { detail } = useProject();
+  const { detail, canEdit } = useProject();
   const { project } = detail;
   const notes = useProjectNotes(project.id);
   const create = useCreateNote();
@@ -19,12 +19,15 @@ export function ProjectNotesPage() {
     <div className="flex flex-col gap-5 px-4 py-4 sm:px-5">
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-text-quiet min-w-0 flex-1 text-sm">
-          Notes filed under this project live in <span className="font-mono text-[12px]">Projects/{project.title}/</span> in your vault.
-          Mention it from any note with <span className="font-mono text-[12px]">[[@{project.title}]]</span>.
+          Notes filed under this project live in <span className="font-mono text-[12px]">Projects/{project.title}/</span> in
+          {project.role === "owner" ? " your vault" : " the vault of whoever wrote them"}, and everyone the project is shared
+          with can read them. Mention it from any note with <span className="font-mono text-[12px]">[[@{project.title}]]</span>.
         </p>
-        <Button variant="primary" className="min-h-10 px-3 text-sm" onClick={newNote} disabled={create.isPending}>
-          + Note
-        </Button>
+        {canEdit && (
+          <Button variant="primary" className="min-h-10 px-3 text-sm" onClick={newNote} disabled={create.isPending}>
+            + Note
+          </Button>
+        )}
       </div>
       <ErrorNote error={notes.error ?? create.error} />
       {!notes.data ? (

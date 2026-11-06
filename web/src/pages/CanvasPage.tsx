@@ -19,7 +19,7 @@ import "@xyflow/react/dist/base.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useNavigate } from "react-router";
 import type { CanvasView } from "../api/client";
-import { CARD_WIDTH, ProjectNode, type ProjectNodeType } from "../canvas/ProjectNode";
+import { CARD_WIDTH, LockedNode, ProjectNode, type CanvasNodeType } from "../canvas/ProjectNode";
 import { LinkEdge, type LinkEdgeType } from "../canvas/LinkEdge";
 import { NewProjectDialog } from "../canvas/NewProjectDialog";
 import { ProjectDrawer } from "../canvas/ProjectDrawer";
@@ -28,7 +28,7 @@ import { useCanvasUi } from "../canvas/store";
 import { Button, ErrorNote } from "../components/ui";
 import { projectColor } from "../theme/resolve";
 
-const nodeTypes = { project: ProjectNode };
+const nodeTypes = { project: ProjectNode, locked: LockedNode };
 const edgeTypes = { link: LinkEdge };
 
 export function CanvasPage() {
@@ -39,15 +39,29 @@ export function CanvasPage() {
   );
 }
 
-function toNodes(view: CanvasView, previous: ProjectNodeType[]): ProjectNodeType[] {
+function toNodes(view: CanvasView, previous: CanvasNodeType[]): CanvasNodeType[] {
   const prev = new Map(previous.map((n) => [n.id, n]));
   const byId = new Map(view.projects.map((p) => [p.id, p]));
+  const lockedById = new Map(view.locked.map((l) => [l.id, l]));
   const parentOf = new Map<string, string>();
   for (const l of view.links) {
     if (l.kind === "spawned" && !parentOf.has(l.target_id)) parentOf.set(l.target_id, byId.get(l.source_id)?.title ?? "");
   }
-  return view.nodes.flatMap((n) => {
+  return view.nodes.flatMap((n): CanvasNodeType[] => {
     const project = n.project_id ? byId.get(n.project_id) : undefined;
+    const locked = n.project_id ? lockedById.get(n.project_id) : undefined;
+    if (locked) {
+      const old = prev.get(locked.id);
+      return [
+        {
+          id: locked.id,
+          type: "locked" as const,
+          position: old?.dragging ? old.position : { x: n.x, y: n.y },
+          selectable: false,
+          data: { ownerName: locked.owner_name },
+        },
+      ];
+    }
     if (!project) return [];
     const old = prev.get(project.id);
     return [
@@ -66,7 +80,8 @@ function toNodes(view: CanvasView, previous: ProjectNodeType[]): ProjectNodeType
 function toEdges(view: CanvasView, selectedId: string | null): LinkEdgeType[] {
   const byId = new Map(view.projects.map((p) => [p.id, p]));
   return view.links.map((link) => {
-    const color = projectColor(byId.get(link.source_id)?.color ?? "slot-1");
+    const source = byId.get(link.source_id);
+    const color = source ? projectColor(source.color) : "var(--tmp-text-quiet)";
     const markerColor = link.kind === "spawned" ? color : link.kind === "blocks" ? "var(--tmp-late)" : undefined;
     return {
       id: link.id,
@@ -74,6 +89,11 @@ function toEdges(view: CanvasView, selectedId: string | null): LinkEdgeType[] {
       target: link.target_id,
       type: "link" as const,
       selected: link.id === selectedId,
+      // Only links between two projects you can edit can be removed.
+      deletable: [link.source_id, link.target_id].every((id) => {
+        const role = byId.get(id)?.role;
+        return role === "owner" || role === "editor";
+      }),
       data: { link, color },
       markerEnd: markerColor ? { type: MarkerType.ArrowClosed, color: markerColor, width: 14, height: 14 } : undefined,
     };
@@ -92,7 +112,7 @@ function CanvasBoard() {
   const createLink = useCreateLink();
   const flow = useReactFlow();
   const navigate = useNavigate();
-  const [nodes, setNodes, onNodesChange] = useNodesState<ProjectNodeType>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNodeType>([]);
   const deleteLink = useDeleteLink();
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
   const fitted = useRef(false);
@@ -136,12 +156,12 @@ function CanvasBoard() {
   }, [openProjectId, setNodes]);
 
   const handleNodesChange = useCallback(
-    (changes: NodeChange<ProjectNodeType>[]) => onNodesChange(changes.filter((c) => c.type !== "remove")),
+    (changes: NodeChange<CanvasNodeType>[]) => onNodesChange(changes.filter((c) => c.type !== "remove")),
     [onNodesChange],
   );
 
   const onNodeDragStop = useCallback(
-    (_: MouseEvent | TouchEvent, _node: ProjectNodeType, dragged: ProjectNodeType[]) => {
+    (_: MouseEvent | TouchEvent, _node: CanvasNodeType, dragged: CanvasNodeType[]) => {
       if (!view) return;
       saveNodes.mutate({
         canvasId: view.canvas.id,
@@ -168,7 +188,7 @@ function CanvasBoard() {
   );
 
   // Links can be removed with the keyboard; cards cannot (use the drawer).
-  const onBeforeDelete: OnBeforeDelete<ProjectNodeType, LinkEdgeType> = useCallback(async ({ edges }) => ({ nodes: [], edges }), []);
+  const onBeforeDelete: OnBeforeDelete<CanvasNodeType, LinkEdgeType> = useCallback(async ({ edges }) => ({ nodes: [], edges }), []);
 
   const jumpTo = useCallback(
     (id: string) => {
@@ -191,7 +211,7 @@ function CanvasBoard() {
 
   return (
     <main className="relative flex-1" onDoubleClick={onPaneDoubleClick}>
-      <ReactFlow<ProjectNodeType, LinkEdgeType>
+      <ReactFlow<CanvasNodeType, LinkEdgeType>
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -199,8 +219,8 @@ function CanvasBoard() {
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
-        onNodeClick={(_, n) => openProject(n.id)}
-        onNodeDoubleClick={(_, n) => navigate(`/projects/${n.id}`)}
+        onNodeClick={(_, n) => n.type === "project" && openProject(n.id)}
+        onNodeDoubleClick={(_, n) => n.type === "project" && navigate(`/projects/${n.id}`)}
         onPaneClick={() => openProject(null)}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
@@ -232,7 +252,10 @@ function CanvasBoard() {
             zoomable
             ariaLabel="Minimap"
             className="!static !m-0 hidden sm:block"
-            nodeColor={(n) => projectColor((n as ProjectNodeType).data.project.color)}
+            nodeColor={(n) => {
+              const node = n as CanvasNodeType;
+              return node.type === "project" ? projectColor(node.data.project.color) : "var(--tmp-line)";
+            }}
             nodeBorderRadius={2}
             maskColor="color-mix(in srgb, var(--tmp-surface) 70%, transparent)"
             style={{ width: 180, height: 110 }}

@@ -25,7 +25,11 @@ fn day(ts: &str) -> &str {
 /// One line per project, for `list_projects`.
 pub fn project_line(p: &Project) -> String {
     let s = &p.stats;
-    let mut line = format!("- **{}** ({}) · id `{}` · {} open", p.title, p.status, p.id, s.open_tasks);
+    let mut line = format!("- **{}** ({}) · id `{}`", p.title, p.status, p.id);
+    if p.role != "owner" {
+        let _ = write!(line, " · shared by {} ({})", p.owner_name, p.role);
+    }
+    let _ = write!(line, " · {} open", s.open_tasks);
     if s.in_progress_tasks > 0 {
         let _ = write!(line, ", {} in progress", s.in_progress_tasks);
     }
@@ -58,6 +62,9 @@ pub fn task_line(t: &Task) -> String {
     }
     if !t.labels.is_empty() {
         bits.push(t.labels.iter().map(|l| l.name.as_str()).collect::<Vec<_>>().join(", "));
+    }
+    if let Some(a) = &t.assignee_name {
+        bits.push(format!("assigned to {a}"));
     }
     if !bits.is_empty() {
         let _ = write!(line, " ({})", bits.join("; "));
@@ -131,6 +138,13 @@ pub fn project(b: &ProjectBrief) -> String {
         facts.push(format!("target {d}"));
     }
     facts.push(format!("last active {}", day(&p.stats.last_active_at)));
+    if p.role != "owner" {
+        facts.push(format!(
+            "shared with you by {}, as {}",
+            p.owner_name,
+            if p.role == "editor" { "an editor" } else { "a viewer, so you can't change it" }
+        ));
+    }
     let _ = writeln!(out, "{}\n", facts.join(" · "));
     if let Some(s) = p.summary.as_deref().filter(|s| !s.is_empty()) {
         let _ = writeln!(out, "{s}\n");

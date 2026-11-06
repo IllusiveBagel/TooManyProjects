@@ -30,8 +30,15 @@ export function InvitePage() {
     accept.mutate({ token, ...form }, { onSuccess: () => navigate("/", { replace: true }) });
   };
 
+  const { invited_by, scope, project_title, role } = lookup.data;
+  const what =
+    scope === "project" && project_title
+      ? ` to ${role === "editor" ? "work on" : "see"} ${project_title}`
+      : scope === "account"
+        ? ` to ${role === "editor" ? "work on" : "see"} all their projects`
+        : "";
   return (
-    <AuthLayout title="Join the workshop" intro={`${lookup.data.invited_by} invited you. Make your account to get in.`}>
+    <AuthLayout title="Join the workshop" intro={`${invited_by} invited you${what}. Make your account to get in.`}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <Field label="Name" autoComplete="name" required value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })} />

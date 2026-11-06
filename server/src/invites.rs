@@ -1,9 +1,9 @@
 //! Invite links: the only way to make an account once the owner exists.
 //!
 //! An invite's token is shown once, inside its link, when it is created. Only
-//! its SHA-256 is stored. In phase 0 every invite has scope `server` (join the
-//! install, nothing shared yet); `account` and `project` scopes arrive with
-//! sharing.
+//! its SHA-256 is stored. Scope `server` only lets someone join; `account`
+//! and `project` also share the inviter's whole account or one project with
+//! them as they join.
 
 use axum::{
     Json,
@@ -21,7 +21,8 @@ use crate::{
     AppState,
     auth::{self, CurrentUser, User},
     error::{AppError, AppResult},
-    time,
+    projects::owned_project,
+    sharing, time,
 };
 
 pub fn router() -> OpenApiRouter<AppState> {
@@ -35,8 +36,14 @@ pub fn router() -> OpenApiRouter<AppState> {
 #[derive(Serialize, FromRow, ToSchema)]
 pub struct Invite {
     pub id: String,
+    /// `server` (join only), `account` or `project`.
     pub scope: String,
+    pub project_id: Option<String>,
+    pub project_title: Option<String>,
+    /// For `account` and `project` invites: `viewer` or `editor`.
     pub role: String,
+    pub include_children: bool,
+    pub include_notes: bool,
     pub note: Option<String>,
     pub created_at: String,
     pub expires_at: String,
@@ -52,6 +59,16 @@ pub struct CreateInviteRequest {
     pub note: Option<String>,
     /// 1 to 30. Defaults to 7.
     pub expires_in_days: Option<i64>,
+    /// `server` (the default), `account` or `project`.
+    pub scope: Option<String>,
+    /// Required for a `project` invite. You must own it.
+    pub project_id: Option<String>,
+    /// `viewer` (the default) or `editor`.
+    pub role: Option<String>,
+    #[serde(default)]
+    pub include_children: bool,
+    #[serde(default)]
+    pub include_notes: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -67,6 +84,10 @@ pub struct CreatedInvite {
 pub struct InviteLookup {
     pub invited_by: String,
     pub expires_at: String,
+    /// `server`, `account` or `project`.
+    pub scope: String,
+    pub project_title: Option<String>,
+    pub role: String,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -77,9 +98,10 @@ pub struct AcceptInviteRequest {
     pub password: String,
 }
 
-const INVITE_SELECT: &str = "SELECT i.id, i.scope, i.role, i.note, i.created_at, i.expires_at,
+const INVITE_SELECT: &str = "SELECT i.id, i.scope, i.project_id, p.title AS project_title, i.role,
+        i.include_children, i.include_notes, i.note, i.created_at, i.expires_at,
         i.accepted_at, u.name AS accepted_by_name, i.revoked_at
-    FROM invites i LEFT JOIN users u ON u.id = i.accepted_by";
+    FROM invites i LEFT JOIN users u ON u.id = i.accepted_by LEFT JOIN projects p ON p.id = i.project_id";
 
 fn require_owner(user: &User) -> AppResult<()> {
     if user.is_owner() {
@@ -117,16 +139,41 @@ async fn create_invite(
         return Err(AppError::BadRequest("invalid_expiry", "Invites last 1 to 30 days.".into()));
     }
     let note = req.note.map(|n| n.trim().chars().take(200).collect::<String>()).filter(|n| !n.is_empty());
+    let scope = req.scope.unwrap_or_else(|| "server".into());
+    let role = req.role.unwrap_or_else(|| "viewer".into());
+    sharing::check_role(&role)?;
+    let project_id = match scope.as_str() {
+        "server" | "account" => None,
+        "project" => {
+            let Some(pid) = req.project_id else {
+                return Err(AppError::BadRequest("missing_project", "Say which project to share.".into()));
+            };
+            owned_project(&mut *state.db.acquire().await?, &user.id, &pid).await?;
+            Some(pid)
+        }
+        _ => {
+            return Err(AppError::BadRequest(
+                "invalid_scope",
+                "An invite's scope is server, account or project.".into(),
+            ));
+        }
+    };
     let (token, hash) = auth::new_token();
     let id = time::new_id();
     let now = Utc::now();
     sqlx::query(
-        "INSERT INTO invites (id, token_hash, created_by, scope, role, note, expires_at, created_at)
-         VALUES (?, ?, ?, 'server', 'viewer', ?, ?, ?)",
+        "INSERT INTO invites (id, token_hash, created_by, scope, project_id, role, include_children,
+            include_notes, note, expires_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(&hash)
     .bind(&user.id)
+    .bind(&scope)
+    .bind(&project_id)
+    .bind(&role)
+    .bind(req.include_children && scope == "project")
+    .bind(req.include_notes && scope == "account")
     .bind(&note)
     .bind(time::format(now + Duration::days(days)))
     .bind(time::format(now))
@@ -173,16 +220,17 @@ async fn lookup_invite(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> AppResult<Json<InviteLookup>> {
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT u.name, i.expires_at FROM invites i JOIN users u ON u.id = i.created_by
+    let row: Option<(String, String, String, Option<String>, String)> = sqlx::query_as(
+        "SELECT u.name, i.expires_at, i.scope, p.title, i.role FROM invites i JOIN users u ON u.id = i.created_by
+         LEFT JOIN projects p ON p.id = i.project_id
          WHERE i.token_hash = ? AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?",
     )
     .bind(auth::hash_token(&token))
     .bind(time::now())
     .fetch_optional(&state.db)
     .await?;
-    let (invited_by, expires_at) = row.ok_or(AppError::NotFound)?;
-    Ok(Json(InviteLookup { invited_by, expires_at }))
+    let (invited_by, expires_at, scope, project_title, role) = row.ok_or(AppError::NotFound)?;
+    Ok(Json(InviteLookup { invited_by, expires_at, scope, project_title, role }))
 }
 
 /// Make an account from an invite, and sign in. Public.
@@ -240,6 +288,29 @@ async fn accept_invite(
     .rows_affected();
     if claimed == 0 {
         return Err(AppError::NotFound);
+    }
+    let (scope, created_by, project_id, role, include_children, include_notes): (
+        String,
+        String,
+        Option<String>,
+        String,
+        bool,
+        bool,
+    ) = sqlx::query_as(
+        "SELECT scope, created_by, project_id, role, include_children, include_notes FROM invites
+         WHERE token_hash = ?",
+    )
+    .bind(auth::hash_token(&req.token))
+    .fetch_one(&mut *tx)
+    .await?;
+    match (scope.as_str(), project_id) {
+        ("account", _) => {
+            sharing::insert_account_share(&mut tx, &created_by, &user_id, &role, include_notes).await?;
+        }
+        ("project", Some(pid)) => {
+            sharing::insert_project_share(&mut tx, &pid, &user_id, &role, include_children).await?;
+        }
+        _ => {}
     }
     auth::create_home_canvas(&mut tx, &user_id).await?;
     let cookie = auth::start_session(&mut tx, &state, &user_id, &headers).await?;

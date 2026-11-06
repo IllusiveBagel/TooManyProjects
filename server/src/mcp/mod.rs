@@ -223,7 +223,7 @@ fn text(s: impl Into<String>) -> CallToolResult {
 /// A failure the model should read and can fix.
 fn failed(e: AppError) -> CallToolResult {
     let message = match &e {
-        AppError::NotFound => "Not found, or not yours.".to_string(),
+        AppError::NotFound => "Not found, or not shared with you.".to_string(),
         AppError::Internal(err) => {
             tracing::error!(error = ?err, "mcp tool failed");
             "Something went wrong on the server.".to_string()
@@ -263,26 +263,31 @@ fn bad(code: &'static str, msg: impl Into<String>) -> AppError {
     AppError::BadRequest(code, msg.into())
 }
 
-/// A project by id, or by exact title (any case) among the person's own.
+/// A project by id, or by exact title (any case) among those the person can
+/// see, their own first.
 async fn find_project(conn: &mut SqliteConnection, user: &User, key: &str) -> AppResult<Project> {
     let key = key.trim();
     if let Ok(p) = visible_project(conn, &user.id, key).await {
         return Ok(p);
     }
-    let id: Option<String> =
-        sqlx::query_scalar("SELECT id FROM projects WHERE owner_id = ? AND title = ? COLLATE NOCASE LIMIT 1")
-            .bind(&user.id)
-            .bind(key)
-            .fetch_optional(&mut *conn)
-            .await?;
+    let id: Option<String> = sqlx::query_scalar(
+        "SELECT p.id FROM projects p JOIN project_access a ON a.project_id = p.id
+             WHERE a.user_id = ?1 AND p.title = ?2 COLLATE NOCASE ORDER BY p.owner_id = ?1 DESC LIMIT 1",
+    )
+    .bind(&user.id)
+    .bind(key)
+    .fetch_optional(&mut *conn)
+    .await?;
     match id {
         Some(id) => visible_project(conn, &user.id, &id).await,
         None => {
-            let titles: Vec<String> =
-                sqlx::query_scalar("SELECT title FROM projects WHERE owner_id = ? AND status <> 'archived'")
-                    .bind(&user.id)
-                    .fetch_all(&mut *conn)
-                    .await?;
+            let titles: Vec<String> = sqlx::query_scalar(
+                "SELECT p.title FROM projects p JOIN project_access a ON a.project_id = p.id
+                     WHERE a.user_id = ? AND p.status <> 'archived'",
+            )
+            .bind(&user.id)
+            .fetch_all(&mut *conn)
+            .await?;
             let like = close_titles(key, &titles);
             let hint = if like.is_empty() {
                 "Use list_projects to see them.".to_string()
@@ -314,11 +319,11 @@ fn close_titles(key: &str, titles: &[String]) -> Vec<String> {
 async fn find_note(conn: &mut SqliteConnection, user: &User, key: &str) -> AppResult<String> {
     let key = key.trim();
     let id: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM notes WHERE user_id = ? AND (id = ? OR title = ? COLLATE NOCASE) ORDER BY id = ? DESC, updated_at DESC LIMIT 1",
+        "SELECT n.id FROM notes n JOIN note_access na ON na.note_id = n.id AND na.user_id = ?1
+         WHERE n.id = ?2 OR n.title = ?2 COLLATE NOCASE
+         ORDER BY n.id = ?2 DESC, n.user_id = ?1 DESC, n.updated_at DESC LIMIT 1",
     )
     .bind(&user.id)
-    .bind(key)
-    .bind(key)
     .bind(key)
     .fetch_optional(&mut *conn)
     .await?;
@@ -358,7 +363,9 @@ enum ColumnChoice {
 async fn descendants(conn: &mut SqliteConnection, user: &User, root: &str) -> AppResult<Vec<String>> {
     Ok(sqlx::query_scalar(
         "WITH RECURSIVE fam(id) AS (SELECT ? UNION SELECT l.target_id FROM project_links l JOIN fam f ON l.source_id = f.id WHERE l.kind = 'spawned')
-         SELECT p.id FROM fam JOIN projects p ON p.id = fam.id WHERE p.owner_id = ? AND p.id <> ? ORDER BY p.created_at",
+         SELECT p.id FROM fam JOIN projects p ON p.id = fam.id
+         JOIN project_access a ON a.project_id = p.id
+         WHERE a.user_id = ? AND p.id <> ? ORDER BY p.created_at",
     )
     .bind(root)
     .bind(&user.id)
@@ -372,7 +379,8 @@ spawned another), each with a kanban board of tasks, plus a vault of markdown no
 or search, then get_project_context for a full briefing on one project. Notes link with [[Note title]] and \
 [[@Project title]]. Write tools (create_task, update_task, add_note, append_to_note, spawn_project) need a \
 read-write token, and everything they change shows in the project's history as done via AI. Prefer adding to \
-an existing note over making a near-duplicate.";
+an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
+a project shared as viewer can be read but not changed.";
 
 // ---------------------------------------------------------------------------
 // The server
@@ -406,7 +414,8 @@ impl Mcp {
         let other_links: Vec<(String, bool, String)> = sqlx::query_as(
             "SELECT l.kind, l.source_id = ?1, p.title FROM project_links l
              JOIN projects p ON p.id = CASE WHEN l.source_id = ?1 THEN l.target_id ELSE l.source_id END
-             WHERE (l.source_id = ?1 OR l.target_id = ?1) AND l.kind <> 'spawned' AND p.owner_id = ?2",
+             JOIN project_access a ON a.project_id = p.id
+             WHERE (l.source_id = ?1 OR l.target_id = ?1) AND l.kind <> 'spawned' AND a.user_id = ?2",
         )
         .bind(&id)
         .bind(&user.id)
@@ -453,7 +462,7 @@ impl Mcp {
         let Json(all) = tasks::global_tasks(
             State(self.state.clone()),
             CurrentUser(user.clone()),
-            Query(tasks::GlobalQuery { project_id: None, family: None, done_days: Some(7) }),
+            Query(tasks::GlobalQuery { project_id: None, family: None, done_days: Some(7), mine: false }),
         )
         .await?;
         let mut out = String::from("# The week across every project\n\n## Projects\n\n");
@@ -552,8 +561,10 @@ impl Mcp {
                 let like = format!("%{}%", q.replace(['%', '_'], ""));
                 let mut conn = self.conn().await?;
                 let found_projects: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
-                    "SELECT id, title, status, summary FROM projects WHERE owner_id = ?
-                       AND (title LIKE ?2 OR summary LIKE ?2 OR description LIKE ?2) ORDER BY updated_at DESC LIMIT ?3",
+                    "SELECT p.id, p.title, p.status, p.summary FROM projects p
+                     JOIN project_access a ON a.project_id = p.id AND a.user_id = ?1
+                     WHERE p.title LIKE ?2 OR p.summary LIKE ?2 OR p.description LIKE ?2
+                     ORDER BY p.updated_at DESC LIMIT ?3",
                 )
                 .bind(&user.id)
                 .bind(&like)
@@ -563,7 +574,8 @@ impl Mcp {
                 let found_tasks: Vec<(String, i64, String, String, String)> = sqlx::query_as(
                     "SELECT t.id, t.number, t.title, p.title, s.name FROM tasks t
                      JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id
-                     WHERE p.owner_id = ? AND (t.title LIKE ?2 OR t.description LIKE ?2)
+                     JOIN project_access a ON a.project_id = p.id AND a.user_id = ?1
+                     WHERE t.title LIKE ?2 OR t.description LIKE ?2
                      ORDER BY s.category = 'done', t.updated_at DESC LIMIT ?3",
                 )
                 .bind(&user.id)
@@ -579,6 +591,7 @@ impl Mcp {
                         tag: None,
                         project_id: None,
                         folder: None,
+                        shared: None,
                         limit: Some(limit),
                     }),
                 )
@@ -629,6 +642,7 @@ impl Mcp {
                         tag: args.tag.clone().map(|t| t.trim_start_matches('#').to_string()),
                         project_id,
                         folder: args.folder.clone(),
+                        shared: None,
                         limit: Some(args.limit.unwrap_or(30).clamp(1, 200)),
                     }),
                 )
@@ -922,7 +936,8 @@ impl ServerHandler for Mcp {
     ) -> Result<ListResourcesResult, McpError> {
         let user = caller(&ctx)?.user;
         let rows: Vec<(String, String, Option<String>)> = sqlx::query_as(
-            "SELECT id, title, summary FROM projects WHERE owner_id = ? AND status <> 'archived' ORDER BY title",
+            "SELECT p.id, p.title, p.summary FROM projects p JOIN project_access a ON a.project_id = p.id
+             WHERE a.user_id = ? AND p.status <> 'archived' ORDER BY p.title",
         )
         .bind(&user.id)
         .fetch_all(&self.state.db)

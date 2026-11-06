@@ -301,7 +301,8 @@ async fn write_index(
     for p in &fm.projects {
         sqlx::query(
             "INSERT OR IGNORE INTO note_projects (note_id, project_id)
-             SELECT ?, id FROM projects WHERE owner_id = ? AND title = ? COLLATE NOCASE",
+             SELECT ?, p.id FROM projects p JOIN project_access a ON a.project_id = p.id
+             WHERE a.user_id = ? AND p.title = ? COLLATE NOCASE",
         )
         .bind(id)
         .bind(user_id)

@@ -23,8 +23,9 @@ export function NotePage() {
 
 function NoteView({ detail }: { detail: NoteDetail }) {
   const { note } = detail;
+  const canEdit = note.can_edit;
   const [params, setParams] = useSearchParams();
-  const editing = params.get("edit") === "1" || (!detail.body.trim() && params.get("edit") !== "0");
+  const editing = canEdit && (params.get("edit") === "1" || (!detail.body.trim() && params.get("edit") !== "0"));
   const setEditing = (on: boolean) =>
     setParams((p) => {
       const next = new URLSearchParams(p);
@@ -83,7 +84,7 @@ function NoteView({ detail }: { detail: NoteDetail }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+      if (canEdit && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
         e.preventDefault();
         flushRef.current();
         setEditing(!editing);
@@ -115,52 +116,63 @@ function NoteView({ detail }: { detail: NoteDetail }) {
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/notes" className="label-mono text-text-quiet hover:text-text md:hidden">‹ Notes</Link>
           <span className={`label-mono text-[11px] ${save === "error" ? "text-late" : "text-text-quiet"}`} role="status">{saveLabel}</span>
+          {note.owner_name && (
+            <span className="label-mono text-text-quiet text-[11px]">
+              · {note.owner_name}’s note · {canEdit ? "you can edit" : "view only"}
+            </span>
+          )}
           <span className="ml-auto flex gap-2">
-            <Button
-              className="label-mono min-h-9 px-3 text-[11px]"
-              aria-pressed={editing}
-              onClick={() => {
-                flush();
-                setEditing(!editing);
-              }}
-              title="Ctrl E"
-            >
-              {editing ? "Read" : "Edit"}
-            </Button>
+            {canEdit && (
+              <Button
+                className="label-mono min-h-9 px-3 text-[11px]"
+                aria-pressed={editing}
+                onClick={() => {
+                  flush();
+                  setEditing(!editing);
+                }}
+                title="Ctrl E"
+              >
+                {editing ? "Read" : "Edit"}
+              </Button>
+            )}
             <a
               href={`/api/v1/notes/${note.id}/download`}
               className="border-rule label-mono hover:bg-surface-raised inline-flex min-h-9 items-center rounded-md px-3 text-[11px] font-bold"
             >
               .md
             </a>
-            <Button
-              className="label-mono text-late min-h-9 px-3 text-[11px]"
-              onClick={() => {
-                if (!confirm(`Delete “${note.title}”? The file is removed from your vault.`)) return;
-                pending.current = null;
-                remove.mutate(note.id, { onSuccess: () => navigate("/notes") });
-              }}
-            >
-              Delete
-            </Button>
+            {!note.owner_name && (
+              <Button
+                className="label-mono text-late min-h-9 px-3 text-[11px]"
+                onClick={() => {
+                  if (!confirm(`Delete “${note.title}”? The file is removed from your vault.`)) return;
+                  pending.current = null;
+                  remove.mutate(note.id, { onSuccess: () => navigate("/notes") });
+                }}
+              >
+                Delete
+              </Button>
+            )}
           </span>
         </div>
 
-        <TitleInput detail={detail} onRename={(title) => update.mutate({ title })} />
+        <TitleInput detail={detail} readOnly={!canEdit} onRename={(title) => update.mutate({ title })} />
         <ErrorNote error={update.error ?? remove.error ?? create.error} />
 
-        <MetaRow detail={detail} onChange={(change) => update.mutate(change)} />
+        <MetaRow detail={detail} readOnly={!canEdit} onChange={(change) => update.mutate(change)} />
 
         {editing ? (
           <MarkdownEditor value={body} onChange={onChange} targets={targets} autoFocus label={`${note.title}, markdown`} />
         ) : body.trim() ? (
-          <div onDoubleClick={() => setEditing(true)}>
+          <div onDoubleClick={() => canEdit && setEditing(true)}>
             <NoteMarkdown body={body} links={linksOut} onCreate={createLinked} />
           </div>
-        ) : (
+        ) : canEdit ? (
           <button type="button" onClick={() => setEditing(true)} className="text-text-quiet font-reading cursor-pointer self-start text-[19px] italic">
             Empty. Start writing…
           </button>
+        ) : (
+          <p className="text-text-quiet font-reading text-[19px] italic">Empty.</p>
         )}
       </article>
 
@@ -208,7 +220,7 @@ function NoteView({ detail }: { detail: NoteDetail }) {
   );
 }
 
-function TitleInput({ detail, onRename }: { detail: NoteDetail; onRename: (title: string) => void }) {
+function TitleInput({ detail, readOnly, onRename }: { detail: NoteDetail; readOnly: boolean; onRename: (title: string) => void }) {
   const [title, setTitle] = useState(detail.note.title);
   useEffect(() => setTitle(detail.note.title), [detail.note.title]);
   const commit = () => {
@@ -220,6 +232,7 @@ function TitleInput({ detail, onRename }: { detail: NoteDetail; onRename: (title
     <input
       aria-label="Title"
       value={title}
+      readOnly={readOnly}
       onChange={(e) => setTitle(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
@@ -230,23 +243,26 @@ function TitleInput({ detail, onRename }: { detail: NoteDetail; onRename: (title
 
 function MetaRow({
   detail,
+  readOnly,
   onChange,
 }: {
   detail: NoteDetail;
+  readOnly: boolean;
   onChange: (change: { project_ids?: string[]; tags?: string[] }) => void;
 }) {
   const { note } = detail;
   const projects = useCanvas(false).data?.projects ?? [];
   const [tagDraft, setTagDraft] = useState("");
   const ids = note.projects.map((p) => p.id);
-  const others = projects.filter((p) => !ids.includes(p.id));
+  // Filing a note under a project shares it with that project's people, so only projects you can edit.
+  const others = readOnly ? [] : projects.filter((p) => !ids.includes(p.id) && p.role !== "viewer");
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {note.projects.map((p) => (
         <span key={p.id} className="label-mono border-rule inline-flex items-center rounded-sm border-current text-[10.5px]" style={{ color: projectColor(p.color) }}>
-          <Link to={`/projects/${p.id}`} className="py-1 pl-1.5">{p.title}</Link>
-          <button type="button" aria-label={`Remove ${p.title}`} onClick={() => onChange({ project_ids: ids.filter((i) => i !== p.id) })} className="cursor-pointer px-1.5 py-1">×</button>
+          <Link to={`/projects/${p.id}`} className={`py-1 pl-1.5 ${readOnly ? "pr-1.5" : ""}`}>{p.title}</Link>
+          {!readOnly && <button type="button" aria-label={`Remove ${p.title}`} onClick={() => onChange({ project_ids: ids.filter((i) => i !== p.id) })} className="cursor-pointer px-1.5 py-1">×</button>}
         </span>
       ))}
       {others.length > 0 && (
@@ -265,10 +281,10 @@ function MetaRow({
       {note.tags.map((t) => (
         <span key={t} className="label-mono text-text-quiet inline-flex items-center text-[11px]">
           <Link to={`/notes?tag=${encodeURIComponent(t)}`} className="hover:text-text py-1">#{t}</Link>
-          <button type="button" aria-label={`Remove tag ${t}`} onClick={() => onChange({ tags: note.tags.filter((x) => x !== t) })} className="hover:text-text cursor-pointer px-1 py-1">×</button>
+          {!readOnly && <button type="button" aria-label={`Remove tag ${t}`} onClick={() => onChange({ tags: note.tags.filter((x) => x !== t) })} className="hover:text-text cursor-pointer px-1 py-1">×</button>}
         </span>
       ))}
-      <form
+      {!readOnly && <form
         onSubmit={(e) => {
           e.preventDefault();
           const added = parseTags(tagDraft);
@@ -283,7 +299,7 @@ function MetaRow({
           placeholder="#tag"
           className="label-mono text-text min-h-8 w-20 bg-transparent px-1 text-[11px] outline-none placeholder:text-text-quiet focus:w-32"
         />
-      </form>
+      </form>}
     </div>
   );
 }

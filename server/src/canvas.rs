@@ -2,6 +2,8 @@
 //! projects themselves, so moving a card never touches a project, and each
 //! person arranges their own canvas.
 
+use std::collections::HashSet;
+
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -52,13 +54,24 @@ pub struct CanvasNode {
     pub collapsed: bool,
 }
 
+/// A project you can't see that is linked to one you can. The canvas shows it
+/// as a locked card, so the arrow has somewhere to go, without its title.
+#[derive(Serialize, FromRow, ToSchema)]
+pub struct LockedProject {
+    pub id: String,
+    pub owner_name: String,
+}
+
 /// Everything the canvas draws, in one call.
 #[derive(Serialize, ToSchema)]
 pub struct CanvasView {
     pub canvas: Canvas,
     pub nodes: Vec<CanvasNode>,
+    /// Your projects and the ones shared with you.
     pub projects: Vec<Project>,
-    /// Links whose two ends are both in `projects`.
+    /// Linked projects that aren't shared with you.
+    pub locked: Vec<LockedProject>,
+    /// Links whose ends are both in `projects` or `locked`, at least one in `projects`.
     pub links: Vec<Link>,
 }
 
@@ -170,21 +183,76 @@ async fn home_canvas(
 
     let archived = if q.include_archived { "" } else { " AND p.status <> 'archived'" };
     let projects = sqlx::query_as::<_, Project>(&format!(
-        "{PROJECT_SELECT} WHERE p.owner_id = ?{archived} ORDER BY p.created_at"
+        "{PROJECT_SELECT} WHERE a.user_id = ?{archived} ORDER BY p.created_at"
     ))
     .bind(&user.id)
     .fetch_all(&mut *tx)
     .await?;
+    let shown: HashSet<String> = projects.iter().map(|p| p.id.clone()).collect();
+    let access: HashSet<String> =
+        sqlx::query_scalar("SELECT project_id FROM project_access WHERE user_id = ?")
+            .bind(&user.id)
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .collect();
 
+    // Every link touching a project shown here. An end you have no access to
+    // at all becomes a locked card; an end you can see but that is hidden
+    // (archived) drops the link, as before.
+    let links: Vec<Link> = sqlx::query_as::<_, Link>(&format!(
+        "SELECT {LINK_COLUMNS} FROM project_links l
+         WHERE l.source_id IN (SELECT project_id FROM project_access WHERE user_id = ?1)
+            OR l.target_id IN (SELECT project_id FROM project_access WHERE user_id = ?1)
+         ORDER BY created_at"
+    ))
+    .bind(&user.id)
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .filter(|l| {
+        let ok = |id: &str| shown.contains(id) || !access.contains(id);
+        ok(&l.source_id) && ok(&l.target_id) && (shown.contains(&l.source_id) || shown.contains(&l.target_id))
+    })
+    .collect();
+    let mut locked_ids: Vec<&str> = links
+        .iter()
+        .flat_map(|l| [l.source_id.as_str(), l.target_id.as_str()])
+        .filter(|id| !access.contains(*id))
+        .collect();
+    locked_ids.sort_unstable();
+    locked_ids.dedup();
+    let mut locked = Vec::with_capacity(locked_ids.len());
+    for id in &locked_ids {
+        locked.push(
+            sqlx::query_as::<_, LockedProject>(
+                "SELECT p.id, u.name AS owner_name FROM projects p JOIN users u ON u.id = p.owner_id WHERE p.id = ?",
+            )
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?,
+        );
+    }
+
+    let placed: HashSet<String> = sqlx::query_scalar(
+        "SELECT project_id FROM canvas_nodes WHERE canvas_id = ? AND project_id IS NOT NULL",
+    )
+    .bind(&canvas_id)
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .collect();
     let unplaced: Vec<String> = sqlx::query_scalar(
-        "SELECT p.id FROM projects p WHERE p.owner_id = ?
-           AND NOT EXISTS (SELECT 1 FROM canvas_nodes n WHERE n.canvas_id = ? AND n.project_id = p.id)
+        "SELECT p.id FROM projects p JOIN project_access a ON a.project_id = p.id AND a.user_id = ?
          ORDER BY p.created_at",
     )
     .bind(&user.id)
-    .bind(&canvas_id)
     .fetch_all(&mut *tx)
-    .await?;
+    .await?
+    .into_iter()
+    .chain(locked_ids.iter().map(|s| s.to_string()))
+    .filter(|id| !placed.contains(id))
+    .collect();
     for project_id in unplaced {
         let (x, y) = next_free_spot(&mut tx, &canvas_id).await?;
         place_project(&mut tx, &canvas_id, &project_id, x, y).await?;
@@ -197,24 +265,11 @@ async fn home_canvas(
     .bind(&canvas_id)
     .fetch_all(&mut *tx)
     .await?;
-    let shown: std::collections::HashSet<&str> = projects.iter().map(|p| p.id.as_str()).collect();
-    nodes.retain(|n| n.project_id.as_deref().is_none_or(|id| shown.contains(id)));
-
-    let links = sqlx::query_as::<_, Link>(&format!(
-        "SELECT {LINK_COLUMNS} FROM project_links l
-         WHERE EXISTS (SELECT 1 FROM projects p WHERE p.id = l.source_id AND p.owner_id = ?)
-           AND EXISTS (SELECT 1 FROM projects p WHERE p.id = l.target_id AND p.owner_id = ?)
-         ORDER BY created_at"
-    ))
-    .bind(&user.id)
-    .bind(&user.id)
-    .fetch_all(&mut *tx)
-    .await?
-    .into_iter()
-    .filter(|l| shown.contains(l.source_id.as_str()) && shown.contains(l.target_id.as_str()))
-    .collect();
+    nodes.retain(|n| {
+        n.project_id.as_deref().is_none_or(|id| shown.contains(id) || locked_ids.binary_search(&id).is_ok())
+    });
     tx.commit().await?;
-    Ok(Json(CanvasView { canvas, nodes, projects, links }))
+    Ok(Json(CanvasView { canvas, nodes, projects, locked, links }))
 }
 
 /// Save card positions after a drag.
@@ -254,12 +309,12 @@ async fn save_nodes(
     }
     let now = time::now();
     for n in &req.nodes {
-        // Only cards for projects this person can see.
+        // Only cards already on this canvas, which the server placed for
+        // projects this person can see or for locked cards beside them.
         let changed = sqlx::query(
             "UPDATE canvas_nodes SET x = ?, y = ?, width = COALESCE(?, width), height = COALESCE(?, height),
                 updated_at = ?
-             WHERE canvas_id = ? AND project_id = ?
-               AND EXISTS (SELECT 1 FROM projects p WHERE p.id = ? AND p.owner_id = ?)",
+             WHERE canvas_id = ? AND project_id = ?",
         )
         .bind(n.x)
         .bind(n.y)
@@ -268,8 +323,6 @@ async fn save_nodes(
         .bind(&now)
         .bind(&id)
         .bind(&n.project_id)
-        .bind(&n.project_id)
-        .bind(&user.id)
         .execute(&mut *tx)
         .await?
         .rows_affected();

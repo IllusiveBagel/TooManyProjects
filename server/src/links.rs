@@ -21,7 +21,7 @@ use crate::{
     AppState,
     auth::CurrentUser,
     error::{AppError, AppResult},
-    projects::{log_activity, visible_project},
+    projects::{editable_project, log_activity, visible_project},
     time,
 };
 
@@ -173,11 +173,13 @@ async fn link_by_id(conn: &mut SqliteConnection, id: &str) -> AppResult<Link> {
         .ok_or(AppError::NotFound)
 }
 
-/// A link the person may change: they must see both ends.
-async fn visible_link(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Link> {
+/// A link the person may change: they must be able to edit both ends.
+async fn editable_link(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Link> {
     let link = link_by_id(conn, id).await?;
     visible_project(conn, user_id, &link.source_id).await?;
     visible_project(conn, user_id, &link.target_id).await?;
+    editable_project(conn, user_id, &link.source_id).await?;
+    editable_project(conn, user_id, &link.target_id).await?;
     Ok(link)
 }
 
@@ -193,8 +195,8 @@ async fn create_link(
 ) -> AppResult<(StatusCode, Json<Link>)> {
     let label = clean_label(req.label)?;
     let mut tx = state.db.begin().await?;
-    visible_project(&mut tx, &user.id, &req.source_id).await?;
-    visible_project(&mut tx, &user.id, &req.target_id).await?;
+    editable_project(&mut tx, &user.id, &req.source_id).await?;
+    editable_project(&mut tx, &user.id, &req.target_id).await?;
     let link = insert_link(&mut tx, &req.source_id, &req.target_id, &req.kind, label).await?;
     log_activity(
         &mut tx,
@@ -220,7 +222,7 @@ async fn update_link(
     Json(req): Json<UpdateLinkRequest>,
 ) -> AppResult<Json<Link>> {
     let mut tx = state.db.begin().await?;
-    let link = visible_link(&mut tx, &user.id, &id).await?;
+    let link = editable_link(&mut tx, &user.id, &id).await?;
     let kind = req.kind.unwrap_or_else(|| link.kind.clone());
     let label = match req.label {
         Some(l) => clean_label(l)?,
@@ -251,7 +253,7 @@ async fn delete_link(
     Path(id): Path<String>,
 ) -> AppResult<StatusCode> {
     let mut tx = state.db.begin().await?;
-    let link = visible_link(&mut tx, &user.id, &id).await?;
+    let link = editable_link(&mut tx, &user.id, &id).await?;
     sqlx::query("DELETE FROM project_links WHERE id = ?").bind(&id).execute(&mut *tx).await?;
     log_activity(
         &mut tx,

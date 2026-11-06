@@ -18,7 +18,7 @@ use crate::{
     auth::CurrentUser,
     error::{AppError, AppResult},
     position,
-    projects::{check_color, log_activity, some, visible_project},
+    projects::{check_color, editable_project, log_activity, some, visible_project},
     time,
 };
 
@@ -121,14 +121,14 @@ pub async fn statuses_for(conn: &mut SqliteConnection, project_id: &str) -> AppR
     .await?)
 }
 
-/// A column the person can see, else 404.
-pub async fn visible_status(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Status> {
+/// A column the person may change (and so move tasks into), else 404 or 403.
+pub async fn editable_status(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Status> {
     let status = sqlx::query_as::<_, Status>(&format!("SELECT {STATUS_COLUMNS} FROM statuses WHERE id = ?"))
         .bind(id)
         .fetch_optional(&mut *conn)
         .await?
         .ok_or(AppError::NotFound)?;
-    visible_project(conn, user_id, &status.project_id).await?;
+    editable_project(conn, user_id, &status.project_id).await?;
     Ok(status)
 }
 
@@ -245,7 +245,7 @@ async fn create_status(
         check_color(c)?;
     }
     let mut tx = state.db.begin().await?;
-    visible_project(&mut tx, &user.id, &id).await?;
+    editable_project(&mut tx, &user.id, &id).await?;
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM statuses WHERE project_id = ?")
         .bind(&id)
         .fetch_one(&mut *tx)
@@ -269,7 +269,7 @@ async fn update_status(
     Json(req): Json<UpdateStatusRequest>,
 ) -> AppResult<Json<Status>> {
     let mut tx = state.db.begin().await?;
-    let current = visible_status(&mut tx, &user.id, &id).await?;
+    let current = editable_status(&mut tx, &user.id, &id).await?;
     let name = match &req.name {
         Some(n) => clean_name(n, "column")?,
         None => current.name.clone(),
@@ -315,7 +315,7 @@ async fn update_status(
         .execute(&mut *tx)
         .await?;
     }
-    let status = visible_status(&mut tx, &user.id, &id).await?;
+    let status = editable_status(&mut tx, &user.id, &id).await?;
     tx.commit().await?;
     Ok(Json(status))
 }
@@ -331,7 +331,7 @@ async fn delete_status(
     Query(q): Query<DeleteStatusQuery>,
 ) -> AppResult<StatusCode> {
     let mut tx = state.db.begin().await?;
-    let status = visible_status(&mut tx, &user.id, &id).await?;
+    let status = editable_status(&mut tx, &user.id, &id).await?;
     let columns: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM statuses WHERE project_id = ?")
         .bind(&status.project_id)
         .fetch_one(&mut *tx)
@@ -350,7 +350,7 @@ async fn delete_status(
                 "Move this column's tasks to another column first.".into(),
             ));
         };
-        let dest = visible_status(&mut tx, &user.id, &target).await?;
+        let dest = editable_status(&mut tx, &user.id, &target).await?;
         if dest.project_id != status.project_id {
             return Err(AppError::BadRequest("invalid_move_to", "Pick a column on the same board.".into()));
         }
@@ -394,13 +394,13 @@ async fn delete_status(
 // ---------------------------------------------------------------------------
 // Label handlers
 
-async fn visible_label(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Label> {
+async fn editable_label(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Label> {
     let label = sqlx::query_as::<_, Label>("SELECT id, project_id, name, color FROM labels WHERE id = ?")
         .bind(id)
         .fetch_optional(&mut *conn)
         .await?
         .ok_or(AppError::NotFound)?;
-    visible_project(conn, user_id, &label.project_id).await?;
+    editable_project(conn, user_id, &label.project_id).await?;
     Ok(label)
 }
 
@@ -437,7 +437,7 @@ async fn create_label(
     let color = req.color.flatten().unwrap_or_else(|| "slot-1".into());
     check_color(&color)?;
     let mut tx = state.db.begin().await?;
-    visible_project(&mut tx, &user.id, &id).await?;
+    editable_project(&mut tx, &user.id, &id).await?;
     let taken: Option<String> =
         sqlx::query_scalar("SELECT id FROM labels WHERE project_id = ? AND name = ? COLLATE NOCASE")
             .bind(&id)
@@ -469,7 +469,7 @@ async fn update_label(
     Json(req): Json<LabelRequest>,
 ) -> AppResult<Json<Label>> {
     let mut tx = state.db.begin().await?;
-    let mut label = visible_label(&mut tx, &user.id, &id).await?;
+    let mut label = editable_label(&mut tx, &user.id, &id).await?;
     if let Some(n) = &req.name {
         label.name = clean_name(n, "label")?;
     }
@@ -504,7 +504,7 @@ async fn delete_label(
     Path(id): Path<String>,
 ) -> AppResult<StatusCode> {
     let mut tx = state.db.begin().await?;
-    visible_label(&mut tx, &user.id, &id).await?;
+    editable_label(&mut tx, &user.id, &id).await?;
     sqlx::query("DELETE FROM labels WHERE id = ?").bind(&id).execute(&mut *tx).await?;
     tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)

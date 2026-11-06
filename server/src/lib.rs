@@ -15,6 +15,7 @@ pub mod notes;
 pub mod openapi;
 pub mod position;
 pub mod projects;
+pub mod sharing;
 pub mod tasks;
 pub mod themes;
 pub mod time;

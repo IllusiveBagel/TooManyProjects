@@ -8,7 +8,7 @@ import { useProject } from "./ProjectPage";
 
 /** The Overview tab: stat tiles, the weekly chart, where tasks sit, up next, activity. */
 export function ProjectOverview() {
-  const { detail, newTask } = useProject();
+  const { detail, newTask, canEdit } = useProject();
   const dash = useDashboard(detail.project.id);
   const [, openTask] = useOpenTask();
   const { stats } = detail.project;
@@ -38,9 +38,11 @@ export function ProjectOverview() {
               {dash.data.up_next.length === 0 ? (
                 <p className="text-text-quiet text-sm">
                   Nothing open.{" "}
-                  <button type="button" className="text-accent cursor-pointer font-bold" onClick={() => newTask()}>
-                    Add a task
-                  </button>
+                  {canEdit && (
+                    <button type="button" className="text-accent cursor-pointer font-bold" onClick={() => newTask()}>
+                      Add a task
+                    </button>
+                  )}
                 </p>
               ) : (
                 <ul className="flex flex-col">

@@ -1,7 +1,8 @@
 //! Projects: the cards on the canvas.
 //!
-//! In phase 1 a person sees only the projects they own. Sharing (phase 3)
-//! widens [`visible_project`] and the list queries.
+//! Who sees what comes from the `project_access` view: a person's own
+//! projects plus whatever has been shared with them. [`visible_project`],
+//! [`editable_project`] and [`owned_project`] are the checks every handler uses.
 
 use axum::{
     Json,
@@ -65,6 +66,9 @@ pub struct Project {
     pub archived_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// What you can do with it: `owner`, `editor` or `viewer`.
+    pub role: String,
+    pub owner_name: String,
     #[sqlx(flatten)]
     pub stats: ProjectStats,
 }
@@ -72,8 +76,10 @@ pub struct Project {
 pub(crate) const PROJECT_SELECT: &str = "SELECT p.id, p.owner_id, p.title, p.summary, p.description,
         p.status, p.color, p.icon, p.started_at, p.target_date, p.archived_at, p.created_at, p.updated_at,
         s.total_tasks, s.done_tasks, s.open_tasks, s.in_progress_tasks, s.overdue_tasks, s.child_count,
-        s.last_active_at
-    FROM projects p JOIN project_stats s ON s.project_id = p.id";
+        s.last_active_at, a.role, o.name AS owner_name
+    FROM projects p JOIN project_stats s ON s.project_id = p.id
+        JOIN project_access a ON a.project_id = p.id
+        JOIN users o ON o.id = p.owner_id";
 
 /// A parent or child, as shown in a project's breadcrumbs.
 #[derive(Serialize, FromRow, ToSchema)]
@@ -209,12 +215,42 @@ pub fn check_date(date: &Option<String>) -> AppResult<()> {
 
 /// The project if the signed-in person may see it, else 404.
 pub async fn visible_project(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Project> {
-    sqlx::query_as::<_, Project>(&format!("{PROJECT_SELECT} WHERE p.id = ? AND p.owner_id = ?"))
+    sqlx::query_as::<_, Project>(&format!("{PROJECT_SELECT} WHERE p.id = ? AND a.user_id = ?"))
         .bind(id)
         .bind(user_id)
         .fetch_optional(conn)
         .await?
         .ok_or(AppError::NotFound)
+}
+
+/// The project if the signed-in person may change it (owner or editor).
+/// A viewer gets 403; someone it isn't shared with gets 404.
+pub async fn editable_project(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Project> {
+    let project = visible_project(conn, user_id, id).await?;
+    if project.role == "viewer" {
+        return Err(AppError::Forbidden(format!(
+            "{} is shared with you to view, not to change.",
+            project.title
+        )));
+    }
+    Ok(project)
+}
+
+/// The project if the signed-in person owns it.
+pub async fn owned_project(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Project> {
+    let project = visible_project(conn, user_id, id).await?;
+    if project.role != "owner" {
+        return Err(AppError::Forbidden(format!(
+            "Only {} can do that to {}.",
+            project.owner_name, project.title
+        )));
+    }
+    Ok(project)
+}
+
+/// Fails unless the person can change the project, without loading it.
+pub async fn require_edit(conn: &mut SqliteConnection, user_id: &str, project_id: &str) -> AppResult<()> {
+    editable_project(conn, user_id, project_id).await.map(|_| ())
 }
 
 tokio::task_local! {
@@ -279,7 +315,7 @@ async fn create_default_statuses(conn: &mut SqliteConnection, project_id: &str) 
 // ---------------------------------------------------------------------------
 // Handlers
 
-/// Your projects with their card stats, oldest first.
+/// Your projects and the ones shared with you, with their card stats, oldest first.
 #[utoipa::path(get, path = "/projects", tag = "projects", params(ListQuery),
     responses((status = 200, body = Vec<Project>)))]
 pub(crate) async fn list_projects(
@@ -289,7 +325,7 @@ pub(crate) async fn list_projects(
 ) -> AppResult<Json<Vec<Project>>> {
     let archived = if q.include_archived { "" } else { " AND p.status <> 'archived'" };
     let projects = sqlx::query_as::<_, Project>(&format!(
-        "{PROJECT_SELECT} WHERE p.owner_id = ?{archived} ORDER BY p.created_at"
+        "{PROJECT_SELECT} WHERE a.user_id = ?{archived} ORDER BY p.created_at"
     ))
     .bind(&user.id)
     .fetch_all(&state.db)
@@ -317,14 +353,17 @@ pub(crate) async fn create_project(
     }
 
     let mut tx = state.db.begin().await?;
-    if let Some(parent) = &req.spawned_from {
-        visible_project(&mut tx, &user.id, parent).await?;
-    }
+    // A project spawned from a shared one joins its parent's family: the
+    // parent's owner owns it, so it is shared the same way.
+    let owner_id = match &req.spawned_from {
+        Some(parent) => editable_project(&mut tx, &user.id, parent).await?.owner_id,
+        None => user.id.clone(),
+    };
     let color = match req.color {
         Some(c) => c,
         None => {
             let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projects WHERE owner_id = ?")
-                .bind(&user.id)
+                .bind(&owner_id)
                 .fetch_one(&mut *tx)
                 .await?;
             format!("slot-{}", count % 8 + 1)
@@ -339,7 +378,7 @@ pub(crate) async fn create_project(
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
-    .bind(&user.id)
+    .bind(&owner_id)
     .bind(&title)
     .bind(&summary)
     .bind(&description)
@@ -361,6 +400,19 @@ pub(crate) async fn create_project(
         _ => canvas::next_free_spot(&mut tx, &canvas_id).await?,
     };
     canvas::place_project(&mut tx, &canvas_id, &id, x, y).await?;
+    if owner_id != user.id {
+        // Whoever spawned it keeps editing it, even if their share of the
+        // parent doesn't take in children.
+        let covered: Option<String> =
+            sqlx::query_scalar("SELECT role FROM project_access WHERE project_id = ? AND user_id = ?")
+                .bind(&id)
+                .bind(&user.id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if covered.is_none() {
+            crate::sharing::insert_project_share(&mut tx, &id, &user.id, "editor", false).await?;
+        }
+    }
     log_activity(
         &mut tx,
         &id,
@@ -387,7 +439,8 @@ pub(crate) async fn get_project(
     let parents = sqlx::query_as::<_, ProjectRef>(
         "SELECT p.id, p.title, p.color, p.status, l.id AS link_id
          FROM project_links l JOIN projects p ON p.id = l.source_id
-         WHERE l.target_id = ? AND l.kind = 'spawned' AND p.owner_id = ? ORDER BY p.title",
+         JOIN project_access a ON a.project_id = p.id
+         WHERE l.target_id = ? AND l.kind = 'spawned' AND a.user_id = ? ORDER BY p.title",
     )
     .bind(&id)
     .bind(&user.id)
@@ -396,7 +449,8 @@ pub(crate) async fn get_project(
     let children = sqlx::query_as::<_, ProjectRef>(
         "SELECT p.id, p.title, p.color, p.status, l.id AS link_id
          FROM project_links l JOIN projects p ON p.id = l.target_id
-         WHERE l.source_id = ? AND l.kind = 'spawned' AND p.owner_id = ? ORDER BY p.title",
+         JOIN project_access a ON a.project_id = p.id
+         WHERE l.source_id = ? AND l.kind = 'spawned' AND a.user_id = ? ORDER BY p.title",
     )
     .bind(&id)
     .bind(&user.id)
@@ -417,7 +471,7 @@ async fn update_project(
     Json(req): Json<UpdateProjectRequest>,
 ) -> AppResult<Json<Project>> {
     let mut tx = state.db.begin().await?;
-    let current = visible_project(&mut tx, &user.id, &id).await?;
+    let current = editable_project(&mut tx, &user.id, &id).await?;
 
     let title = match req.title {
         Some(t) => clean_title(&t)?,
@@ -478,10 +532,17 @@ async fn update_project(
     log_activity(&mut tx, &id, &user.id, kind, serde_json::json!({ "from": current.status, "to": status }))
         .await?;
     let project = visible_project(&mut tx, &user.id, &id).await?;
+    let people: Vec<String> = sqlx::query_scalar("SELECT user_id FROM project_access WHERE project_id = ?")
+        .bind(&id)
+        .fetch_all(&mut *tx)
+        .await?;
     tx.commit().await?;
     if title != current.title {
-        // Notes name projects by title; the owner's vault follows the rename.
-        notes::project_renamed(&state, &current.owner_id, &current.title, &title).await?;
+        // Notes name projects by title; every vault that can name this one
+        // follows the rename.
+        for person in people {
+            notes::project_renamed(&state, &person, &current.title, &title).await?;
+        }
     }
     Ok(Json(project))
 }
@@ -495,7 +556,7 @@ async fn delete_project(
     Path(id): Path<String>,
 ) -> AppResult<StatusCode> {
     let mut tx = state.db.begin().await?;
-    visible_project(&mut tx, &user.id, &id).await?;
+    owned_project(&mut tx, &user.id, &id).await?;
     // Tasks first: their status column is ON DELETE RESTRICT, and the cascade
     // from projects would otherwise reach statuses before tasks.
     sqlx::query("DELETE FROM tasks WHERE project_id = ?").bind(&id).execute(&mut *tx).await?;
