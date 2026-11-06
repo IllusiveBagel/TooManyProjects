@@ -1,0 +1,128 @@
+{
+  "$schema": "./theme.schema.json",
+  "id": "workshop",
+  "name": "Workshop",
+  "version": 1,
+  "description": "The default look: graphite workbench, sage accent, muted project colours. Ships with a light Paper variant.",
+  "fonts": {
+    "display": "'Bricolage Grotesque Variable', 'Bricolage Grotesque', system-ui, sans-serif",
+    "interface": "'Bricolage Grotesque Variable', 'Bricolage Grotesque', system-ui, sans-serif",
+    "mono": "'JetBrains Mono', ui-monospace, monospace",
+    "reading": "'Newsreader Variable', 'Newsreader', Georgia, serif"
+  },
+  "primitives": {
+    "graphite-900": "#121110",
+    "graphite-800": "#1A1917",
+    "graphite-700": "#22201D",
+    "graphite-600": "#34312C",
+    "graphite-500": "#1E1C1A",
+    "graphite-450": "#2A2825",
+    "pencil-400": "#A8A196",
+    "pencil-600": "#5C574F",
+    "paper-50": "#F2EFE8",
+    "paper-100": "#EAE6DC",
+    "paper-200": "#E0DACD",
+    "paper-300": "#CFC7B7",
+    "ink-900": "#1C1A17",
+    "sage-300": "#B8C4A0",
+    "sage-700": "#4F5B3A",
+    "terracotta-400": "#D98A5F",
+    "terracotta-700": "#9A4F2A",
+    "lagoon-400": "#5FA8B0",
+    "lagoon-700": "#2F6E75",
+    "slate-400": "#7E9CC9",
+    "slate-700": "#3F5F8F",
+    "lavender-400": "#A193C4",
+    "lavender-700": "#5E4F87",
+    "olive-400": "#A3A36A",
+    "olive-700": "#5F5F2E",
+    "ochre-400": "#D4B26A",
+    "ochre-700": "#80652A",
+    "sand-400": "#C2B39A",
+    "sand-700": "#6B5E48",
+    "steel-400": "#93A4A8",
+    "steel-700": "#4C5D61",
+    "brick-400": "#D97A66",
+    "brick-700": "#A3402C",
+    "black": "#000000"
+  },
+  "modes": {
+    "dark": {
+      "label": "Workshop",
+      "semantic": {
+        "surface": "{graphite-900}",
+        "surface-card": "{graphite-800}",
+        "surface-raised": "{graphite-700}",
+        "line": "{graphite-600}",
+        "text": "{paper-50}",
+        "text-quiet": "{pencil-400}",
+        "accent": "{sage-300}",
+        "on-accent": "{graphite-900}",
+        "late": "{brick-400}",
+        "done": "{sage-300}",
+        "focus": "{sage-300}",
+        "shadow": "{black}"
+      },
+      "slots": [
+        "{terracotta-400}",
+        "{lagoon-400}",
+        "{slate-400}",
+        "{lavender-400}",
+        "{olive-400}",
+        "{ochre-400}",
+        "{sand-400}",
+        "{steel-400}"
+      ],
+      "component": {
+        "canvas-grid-minor": "{graphite-500}",
+        "canvas-grid-major": "{graphite-450}",
+        "card-shadow": "5px 5px 0 {black}",
+        "card-shadow-selected": "5px 5px 0 {sage-300}",
+        "button-shadow": "3px 3px 0 {black}"
+      }
+    },
+    "light": {
+      "label": "Paper",
+      "semantic": {
+        "surface": "{paper-50}",
+        "surface-card": "{paper-100}",
+        "surface-raised": "{paper-200}",
+        "line": "{paper-300}",
+        "text": "{ink-900}",
+        "text-quiet": "{pencil-600}",
+        "accent": "{sage-700}",
+        "on-accent": "{paper-50}",
+        "late": "{brick-700}",
+        "done": "{sage-700}",
+        "focus": "{sage-700}",
+        "shadow": "{ink-900}"
+      },
+      "slots": [
+        "{terracotta-700}",
+        "{lagoon-700}",
+        "{slate-700}",
+        "{lavender-700}",
+        "{olive-700}",
+        "{ochre-700}",
+        "{sand-700}",
+        "{steel-700}"
+      ],
+      "component": {
+        "canvas-grid-minor": "{paper-100}",
+        "canvas-grid-major": "{paper-200}",
+        "card-shadow": "4px 4px 0 {ink-900}",
+        "card-shadow-selected": "4px 4px 0 {sage-700}",
+        "button-shadow": "3px 3px 0 {ink-900}"
+      }
+    }
+  },
+  "shape": {
+    "radius-sm": "3px",
+    "radius-md": "4px",
+    "radius-lg": "6px",
+    "rule-width": "1.5px",
+    "link-width": "3px",
+    "gauge-segment": "8px",
+    "gauge-gap": "2px"
+  }
+}

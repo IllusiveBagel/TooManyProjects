@@ -1,0 +1,18 @@
+services:
+  toomanyprojects:
+    image: ghcr.io/illusivebagel/toomanyprojects:latest
+    build: .
+    container_name: toomanyprojects
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # The address people open the app at. Used for invite links, and turns on
+      # secure cookies when it starts with https://.
+      TMP_PUBLIC_URL: "http://localhost:8080"
+    volumes:
+      # Database, themes and (later) the notes vault. Back up this one folder.
+      - tmp-data:/data
+
+volumes:
+  tmp-data:
