@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import type { ProjectDetail } from "../api/client";
 import { ColorPicker, StatusPicker } from "../components/Pickers";
 import { Button, ErrorNote } from "../components/ui";
@@ -85,6 +86,21 @@ function DrawerBody({ detail, onJump }: { detail: ProjectDetail; onJump: (id: st
           <Stat label="Done" value={`${project.stats.done_tasks}/${project.stats.total_tasks}`} />
           <Stat label="Progress" value={`${progress(project)}%`} />
           <Stat label="Active" value={lastActive(project.stats.last_active_at)} />
+        </div>
+
+        <div className="flex gap-2">
+          <Link
+            to={`/projects/${project.id}`}
+            className="border-rule bg-accent text-on-accent shadow-button inline-flex min-h-11 flex-1 items-center justify-center rounded-md px-3 font-bold"
+          >
+            Open dashboard
+          </Link>
+          <Link
+            to={`/projects/${project.id}/board`}
+            className="border-rule hover:bg-surface-raised inline-flex min-h-11 flex-1 items-center justify-center rounded-md px-3 font-bold"
+          >
+            Board
+          </Link>
         </div>
 
         {(parents.length > 0 || children.length > 0) && (

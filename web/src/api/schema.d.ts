@@ -126,6 +126,24 @@ export interface paths {
         patch: operations["save_nodes"];
         trace?: never;
     };
+    "/checklist/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a checklist item. */
+        delete: operations["delete_checklist_item"];
+        options?: never;
+        head?: never;
+        /** Tick, untick or reword a checklist item. */
+        patch: operations["update_checklist_item"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -193,6 +211,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/labels/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a label. Tasks keep everything else. */
+        delete: operations["delete_label"];
+        options?: never;
+        head?: never;
+        /** Rename or recolour a label. */
+        patch: operations["update_label"];
         trace?: never;
     };
     "/links": {
@@ -301,6 +337,151 @@ export interface paths {
         patch: operations["update_project"];
         trace?: never;
     };
+    "/projects/{id}/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stat tiles, weekly chart, up next and activity for a project. */
+        get: operations["project_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's labels, by name. */
+        get: operations["list_labels"];
+        put?: never;
+        /** Make a label for this project's tasks. */
+        post: operations["create_label"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's board columns, left to right. */
+        get: operations["list_statuses"];
+        put?: never;
+        /** Add a column at the right end of the board. */
+        post: operations["create_status"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every task in a project, column by column. */
+        get: operations["list_project_tasks"];
+        put?: never;
+        /** Add a task to a project. */
+        post: operations["create_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/statuses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a column. Its tasks must be moved first, with `move_to`. */
+        delete: operations["delete_status"];
+        options?: never;
+        head?: never;
+        /** Rename, recategorise, recolour or move a column. */
+        patch: operations["update_status"];
+        trace?: never;
+    };
+    "/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tasks across every project, for the global board. Archived projects are
+         *     left out, and so are tasks finished more than `done_days` ago.
+         */
+        get: operations["global_tasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One task with its checklist and history. */
+        get: operations["get_task"];
+        put?: never;
+        post?: never;
+        /** Delete a task. */
+        delete: operations["delete_task"];
+        options?: never;
+        head?: never;
+        /** Edit a task, or move it between columns. */
+        patch: operations["update_task"];
+        trace?: never;
+    };
+    "/tasks/{id}/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a checklist item to the bottom of a task's list. */
+        post: operations["add_checklist_item"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/themes": {
         parameters: {
             query?: never;
@@ -345,6 +526,19 @@ export interface components {
             password: string;
             token: string;
         };
+        /** @description One line of a project's or task's history. */
+        ActivityItem: {
+            created_at: string;
+            id: string;
+            /** @description Such as `task.created`, `task.moved`, `project.archived`. */
+            kind: string;
+            /** @description Details for the kind, such as the task title or the columns moved between. */
+            payload: Record<string, never>;
+            task_id?: string | null;
+            user_name?: string | null;
+            /** @description `web` or `ai`. */
+            via: string;
+        };
         AuthStatus: {
             /** @description True until the owner account exists. The web app shows setup instead of login. */
             needs_setup: boolean;
@@ -379,6 +573,25 @@ export interface components {
             nodes: components["schemas"]["CanvasNode"][];
             projects: components["schemas"]["Project"][];
         };
+        ChecklistItem: {
+            done: boolean;
+            id: string;
+            position: string;
+            text: string;
+        };
+        ChecklistRequest: {
+            done?: boolean | null;
+            text?: string | null;
+        };
+        ColumnCount: {
+            /** @description `todo`, `in_progress`, `blocked` or `done`. */
+            category: string;
+            color?: string | null;
+            /** Format: int64 */
+            count: number;
+            name: string;
+            status_id: string;
+        };
         CreateInviteRequest: {
             /**
              * Format: int64
@@ -407,12 +620,38 @@ export interface components {
             target_date?: string | null;
             title: string;
         };
+        CreateStatusRequest: {
+            category: string;
+            color?: string | null;
+            name: string;
+        };
+        CreateTaskRequest: {
+            /** @description Add at the top of the column instead of the bottom. */
+            at_top?: boolean;
+            description?: string | null;
+            due_date?: string | null;
+            label_ids?: string[];
+            priority?: string | null;
+            /** @description Column to add it to. Defaults to the first column. */
+            status_id?: string | null;
+            title: string;
+        };
         CreatedInvite: {
             invite: components["schemas"]["Invite"];
             /** @description The raw token. It is never shown again. */
             token: string;
             /** @description The link to send, when the server knows its public URL. */
             url?: string | null;
+        };
+        Dashboard: {
+            /** @description The latest fifteen things that happened. */
+            activity: components["schemas"]["ActivityItem"][];
+            /** @description Every column in board order, with how many tasks sit in it. */
+            columns: components["schemas"]["ColumnCount"][];
+            /** @description Up to five open tasks: late and soonest due first, then by priority. */
+            up_next: components["schemas"]["Task"][];
+            /** @description Tasks finished in each of the last eight weeks, oldest first. */
+            weekly: components["schemas"]["WeekCount"][];
         };
         /** @description Body of every error response. */
         ErrorBody: {
@@ -440,6 +679,16 @@ export interface components {
         InviteLookup: {
             expires_at: string;
             invited_by: string;
+        };
+        Label: {
+            color?: string | null;
+            id: string;
+            name: string;
+            project_id: string;
+        };
+        LabelRequest: {
+            color?: string | null;
+            name?: string | null;
         };
         Link: {
             created_at: string;
@@ -537,6 +786,51 @@ export interface components {
             name: string;
             password: string;
         };
+        Status: {
+            /** @description `todo`, `in_progress`, `blocked` or `done`. */
+            category: string;
+            color?: string | null;
+            id: string;
+            name: string;
+            position: string;
+            project_id: string;
+        };
+        Task: {
+            /** @description The column's category: `todo`, `in_progress`, `blocked` or `done`. */
+            category: string;
+            /** Format: int64 */
+            checklist_done: number;
+            /** Format: int64 */
+            checklist_total: number;
+            completed_at?: string | null;
+            created_at: string;
+            /** @description Markdown. */
+            description?: string | null;
+            due_date?: string | null;
+            id: string;
+            labels: components["schemas"]["Label"][];
+            /**
+             * Format: int64
+             * @description Per-project number, shown as T-12.
+             */
+            number: number;
+            /** @description Open, with a due date before today. */
+            overdue: boolean;
+            position: string;
+            /** @description `low`, `medium`, `high` or `urgent`. */
+            priority?: string | null;
+            project_color: string;
+            project_id: string;
+            project_title: string;
+            status_id: string;
+            title: string;
+            updated_at: string;
+        };
+        TaskDetail: {
+            activity: components["schemas"]["ActivityItem"][];
+            checklist: components["schemas"]["ChecklistItem"][];
+            task: components["schemas"]["Task"];
+        };
         ThemeModeSummary: {
             label: string;
             /** @description `dark` or `light`. */
@@ -567,6 +861,34 @@ export interface components {
             target_date?: string | null;
             title?: string | null;
         };
+        UpdateStatusRequest: {
+            /** @description Move the column: put it after this column, or first when `null`. */
+            after_id?: string | null;
+            category?: string | null;
+            color?: string | null;
+            name?: string | null;
+        };
+        /** @description Fields left out stay as they are. Send `null` to clear an optional field. */
+        UpdateTaskRequest: {
+            /**
+             * @description Place the card after this task in its column, or at the top when `null`.
+             *     Left out, a moved card goes to the bottom and an unmoved one stays put.
+             */
+            after_id?: string | null;
+            /**
+             * @description Move to the first column of this category, as the global board does.
+             *     Adds the column if the project has none.
+             */
+            category?: string | null;
+            description?: string | null;
+            due_date?: string | null;
+            /** @description Replaces the task's labels. */
+            label_ids?: string[] | null;
+            priority?: string | null;
+            /** @description Move to this column. */
+            status_id?: string | null;
+            title?: string | null;
+        };
         User: {
             avatar?: string | null;
             created_at: string;
@@ -578,6 +900,12 @@ export interface components {
             theme_id: string;
             /** @description `system`, `dark` or `light`. */
             theme_mode: string;
+        };
+        WeekCount: {
+            /** Format: int64 */
+            done: number;
+            /** @description The Monday the week starts on, `YYYY-MM-DD`. */
+            week: string;
         };
     };
     responses: never;
@@ -808,6 +1136,50 @@ export interface operations {
             };
         };
     };
+    delete_checklist_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_checklist_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChecklistRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChecklistItem"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;
@@ -938,6 +1310,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_label: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_label: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Label"];
                 };
             };
         };
@@ -1271,6 +1687,433 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    project_dashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_labels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Label"][];
+                };
+            };
+        };
+    };
+    create_label: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Label"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_statuses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStatusRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_project_tasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_status: {
+        parameters: {
+            query?: {
+                /** @description Move the column's tasks here first. Needed when it has any. */
+                move_to?: string | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Last column, or tasks left in it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStatusRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    global_tasks: {
+        parameters: {
+            query?: {
+                /** @description Only this project. */
+                project_id?: string | null;
+                /** @description This project and every project spawned from it, at any depth. */
+                family?: string | null;
+                /** @description Hide tasks completed more than this many days ago. Default 14. */
+                done_days?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][];
+                };
+            };
+        };
+    };
+    get_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDetail"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    add_checklist_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChecklistRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChecklistItem"];
                 };
             };
         };

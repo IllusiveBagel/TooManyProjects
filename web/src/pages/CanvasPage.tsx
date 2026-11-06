@@ -17,6 +17,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useNavigate } from "react-router";
 import type { CanvasView } from "../api/client";
 import { CARD_WIDTH, ProjectNode, type ProjectNodeType } from "../canvas/ProjectNode";
 import { LinkEdge, type LinkEdgeType } from "../canvas/LinkEdge";
@@ -90,6 +91,7 @@ function CanvasBoard() {
   const saveNodes = useSaveNodes();
   const createLink = useCreateLink();
   const flow = useReactFlow();
+  const navigate = useNavigate();
   const [nodes, setNodes, onNodesChange] = useNodesState<ProjectNodeType>([]);
   const deleteLink = useDeleteLink();
   const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
@@ -198,6 +200,7 @@ function CanvasBoard() {
         onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={(_, n) => openProject(n.id)}
+        onNodeDoubleClick={(_, n) => navigate(`/projects/${n.id}`)}
         onPaneClick={() => openProject(null)}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}

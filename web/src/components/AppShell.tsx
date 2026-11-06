@@ -21,6 +21,7 @@ export function AppShell() {
         </NavLink>
         <nav className="flex gap-5" aria-label="Main">
           <NavLink to="/" end className={navClass}>Canvas</NavLink>
+          <NavLink to="/board" className={navClass}>Board</NavLink>
           <NavLink to="/settings" className={navClass}>Settings</NavLink>
         </nav>
         <div className="ml-auto flex items-center gap-3">
