@@ -1,7 +1,7 @@
 services:
   toomanyprojects:
+    # Pin a version (such as :1.2.0) to choose when you upgrade.
     image: ghcr.io/illusivebagel/toomanyprojects:latest
-    build: .
     container_name: toomanyprojects
     restart: unless-stopped
     ports:

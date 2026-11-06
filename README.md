@@ -142,9 +142,18 @@ if you let it, add to them.
 
 ## Run it
 
+Each release is published as a Docker image at
+`ghcr.io/illusivebagel/toomanyprojects`. On your server, save
+[`docker-compose.yml`](docker-compose.yml), set `TMP_PUBLIC_URL` in it to the
+address you'll open the app at, then:
+
 ```sh
 docker compose up -d
 ```
+
+To upgrade, `docker compose pull && docker compose up -d`. To build the image
+from source instead, run `docker build -t ghcr.io/illusivebagel/toomanyprojects .`
+in a clone of this repo.
 
 Open <http://localhost:8080>. The first person to open a new install creates
 the **owner** account. After that, people join only through invite links the
@@ -167,6 +176,27 @@ you have backed up everything.
 | `RUST_LOG` | `toomanyprojects=info` | Log level. |
 
 Put the app behind your usual reverse proxy for HTTPS.
+
+## Releases
+
+Push a version tag and GitHub does the rest:
+
+```sh
+git checkout main && git pull
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The **Release** workflow runs the same checks as CI, publishes the image as
+`1.0.0`, `1.0` and `latest`, and creates a GitHub Release with notes made from
+the merged pull requests. A tag with a dash, such as `v1.1.0-rc.1`, becomes a
+pre-release and doesn't move `latest`. The image is built for x86-64 (`amd64`)
+servers.
+
+The first time, GitHub makes the package private. Either make it public
+(the package page → **Package settings** → **Change visibility**), or sign in
+on the server with `docker login ghcr.io` using a personal access token with
+the `read:packages` scope.
 
 ## Develop
 
