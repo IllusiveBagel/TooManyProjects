@@ -36,3 +36,7 @@ export async function unwrap<T>(
   }
   return data as T;
 }
+export type Project = components["schemas"]["Project"];
+export type ProjectDetail = components["schemas"]["ProjectDetail"];
+export type Link = components["schemas"]["Link"];
+export type CanvasView = components["schemas"]["CanvasView"];
