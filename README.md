@@ -4,11 +4,11 @@ A self-hosted canvas for every project you have on the go. Projects live as
 cards on one infinite canvas, projects that grow out of other projects are
 joined by arrows, and each one opens into a dashboard with its tasks and board.
 
-> **Status: phase 3b (MCP server).** Accounts, invites, theming, the canvas
+> **Status: phase 3c (sharing).** Accounts, invites, theming, the canvas
 > with spawned, related and blocking links, tasks with per-project and global
-> boards, a notes vault of markdown files you can open in Obsidian, and now an
-> MCP server so an AI assistant can read and update your projects. Sharing and
-> project databases come next.
+> boards, a notes vault of markdown files you can open in Obsidian, an MCP
+> server so an AI assistant can read and update your projects, and now sharing
+> between people on the same server. Project databases come next.
 
 ### Boards
 
@@ -48,6 +48,36 @@ joined by arrows, and each one opens into a dashboard with its tasks and board.
   into wiki links; Notion databases are skipped until project databases land).
   Nothing is overwritten: a clashing name gets a number. Export downloads the
   whole vault as a zip.
+
+### Sharing
+
+Everyone on a server has their own canvas, projects and vault. Share with
+someone who already has an account here, or invite them.
+
+- **One project:** open it and use **Share**. Pick a person and *Can edit* or
+  *View only*, and whether projects spawned from it come too (on by default).
+  The dialog lists everyone who can see the project and why: owner, shared
+  this project, shared everything, or through a parent project.
+- **Everything:** **Settings → Sharing** shares every project you have, now and
+  later, with *Can edit* or *View only*. Tick the box to include your knowledge
+  notes as well, not only project notes. The same panel lists what you share
+  and what's shared with you, where you can change a role, stop sharing, or
+  leave.
+- **Viewers** see the board, tasks and notes but can't change them. **Editors**
+  can do everything except delete the project or change who has it. A project
+  an editor spawns from a shared project belongs to its owner, and the editor
+  keeps access to it.
+- **Canvas:** shared projects sit on your canvas with the owner's initials
+  (dashed for view only), and you lay them out yourself. A link to a project
+  you can't see shows a *Private project* card, so the arrow still makes sense.
+- **Notes follow projects:** a note filed under a shared project is shared with
+  it, under **Notes → Shared with me**. Editors edit it in place in the owner's
+  vault; only the owner can delete it.
+- **Assignees:** a task can be assigned to anyone who can see its project, and
+  **My tasks** on the global board shows yours.
+- **Invites:** the server's owner can make an invite that also shares
+  everything, or (from a project's Share dialog) one project.
+- **AI access:** a token sees what its person sees, shared projects included.
 
 ### AI access (MCP)
 
@@ -147,6 +177,7 @@ server/            Rust: Axum, SQLx, SQLite
   migrations/      SQL migrations, run automatically on start-up
   src/auth.rs      setup, login, sessions, preferences
   src/invites.rs   invite links
+  src/sharing.rs   shares and who can see a project (the project_access view)
   src/themes.rs    theme files
   src/projects.rs  projects; links.rs and canvas.rs for the canvas
   src/board.rs     columns and labels
@@ -164,6 +195,7 @@ web/               React 19, TypeScript, Vite, Tailwind v4
   src/canvas/      the canvas, cards and links (React Flow)
   src/tasks/       boards (dnd-kit), task cards and the task drawer
   src/notes/       note editor (CodeMirror 6), rendering, quick note
+  src/sharing/     Share dialog, sharing queries and labels
   src/pages/       one file per route
 themes/            bundled themes and their JSON schema
 ```

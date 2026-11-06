@@ -217,28 +217,30 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
                   </button>
                 );
               })}
-              <form
-                className="flex"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const name = newLabel.trim();
-                  if (!name) return;
-                  const slot = `slot-${(labels.length % 8) + 1}`;
-                  createLabel.mutate(
-                    { name, color: slot },
-                    { onSuccess: (l) => (setNewLabel(""), save({ label_ids: [...labelIds, l.id] })) },
-                  );
-                }}
-              >
-                <input
-                  className="border-rule bg-surface label-mono min-h-9 w-28 rounded-sm px-2 text-[11px] outline-none focus:border-accent"
-                  placeholder="+ New label"
-                  value={newLabel}
-                  maxLength={40}
-                  onChange={(e) => setNewLabel(e.target.value)}
-                  aria-label="New label"
-                />
-              </form>
+              {canEdit && (
+                <form
+                  className="flex"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const name = newLabel.trim();
+                    if (!name) return;
+                    const slot = `slot-${(labels.length % 8) + 1}`;
+                    createLabel.mutate(
+                      { name, color: slot },
+                      { onSuccess: (l) => (setNewLabel(""), save({ label_ids: [...labelIds, l.id] })) },
+                    );
+                  }}
+                >
+                  <input
+                    className="border-rule bg-surface label-mono min-h-9 w-28 rounded-sm px-2 text-[11px] outline-none focus:border-accent"
+                    placeholder="+ New label"
+                    value={newLabel}
+                    maxLength={40}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    aria-label="New label"
+                  />
+                </form>
+              )}
             </div>
           </fieldset>
 
@@ -247,7 +249,7 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
             <textarea
               className={`${inputClass} font-reading min-h-32 text-[15px] leading-relaxed`}
               value={description}
-              placeholder="What needs doing, links, measurements…"
+              placeholder={canEdit ? "What needs doing, links, measurements…" : "No notes."}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={() => description !== (task.description ?? "") && save({ description: description || null })}
             />
@@ -272,28 +274,30 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
                     type="button"
                     onClick={() => items.remove.mutate(c.id)}
                     aria-label={`Remove ${c.text}`}
-                    className="text-text-quiet hover:text-late size-9 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    className={`text-text-quiet hover:text-late size-9 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 ${canEdit ? "" : "hidden"}`}
                   >
                     ×
                   </button>
                 </li>
               ))}
             </ul>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newItem.trim()) items.add.mutate(newItem.trim(), { onSuccess: () => setNewItem("") });
-              }}
-            >
-              <input
-                className={`${inputClass} text-sm`}
-                placeholder="+ Add an item"
-                value={newItem}
-                maxLength={300}
-                onChange={(e) => setNewItem(e.target.value)}
-                aria-label="New checklist item"
-              />
-            </form>
+            {canEdit && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (newItem.trim()) items.add.mutate(newItem.trim(), { onSuccess: () => setNewItem("") });
+                }}
+              >
+                <input
+                  className={`${inputClass} text-sm`}
+                  placeholder="+ Add an item"
+                  value={newItem}
+                  maxLength={300}
+                  onChange={(e) => setNewItem(e.target.value)}
+                  aria-label="New checklist item"
+                />
+              </form>
+            )}
           </section>
         </fieldset>
 
