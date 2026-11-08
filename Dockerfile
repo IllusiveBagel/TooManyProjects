@@ -23,7 +23,11 @@ COPY --from=planner /src/server/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY themes /src/themes
 COPY server ./
-RUN cargo build --release --locked \
+# The release workflow passes the tag (such as 1.2.0). The app compares it with
+# the latest GitHub release to tell the owner about updates; without it the
+# build counts as a development build and never shows the update banner.
+ARG VERSION=""
+RUN TMP_BUILD_VERSION="$VERSION" cargo build --release --locked \
  && mkdir -p /out/data \
  && cp target/release/toomanyprojects /out/
 

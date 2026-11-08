@@ -128,7 +128,9 @@ Open <http://localhost:8080>. The first person to open a new install creates
 the **owner** account. After that, people join only through invite links the
 owner makes under **Settings → Invites**.
 
-To upgrade, `docker compose pull && docker compose up -d`. To build the image
+To upgrade, `docker compose pull && docker compose up -d`. The owner sees a
+banner in the app when a new release is out (see
+[Updating](docs/guide.md#updating)). To build the image
 from source instead, run `docker build -t ghcr.io/illusivebagel/toomanyprojects .`
 in a clone of this repo.
 
@@ -146,6 +148,7 @@ in a clone of this repo.
 | `TMP_SESSION_DAYS` | `30` | How long a sign-in lasts. |
 | `TMP_DATA_DIR` | `/data` in Docker | Where the database, themes and notes live. |
 | `TMP_BIND` | `0.0.0.0:8080` | Address and port to listen on. |
+| `TMP_UPDATE_CHECK` | `on` | Set to `off` to stop the server asking GitHub for new releases, such as on an offline server. |
 | `RUST_LOG` | `toomanyprojects=info` | Log level. |
 
 Put the app behind your usual reverse proxy for HTTPS.

@@ -3111,6 +3111,48 @@
         }
       }
     },
+    "/system/version": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "The running version and whether a newer release is out. Owner only.",
+        "operationId": "version",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/version/check": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Checks GitHub for a new release right away. Owner only.",
+        "operationId": "check_now",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tasks": {
       "get": {
         "tags": [
@@ -5680,6 +5722,33 @@
           }
         }
       },
+      "Release": {
+        "type": "object",
+        "required": [
+          "version",
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "The release notes page."
+          },
+          "version": {
+            "type": "string",
+            "description": "Without the leading `v`, such as `1.3.0`."
+          }
+        }
+      },
       "Row": {
         "type": "object",
         "required": [
@@ -6541,6 +6610,57 @@
           }
         }
       },
+      "VersionInfo": {
+        "type": "object",
+        "required": [
+          "current",
+          "development_build",
+          "check_enabled",
+          "update_available"
+        ],
+        "properties": {
+          "check_enabled": {
+            "type": "boolean",
+            "description": "False when `TMP_UPDATE_CHECK` turns the check off."
+          },
+          "checked_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "current": {
+            "type": "string",
+            "description": "The running version, such as `1.2.0`."
+          },
+          "development_build": {
+            "type": "boolean",
+            "description": "True when this server wasn't built from a release tag, so there is nothing to compare."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the last check failed, if it did."
+          },
+          "latest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Release",
+                "description": "The newest release GitHub knows of, once a check has worked."
+              }
+            ]
+          },
+          "update_available": {
+            "type": "boolean",
+            "description": "True when `latest` is newer than `current`."
+          }
+        }
+      },
       "View": {
         "type": "object",
         "required": [
@@ -6689,7 +6809,7 @@
     },
     {
       "name": "system",
-      "description": "Health"
+      "description": "Health, the running version and update checks"
     }
   ]
 }

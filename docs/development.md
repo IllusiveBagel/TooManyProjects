@@ -85,6 +85,14 @@ the merged pull requests. A tag with a dash, such as `v1.1.0-rc.1`, becomes a
 pre-release and doesn't move `latest`. The image is built for x86-64 (`amd64`)
 servers.
 
+The workflow passes the version to the Docker build (`--build-arg VERSION=1.0.0`),
+which bakes it into the binary as `TMP_BUILD_VERSION`. The app compares it with
+the latest GitHub release to show the owner an update banner. A build without
+it is a development build: it reports the `Cargo.toml` version and never shows
+the banner. To try the banner locally, build with
+`TMP_BUILD_VERSION=0.0.1 cargo run` and point `TMP_UPDATE_CHECK_URL` at any URL
+that answers like GitHub's `releases/latest`.
+
 The first time, GitHub makes the package private. Either make it public
 (the package page → **Package settings** → **Change visibility**), or sign in
 on the server with `docker login ghcr.io` using a personal access token with

@@ -15,6 +15,10 @@ pub struct Config {
     /// Mark the session cookie `Secure`. Defaults to on when `public_url` is https.
     pub cookie_secure: bool,
     pub session_days: i64,
+    /// Ask GitHub a few times a day whether a newer release is out (`TMP_UPDATE_CHECK`).
+    pub update_check: bool,
+    /// Where to ask; only changed for tests or a fork (`TMP_UPDATE_CHECK_URL`).
+    pub update_check_url: String,
 }
 
 impl Config {
@@ -39,7 +43,24 @@ impl Config {
             _ => public_url.as_deref().is_some_and(|u| u.starts_with("https://")),
         };
         let session_days = env::var("TMP_SESSION_DAYS").ok().and_then(|d| d.parse().ok()).unwrap_or(30);
-        Ok(Self { data_dir, bind, static_dir, public_url, cookie_secure, session_days })
+        let update_check = !matches!(
+            env::var("TMP_UPDATE_CHECK").ok().as_deref().map(str::to_ascii_lowercase).as_deref(),
+            Some("0" | "false" | "no" | "off")
+        );
+        let update_check_url = env::var("TMP_UPDATE_CHECK_URL")
+            .ok()
+            .filter(|u| !u.is_empty())
+            .unwrap_or_else(|| crate::updates::DEFAULT_RELEASES_URL.into());
+        Ok(Self {
+            data_dir,
+            bind,
+            static_dir,
+            public_url,
+            cookie_secure,
+            session_days,
+            update_check,
+            update_check_url,
+        })
     }
 
     /// Settings for tests: everything under `data_dir`, no web app.
@@ -51,6 +72,9 @@ impl Config {
             public_url: Some("http://localhost:8080".into()),
             cookie_secure: false,
             session_days: 30,
+            // Tests never reach the network; the update tests point the checker at a local server.
+            update_check: false,
+            update_check_url: crate::updates::DEFAULT_RELEASES_URL.into(),
         }
     }
 }

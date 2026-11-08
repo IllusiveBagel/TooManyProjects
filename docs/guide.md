@@ -10,6 +10,7 @@ How each part of **too many projects** works. For installing it, see the
 - [Project databases](#project-databases)
 - [AI access (MCP)](#ai-access-mcp)
 - [Theming](#theming)
+- [Updating](#updating)
 
 ## Boards
 
@@ -170,3 +171,31 @@ theme recolours everything at once.
 To add a theme, copy `workshop.json` into `/data/themes/` under a new `id` and
 restart. It then appears under **Settings → Appearance**. Fonts are bundled
 with the app; nothing loads from the internet.
+
+## Updating
+
+When a newer release is out, the owner sees a thin banner under the top bar
+with links to **What's new** (the release notes) and back to this section.
+Closing it hides that version; the next release brings it back. Other
+accounts never see it. **Settings → Updates** shows the running version, what
+the last check found and a **Check now** button.
+
+The server asks GitHub for the latest release when it starts and every six
+hours after. It is one anonymous request and sends nothing about your install.
+Pre-releases are ignored. To turn the check off, for an offline server or
+because you'd rather not, set `TMP_UPDATE_CHECK=off`. Images you build yourself
+without a version count as development builds and never show the banner.
+
+To update with Docker Compose:
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+In **Portainer**, open the stack, choose **Update the stack** and turn on
+**Re-pull image and redeploy** (or open the container, choose **Recreate** and
+turn on **Re-pull image**). Your data lives
+in the `/data` volume, so it carries over. If you pinned a version such as
+`:1.2.0` in the compose file, change it to the new one first. Database changes
+run on their own when the new version starts; back up `/data` first if you
+want a way back.

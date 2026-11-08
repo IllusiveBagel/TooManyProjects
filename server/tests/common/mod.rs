@@ -10,7 +10,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
-use toomanyprojects::{AppState, Config, build_router, db, themes::ThemeStore};
+use toomanyprojects::{AppState, Config, build_router, db, themes::ThemeStore, updates::UpdateChecker};
 use tower::ServiceExt;
 
 pub struct TestApp {
@@ -31,7 +31,9 @@ impl TestApp {
         let dir = tempfile::tempdir().unwrap();
         let config = Config::for_tests(dir.path().to_path_buf());
         let db = db::connect(&config.data_dir).await.unwrap();
-        let state = AppState { db, config: Arc::new(config), themes: Arc::new(ThemeStore::bundled()) };
+        let updates = UpdateChecker::from_config(&config);
+        let state =
+            AppState { db, config: Arc::new(config), themes: Arc::new(ThemeStore::bundled()), updates };
         Self { router: build_router(state.clone()), data_dir: dir.path().to_path_buf(), state, _dir: dir }
     }
 

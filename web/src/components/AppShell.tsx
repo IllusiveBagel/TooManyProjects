@@ -3,6 +3,7 @@ import { useLogout, useMe } from "../auth/queries";
 import { useCanvas } from "../canvas/queries";
 import { useCanvasUi } from "../canvas/store";
 import { QuickNoteDialog, useQuickNote, useQuickNoteShortcut } from "../notes/QuickNote";
+import { UpdateBanner } from "../system/UpdateBanner";
 import { Button, Wordmark } from "./ui";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -65,6 +66,7 @@ export function AppShell() {
           </button>
         </div>
       </header>
+      <UpdateBanner />
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         <Outlet />
       </div>

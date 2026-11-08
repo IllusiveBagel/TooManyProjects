@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use toomanyprojects::{AppState, Config, app, build_router, db, notes, themes::ThemeStore};
+use toomanyprojects::{
+    AppState, Config, app, build_router, db, notes, themes::ThemeStore, updates::UpdateChecker,
+};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -35,7 +37,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let bind = config.bind;
-    let state = AppState { db, config: Arc::new(config), themes: Arc::new(themes) };
+    let updates = UpdateChecker::from_config(&config);
+    updates.spawn();
+    let state = AppState { db, config: Arc::new(config), themes: Arc::new(themes), updates };
     // Pick up notes edited outside the app (another editor, a synced folder).
     // Polling, because file watching is unreliable on Docker volumes.
     let scan_state = state.clone();
