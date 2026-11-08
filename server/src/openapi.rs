@@ -19,7 +19,7 @@ use utoipa::OpenApi;
         (name = "notes", description = "Markdown notes in your vault, search, backlinks, import and export"),
         (name = "databases", description = "Project databases: columns, rows, views, import and export"),
         (name = "tokens", description = "API tokens for AI assistants using the MCP server"),
-        (name = "system", description = "Health"),
+        (name = "system", description = "Health, the running version and update checks"),
     )
 )]
 pub struct ApiDoc;

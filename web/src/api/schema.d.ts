@@ -867,6 +867,40 @@ export interface paths {
         patch: operations["update_status"];
         trace?: never;
     };
+    "/system/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The running version and whether a newer release is out. Owner only. */
+        get: operations["version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/version/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checks GitHub for a new release right away. Owner only. */
+        post: operations["check_now"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks": {
         parameters: {
             query?: never;
@@ -1619,6 +1653,14 @@ export interface components {
             /** @description `task`, `note`, `project` or `row`. */
             kind: string;
         };
+        Release: {
+            name: string;
+            published_at?: string | null;
+            /** @description The release notes page. */
+            url: string;
+            /** @description Without the leading `v`, such as `1.3.0`. */
+            version: string;
+        };
         Row: {
             created_at: string;
             database_id: string;
@@ -1859,6 +1901,20 @@ export interface components {
             theme_id: string;
             /** @description `system`, `dark` or `light`. */
             theme_mode: string;
+        };
+        VersionInfo: {
+            /** @description False when `TMP_UPDATE_CHECK` turns the check off. */
+            check_enabled: boolean;
+            checked_at?: string | null;
+            /** @description The running version, such as `1.2.0`. */
+            current: string;
+            /** @description True when this server wasn't built from a release tag, so there is nothing to compare. */
+            development_build: boolean;
+            /** @description Why the last check failed, if it did. */
+            error?: string | null;
+            latest?: null | components["schemas"]["Release"];
+            /** @description True when `latest` is newer than `current`. */
+            update_available: boolean;
         };
         View: {
             config: components["schemas"]["ViewConfig"];
@@ -4090,6 +4146,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
+                };
+            };
+        };
+    };
+    check_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
                 };
             };
         };

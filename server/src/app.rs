@@ -29,6 +29,7 @@ use crate::{
     projects, sharing, tasks,
     themes::{self, ThemeStore},
     tokens,
+    updates::{self, UpdateChecker},
 };
 
 #[derive(Clone)]
@@ -36,6 +37,7 @@ pub struct AppState {
     pub db: SqlitePool,
     pub config: Arc<Config>,
     pub themes: Arc<ThemeStore>,
+    pub updates: Arc<UpdateChecker>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -47,7 +49,7 @@ pub struct Health {
 /// Liveness check, used by the Docker health check.
 #[utoipa::path(get, path = "/health", tag = "system", responses((status = 200, body = Health)))]
 async fn health() -> Json<Health> {
-    Json(Health { status: "ok", version: env!("CARGO_PKG_VERSION") })
+    Json(Health { status: "ok", version: updates::display_version() })
 }
 
 /// The `/api/v1` routes and their OpenAPI description.
@@ -68,6 +70,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(notes::router())
         .merge(sharing::router())
         .merge(tokens::router())
+        .merge(updates::router())
         .split_for_parts();
     // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.
     doc.info.license = None;

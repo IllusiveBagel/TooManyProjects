@@ -5,6 +5,7 @@ import { useLogout, useMe, useUpdatePreferences } from "../auth/queries";
 import { useImportNotes, useRescan } from "../notes/queries";
 import { AiAccessPanel } from "./AiAccessPanel";
 import { SharingPanel } from "./SharingPanel";
+import { UpdatesPanel } from "../system/UpdatesPanel";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
@@ -19,6 +20,7 @@ export function SettingsPage() {
       <NotesPanel />
       <AiAccessPanel />
       {me.role === "owner" && <InvitesPanel />}
+      {me.role === "owner" && <UpdatesPanel />}
       <AccountPanel />
     </main>
   );
