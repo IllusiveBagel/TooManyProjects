@@ -212,3 +212,51 @@ export function useChecklist(taskId: string) {
   });
   return { add, update, remove };
 }
+
+// Comments and linked notes ------------------------------------------------------
+
+/** After a comment or link changes: the task, card counts, and notes that list tasks. */
+function refreshLog(qc: QueryClient, taskId: string) {
+  qc.invalidateQueries({ queryKey: taskKeys.task(taskId) });
+  qc.invalidateQueries({ queryKey: ["tasks"] });
+  qc.invalidateQueries({ queryKey: ["dashboard"] });
+}
+
+export function useComments(taskId: string) {
+  const qc = useQueryClient();
+  const onSuccess = () => refreshLog(qc, taskId);
+  const add = useMutation({
+    mutationFn: (body: string) =>
+      unwrap(api.POST("/tasks/{id}/comments", { params: { path: { id: taskId } }, body: { body } })),
+    onSuccess,
+  });
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: string }) =>
+      unwrap(api.PATCH("/comments/{id}", { params: { path: { id } }, body: { body } })),
+    onSuccess,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => unwrap(api.DELETE("/comments/{id}", { params: { path: { id } } })),
+    onSuccess,
+  });
+  return { add, update, remove };
+}
+
+export function useTaskNoteLinks() {
+  const qc = useQueryClient();
+  const onSuccess = (_: unknown, { taskId, noteId }: { taskId: string; noteId: string }) => {
+    refreshLog(qc, taskId);
+    qc.invalidateQueries({ queryKey: ["notes", "one", noteId] });
+  };
+  const link = useMutation({
+    mutationFn: ({ taskId, noteId }: { taskId: string; noteId: string }) =>
+      unwrap(api.PUT("/tasks/{id}/notes/{note_id}", { params: { path: { id: taskId, note_id: noteId } } })),
+    onSuccess,
+  });
+  const unlink = useMutation({
+    mutationFn: ({ taskId, noteId }: { taskId: string; noteId: string }) =>
+      unwrap(api.DELETE("/tasks/{id}/notes/{note_id}", { params: { path: { id: taskId, note_id: noteId } } })),
+    onSuccess,
+  });
+  return { link, unlink };
+}

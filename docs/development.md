@@ -46,6 +46,7 @@ server/            Rust: Axum, SQLx, SQLite
   src/projects.rs  projects; links.rs and canvas.rs for the canvas
   src/board.rs     columns and labels
   src/tasks.rs     tasks, checklists, the global board
+  src/comments.rs  comments on tasks (a task's log)
   src/dashboard.rs a project's overview in one call
   src/notes/       the notes vault: files and index (vault.rs), markdown and
                    wiki links (markdown.rs), zip import and export (transfer.rs)

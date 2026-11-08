@@ -52,6 +52,12 @@ export function TaskCard({
             ☑ {task.checklist_done}/{task.checklist_total}
           </span>
         )}
+        {task.comment_count > 0 && (
+          <span title={`${task.comment_count} comment${task.comment_count === 1 ? "" : "s"} in the log`}>✎ {task.comment_count}</span>
+        )}
+        {task.note_count > 0 && (
+          <span title={`${task.note_count} linked note${task.note_count === 1 ? "" : "s"}`}>¶ {task.note_count}</span>
+        )}
         {task.due_date && !done && (
           <span className={`ml-auto ${task.overdue ? "text-late font-semibold" : ""}`}>{dueLabel(task.due_date)}</span>
         )}

@@ -20,7 +20,7 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
-    auth, board, canvas,
+    auth, board, canvas, comments,
     config::Config,
     dashboard, databases,
     error::AppError,
@@ -62,6 +62,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(canvas::router())
         .merge(board::router())
         .merge(tasks::router())
+        .merge(comments::router())
         .merge(dashboard::router())
         .merge(databases::router())
         .merge(notes::router())

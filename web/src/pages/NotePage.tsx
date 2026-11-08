@@ -6,6 +6,7 @@ import { MarkdownEditor } from "../notes/Editor";
 import { ago, parseTags, type NoteDetail } from "../notes/format";
 import { useAllDatabases } from "../data/queries";
 import { NoteMarkdown } from "../notes/Markdown";
+import { NoteTasks } from "../notes/NoteTasks";
 import { useCreateNote, useDeleteNote, useNote, useNotes, useUpdateNote } from "../notes/queries";
 import { projectColor } from "../theme/resolve";
 import { NoteCard } from "./NotesPage";
@@ -183,6 +184,7 @@ function NoteView({ detail }: { detail: NoteDetail }) {
         aria-label="Links"
         className="border-rule flex flex-col gap-6 border-x-0 border-b-0 px-4 py-6 sm:px-8 lg:w-[290px] lg:shrink-0 lg:overflow-y-auto lg:border-t-0 lg:border-l lg:px-4"
       >
+        <NoteTasks detail={detail} />
         <section className="flex flex-col gap-2">
           <h2 className="label-mono text-text-quiet text-[11px] font-normal">
             Backlinks <span className="text-accent">{detail.backlinks.length}</span>
