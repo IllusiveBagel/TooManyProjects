@@ -19,6 +19,15 @@ How each part of **too many projects** works. For installing it, see the
 - **Task drawer**: click a card to edit its title, column, due date,
   priority, labels, notes and checklist, and to see its history. The open
   task is in the URL (`?task=`), so it can be linked.
+- **Log:** each task has a log of comments (markdown) for what you did, tried
+  and learnt. Owners and editors write; viewers read. You can edit your own
+  comments, and a project's owner can delete anyone's. Cards show the count
+  (✎).
+- **Linked notes:** link vault notes to a task from the drawer (**+ Link a
+  note**), or start a new one there (**+ New note**, filed under the task's
+  project). A note shows its tasks in its side panel, where you can link more.
+  Linking doesn't share a note: someone who can't read it sees only that a note
+  is linked. Cards show the count (¶).
 - **Global board** (`/board`): four fixed columns. Each project's columns fold
   into them by category, and dropping a card moves it to that project's first
   column of the category (adding one if the project has none). Filter by one
@@ -128,10 +137,12 @@ if you let it, add to them.
   in isn't supported yet, so connectors that only do OAuth (such as custom
   connectors in the Claude web app) can't connect.
 - **Tools:** `list_projects`, `get_project_context` (a full briefing, with the
-  family on request), `search` (projects, tasks and notes), `list_notes`,
-  `get_note`, `query_database` (a saved view or a search as a markdown table, with
+  family on request), `search` (projects, tasks and their comments, and notes), `list_notes`,
+  `get_note`, `get_task` (a task with its log, linked notes and history),
+  `query_database` (a saved view or a search as a markdown table, with
   totals), and with a read-write token `create_task`, `update_task` (move,
-  finish, reopen or edit by `T-12` or id), `add_note`, `append_to_note`,
+  finish, reopen or edit by `T-12` or id), `add_task_comment`,
+  `link_note_to_task`, `add_note` (optionally linked to a task), `append_to_note`,
   `add_row` (values by column name) and `spawn_project`. Projects and notes
   can be named by title or id.
 - **Resources and prompts:** each project (`tmp://projects/{id}`) and note

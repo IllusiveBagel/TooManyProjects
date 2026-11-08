@@ -187,6 +187,23 @@
 .note-prose > * + * {
   margin-top: 0.8em;
 }
+/* A comment in a task's log: the same faces, smaller and tighter. */
+.note-prose.comment-prose {
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+.comment-prose > * + * {
+  margin-top: 0.55em;
+}
+.comment-prose h1:not(.not-prose *),
+.comment-prose h2:not(.not-prose *),
+.comment-prose h3:not(.not-prose *) {
+  font-size: 17px;
+  margin-top: 0.9em;
+}
+.comment-prose pre:not(.not-prose *) {
+  font-size: 13px;
+}
 .note-prose h1:not(.not-prose *),
 .note-prose h2:not(.not-prose *),
 .note-prose h3:not(.not-prose *),

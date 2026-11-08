@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { TaskDetail } from "../api/client";
 import { lastActive } from "../canvas/format";
@@ -18,6 +18,7 @@ import {
   useTaskDetail,
   useUpdateTask,
 } from "./queries";
+import { TaskLog, TaskNotes } from "./TaskLog";
 
 const inputClass = "border-rule bg-surface text-text w-full rounded-md px-3 py-2.5 outline-none focus:border-accent";
 
@@ -77,7 +78,9 @@ export function TaskDrawer() {
 }
 
 function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) {
-  const { task, checklist, activity } = detail;
+  const { task, checklist } = detail;
+  // Comments have their own log, so the history leaves them out.
+  const activity = detail.activity.filter((a) => a.kind !== "task.commented");
   const statuses = useStatuses(task.project_id).data ?? [];
   const labels = useLabels(task.project_id).data ?? [];
   const update = useUpdateTask();
@@ -107,6 +110,20 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
               {task.project_title}
             </Link>{" "}
             · {taskRef(task)}
+            {detail.comments.length > 0 && (
+              <>
+                {" · "}
+                <JumpTo id="task-log">Log {detail.comments.length}</JumpTo>
+              </>
+            )}
+            {detail.notes.length + detail.hidden_notes > 0 && (
+              <>
+                {" · "}
+                <JumpTo id="task-notes">
+                  {detail.notes.length + detail.hidden_notes} note{detail.notes.length + detail.hidden_notes === 1 ? "" : "s"}
+                </JumpTo>
+              </>
+            )}
           </span>
           <label>
             <span className="sr-only">Title</span>
@@ -304,6 +321,8 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
           </section>
         </fieldset>
         <TaskLinkedRows groups={linkedRows.data ?? []} taskId={task.id} canEdit={canEdit} />
+        <TaskNotes detail={detail} canEdit={canEdit} />
+        <TaskLog detail={detail} canEdit={canEdit} />
 
         <ErrorNote error={update.error ?? remove.error ?? createLabel.error ?? items.add.error} />
 
@@ -348,5 +367,18 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
         )}
       </div>
     </>
+  );
+}
+
+/** A small link in the drawer's header that scrolls to a section below. */
+function JumpTo({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      className="text-accent cursor-pointer underline-offset-2 hover:underline"
+      onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+    >
+      {children}
+    </button>
   );
 }

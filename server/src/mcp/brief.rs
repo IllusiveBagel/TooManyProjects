@@ -8,7 +8,7 @@ use crate::{
     dashboard::Dashboard,
     notes::{NoteDetail, NoteSummary, ProjectNotes},
     projects::{Project, ProjectDetail},
-    tasks::{ActivityItem, Task},
+    tasks::{ActivityItem, Task, TaskDetail},
 };
 
 const CATEGORY: &[(&str, &str)] =
@@ -66,6 +66,12 @@ pub fn task_line(t: &Task) -> String {
     if let Some(a) = &t.assignee_name {
         bits.push(format!("assigned to {a}"));
     }
+    if t.comment_count > 0 {
+        bits.push(format!("{} comment{}", t.comment_count, if t.comment_count == 1 { "" } else { "s" }));
+    }
+    if t.note_count > 0 {
+        bits.push(format!("{} linked note{}", t.note_count, if t.note_count == 1 { "" } else { "s" }));
+    }
     if !bits.is_empty() {
         let _ = write!(line, " ({})", bits.join("; "));
     }
@@ -87,6 +93,8 @@ pub fn activity_line(a: &ActivityItem) -> String {
         "task.completed" => format!("finished {}", quoted(p)),
         "task.updated" => format!("edited {}", quoted(p)),
         "task.deleted" => format!("deleted {}", quoted(p)),
+        "task.commented" => format!("commented on {}", quoted(p)),
+        "task.note_linked" => format!("linked a note to {}", quoted(p)),
         "status.deleted" => format!("removed the {} column", s("name")),
         "project.created" => "started the project".into(),
         "project.archived" => "archived the project".into(),
@@ -268,6 +276,76 @@ pub fn note(d: &NoteDetail) -> String {
         let names: Vec<String> = d.backlinks.iter().map(|b| format!("{} (`{}`)", b.title, b.id)).collect();
         out.push_str(&names.join(", "));
     }
+    if !d.tasks.is_empty() {
+        let _ = write!(out, "\n\nLinked tasks:\n");
+        for t in &d.tasks {
+            let _ = writeln!(out, "{} · {} · {}", task_line(t), t.project_title, category_label(&t.category));
+        }
+    }
     out.push('\n');
+    out
+}
+
+/// One task in full, for `get_task`: details, checklist, the comment log,
+/// linked notes and recent history.
+pub fn task(d: &TaskDetail, column: &str) -> String {
+    let t = &d.task;
+    let mut out = format!("# T-{} {}\n\n{} · {column}", t.number, t.title, t.project_title);
+    if let Some(p) = &t.priority {
+        let _ = write!(out, " · {p}");
+    }
+    if let Some(due) = &t.due_date {
+        let _ = write!(out, " · {}due {due}", if t.overdue { "**overdue**, " } else { "" });
+    }
+    if let Some(a) = &t.assignee_name {
+        let _ = write!(out, " · assigned to {a}");
+    }
+    if !t.labels.is_empty() {
+        let _ = write!(out, " · {}", t.labels.iter().map(|l| l.name.as_str()).collect::<Vec<_>>().join(", "));
+    }
+    let _ = write!(out, " · id `{}`", t.id);
+    if let Some(desc) = t.description.as_deref().filter(|d| !d.trim().is_empty()) {
+        let _ = write!(out, "\n\n{}", desc.trim_end());
+    }
+    if !d.checklist.is_empty() {
+        let _ = write!(out, "\n\n## Checklist\n\n");
+        for c in &d.checklist {
+            let _ = writeln!(out, "- [{}] {}", if c.done { "x" } else { " " }, c.text);
+        }
+    }
+    let _ = write!(out, "\n\n## Log ({})\n\n", d.comments.len());
+    if d.comments.is_empty() {
+        out.push_str("No comments yet.\n");
+    }
+    for c in &d.comments {
+        let via = if c.via == "ai" { " (via AI)" } else { "" };
+        let _ = writeln!(
+            out,
+            "### {} · {}{via}\n\n{}\n",
+            day(&c.created_at),
+            c.user_name.as_deref().unwrap_or("Someone"),
+            c.body.trim_end()
+        );
+    }
+    if !d.notes.is_empty() || d.hidden_notes > 0 {
+        let _ = write!(out, "\n## Linked notes\n\n");
+        for n in &d.notes {
+            out.push_str(&note_line(n));
+            out.push('\n');
+        }
+        if d.hidden_notes > 0 {
+            let _ = writeln!(out, "- and {} not shared with you", d.hidden_notes);
+        }
+        out.push_str("\nRead one with get_note.\n");
+    }
+    let history: Vec<&ActivityItem> =
+        d.activity.iter().filter(|a| a.kind != "task.commented").take(10).collect();
+    if !history.is_empty() {
+        let _ = write!(out, "\n## History\n\n");
+        for a in history {
+            out.push_str(&activity_line(a));
+            out.push('\n');
+        }
+    }
     out
 }

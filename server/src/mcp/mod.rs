@@ -39,7 +39,7 @@ use sqlx::SqliteConnection;
 use crate::{
     AppState,
     auth::{CurrentUser, User},
-    board, dashboard,
+    board, comments, dashboard,
     error::{AppError, AppResult},
     notes,
     projects::{self, Project, as_ai, visible_project},
@@ -183,6 +183,36 @@ pub struct UpdateTaskArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct TaskArgs {
+    /// Task id, or `T-12` together with `project`.
+    pub task: String,
+    /// Needed only when `task` is a number like T-12.
+    pub project: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CommentArgs {
+    /// Task id, or `T-12` together with `project`.
+    pub task: String,
+    /// Needed only when `task` is a number like T-12.
+    pub project: Option<String>,
+    /// Markdown: what was done, tried, found or decided.
+    pub text: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct LinkNoteArgs {
+    /// Task id, or `T-12` together with `project`.
+    pub task: String,
+    /// Needed only when `task` is a number like T-12.
+    pub project: Option<String>,
+    /// Note id, or its exact title.
+    pub note: String,
+    /// true removes the link instead. Default false.
+    pub unlink: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct AddNoteArgs {
     /// Defaults to the date and time.
     pub title: Option<String>,
@@ -193,6 +223,9 @@ pub struct AddNoteArgs {
     pub tags: Option<Vec<String>>,
     /// A folder such as Knowledge/Cars instead of the Inbox or the project's folder.
     pub folder: Option<String>,
+    /// Link the note to this task: its id, or `T-12` together with `project`.
+    /// Without a folder, the note is then filed under the task's project.
+    pub task: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -358,6 +391,31 @@ async fn find_note(conn: &mut SqliteConnection, user: &User, key: &str) -> AppRe
     })
 }
 
+/// A task id, from an id or `T-12` with the project it's in.
+async fn find_task(
+    conn: &mut SqliteConnection,
+    user: &User,
+    key: &str,
+    project: Option<&str>,
+) -> AppResult<String> {
+    let key = key.trim();
+    let number =
+        key.strip_prefix("T-").or_else(|| key.strip_prefix("t-")).and_then(|n| n.parse::<i64>().ok());
+    match (number, project) {
+        (Some(n), Some(p)) => {
+            let project = find_project(conn, user, p).await?;
+            sqlx::query_scalar("SELECT id FROM tasks WHERE project_id = ? AND number = ?")
+                .bind(&project.id)
+                .bind(n)
+                .fetch_optional(&mut *conn)
+                .await?
+                .ok_or_else(|| bad("unknown_task", format!("{} has no T-{n}.", project.title)))
+        }
+        (Some(_), None) => Err(bad("need_project", "Give the project too when naming a task as T-12.")),
+        _ => Ok(key.to_string()),
+    }
+}
+
 /// A column's id from a name or a category, for create and move.
 fn pick_column(statuses: &[board::Status], wanted: &str) -> Result<ColumnChoice, AppError> {
     let w = wanted.trim();
@@ -403,9 +461,10 @@ async fn descendants(conn: &mut SqliteConnection, user: &User, root: &str) -> Ap
 const INSTRUCTIONS: &str = "TooManyProjects holds the user's projects (cards on a canvas, linked when one project \
 spawned another), each with a kanban board of tasks, plus a vault of markdown notes. Start with list_projects \
 or search, then get_project_context for a full briefing on one project. Notes link with [[Note title]] and \
-[[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Write tools \
-(create_task, update_task, add_note, append_to_note, spawn_project, add_row) need a \
-read-write token, and everything they change shows in the project's history as done via AI. Prefer adding to \
+[[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Tasks keep a log of \
+comments and can have notes linked to them: read both with get_task, and log progress or lessons with \
+add_task_comment. Write tools (create_task, update_task, add_task_comment, link_note_to_task, add_note, \
+append_to_note, spawn_project, add_row) need a read-write token, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
 
@@ -586,7 +645,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Search projects (title, summary, description), tasks (title, description) and notes (full text) for some words."
+        description = "Search projects (title, summary, description), tasks (title, description, comments) and notes (full text) for some words."
     )]
     async fn search(
         &self,
@@ -618,7 +677,8 @@ impl Mcp {
                     "SELECT t.id, t.number, t.title, p.title, s.name FROM tasks t
                      JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id
                      JOIN project_access a ON a.project_id = p.id AND a.user_id = ?1
-                     WHERE t.title LIKE ?2 OR t.description LIKE ?2
+                     WHERE (t.title LIKE ?2 OR t.description LIKE ?2
+                        OR EXISTS (SELECT 1 FROM task_comments c WHERE c.task_id = t.id AND c.body LIKE ?2))
                      ORDER BY s.category = 'done', t.updated_at DESC LIMIT ?3",
                 )
                 .bind(&user.id)
@@ -775,26 +835,7 @@ impl Mcp {
         reply(
             as_ai(async {
                 let mut conn = self.conn().await?;
-                let key = args.task.trim();
-                let number = key
-                    .strip_prefix("T-")
-                    .or_else(|| key.strip_prefix("t-"))
-                    .and_then(|n| n.parse::<i64>().ok());
-                let task_id: String = match (number, &args.project) {
-                    (Some(n), Some(p)) => {
-                        let project = find_project(&mut conn, &user, p).await?;
-                        sqlx::query_scalar("SELECT id FROM tasks WHERE project_id = ? AND number = ?")
-                            .bind(&project.id)
-                            .bind(n)
-                            .fetch_optional(&mut *conn)
-                            .await?
-                            .ok_or_else(|| bad("unknown_task", format!("{} has no T-{n}.", project.title)))?
-                    }
-                    (Some(_), None) => {
-                        return Err(bad("need_project", "Give the project too when naming a task as T-12."));
-                    }
-                    _ => key.to_string(),
-                };
+                let task_id = find_task(&mut conn, &user, &args.task, args.project.as_deref()).await?;
                 let Json(current) = tasks::get_task(
                     State(self.state.clone()),
                     CurrentUser(user.clone()),
@@ -855,6 +896,108 @@ impl Mcp {
     }
 
     #[tool(
+        description = "Read one task in full: its details, checklist, the comments logged on it (what was done and learnt), the notes linked to it, and recent history."
+    )]
+    async fn get_task(
+        &self,
+        Parameters(args): Parameters<TaskArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            async {
+                let mut conn = self.conn().await?;
+                let id = find_task(&mut conn, &user, &args.task, args.project.as_deref()).await?;
+                drop(conn);
+                let Json(detail) =
+                    tasks::get_task(State(self.state.clone()), CurrentUser(user.clone()), Path(id)).await?;
+                let statuses = board::statuses_for(&mut *self.conn().await?, &detail.task.project_id).await?;
+                let column = statuses
+                    .iter()
+                    .find(|s| s.id == detail.task.status_id)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default();
+                Ok(brief::task(&detail, &column))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Log a comment on a task: progress, what was tried, a measurement, a decision. Comments build the task's work log. Needs a read-write token."
+    )]
+    async fn add_task_comment(
+        &self,
+        Parameters(args): Parameters<CommentArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let id =
+                    find_task(&mut *self.conn().await?, &user, &args.task, args.project.as_deref()).await?;
+                let req = serde_json::from_value(json!({ "body": args.text }))
+                    .map_err(|e| bad("invalid_comment", e.to_string()))?;
+                let (_, Json(c)) = comments::add_comment(
+                    State(self.state.clone()),
+                    CurrentUser(user.clone()),
+                    Path(id.clone()),
+                    Json(req),
+                )
+                .await?;
+                let Json(detail) =
+                    tasks::get_task(State(self.state.clone()), CurrentUser(user.clone()), Path(id)).await?;
+                Ok(format!(
+                    "Logged on T-{} {} ({} comment{}) · comment id `{}`",
+                    detail.task.number,
+                    detail.task.title,
+                    detail.comments.len(),
+                    if detail.comments.len() == 1 { "" } else { "s" },
+                    c.id
+                ))
+            })
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Link an existing note to a task (or unlink it), so the note shows on the task and the task on the note. To write a new note for a task, use add_note with `task`. Needs a read-write token."
+    )]
+    async fn link_note_to_task(
+        &self,
+        Parameters(args): Parameters<LinkNoteArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let mut conn = self.conn().await?;
+                let task_id = find_task(&mut conn, &user, &args.task, args.project.as_deref()).await?;
+                let note_id = find_note(&mut conn, &user, &args.note).await?;
+                drop(conn);
+                let st = || State(self.state.clone());
+                let me = || CurrentUser(user.clone());
+                let Json(detail) = tasks::get_task(st(), me(), Path(task_id.clone())).await?;
+                let t = &detail.task;
+                if args.unlink.unwrap_or(false) {
+                    notes::unlink_task_note(st(), me(), Path((task_id, note_id))).await?;
+                    Ok(format!("Unlinked the note from T-{} {}", t.number, t.title))
+                } else {
+                    let Json(n) = notes::link_task_note(st(), me(), Path((task_id, note_id))).await?;
+                    Ok(format!("Linked “{}” to T-{} {}", n.title, t.number, t.title))
+                }
+            })
+            .await,
+        )
+    }
+
+    #[tool(
         description = "Save a new markdown note: in the Inbox, under a project, or in a folder. Needs a read-write token."
     )]
     async fn add_note(
@@ -868,9 +1011,24 @@ impl Mcp {
         };
         reply(
             as_ai(async {
-                let project_ids = match &args.project {
-                    Some(p) => vec![find_project(&mut *self.conn().await?, &user, p).await?.id],
-                    None => vec![],
+                let task_id = match &args.task {
+                    Some(t) => {
+                        Some(find_task(&mut *self.conn().await?, &user, t, args.project.as_deref()).await?)
+                    }
+                    None => None,
+                };
+                let project_ids = match (&args.project, &task_id) {
+                    (Some(p), _) => vec![find_project(&mut *self.conn().await?, &user, p).await?.id],
+                    (None, Some(t)) => {
+                        let Json(d) = tasks::get_task(
+                            State(self.state.clone()),
+                            CurrentUser(user.clone()),
+                            Path(t.clone()),
+                        )
+                        .await?;
+                        vec![d.task.project_id]
+                    }
+                    (None, None) => vec![],
                 };
                 let folder = match (&args.folder, project_ids.is_empty()) {
                     (Some(f), _) => Some(f.clone()),
@@ -883,12 +1041,20 @@ impl Mcp {
                     "folder": folder,
                     "project_ids": project_ids,
                     "tags": args.tags.clone().unwrap_or_default(),
+                    "task_id": task_id,
                 }))
                 .map_err(|e| bad("invalid_note", e.to_string()))?;
                 let (_, Json(note)) =
                     notes::create_note(State(self.state.clone()), CurrentUser(user.clone()), Json(req))
                         .await?;
-                Ok(format!("Saved “{}” at `{}` · id `{}`", note.note.title, note.note.path, note.note.id))
+                let linked = match note.tasks.first() {
+                    Some(t) if task_id.is_some() => format!(" · linked to T-{} {}", t.number, t.title),
+                    _ => String::new(),
+                };
+                Ok(format!(
+                    "Saved “{}” at `{}` · id `{}`{linked}",
+                    note.note.title, note.note.path, note.note.id
+                ))
             })
             .await,
         )

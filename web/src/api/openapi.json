@@ -348,6 +348,119 @@
         }
       }
     },
+    "/comments/{id}": {
+      "delete": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Delete a comment: your own, or any on a project you own.",
+        "operationId": "delete_comment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Reword your own comment.",
+        "operationId": "update_comment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/databases": {
       "get": {
         "tags": [
@@ -3243,6 +3356,186 @@
         }
       }
     },
+    "/tasks/{id}/comments": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Add a comment to a task's log.",
+        "operationId": "add_comment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/notes/{note_id}": {
+      "put": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Link a note to a task, so each shows on the other. Needs edit rights on\nthe task's project and read access to the note. Linking doesn't share the\nnote: people on the project who can't read it see only that one is linked.",
+        "operationId": "link_task_note",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "note_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteSummary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Unlink a note from a task. The note itself is kept.",
+        "operationId": "unlink_task_note",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "note_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tasks/{id}/rows": {
       "get": {
         "tags": [
@@ -3865,6 +4158,76 @@
           }
         }
       },
+      "Comment": {
+        "type": "object",
+        "required": [
+          "id",
+          "task_id",
+          "body",
+          "via",
+          "created_at",
+          "can_edit",
+          "can_delete"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Markdown."
+          },
+          "can_delete": {
+            "type": "boolean",
+            "description": "You wrote it, or you own the project."
+          },
+          "can_edit": {
+            "type": "boolean",
+            "description": "You wrote it and can still change the project."
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "edited_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Missing when the author's account is gone."
+          },
+          "user_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "via": {
+            "type": "string",
+            "description": "`web` or `ai`."
+          }
+        }
+      },
+      "CommentRequest": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "Markdown, up to 20,000 characters."
+          }
+        }
+      },
       "CreateColumnRequest": {
         "type": "object",
         "required": [
@@ -3993,6 +4356,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "task_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Link the new note to this task (you need to be able to change it).\nWithout `project_ids` or `folder`, the note is filed under the task's project."
           },
           "title": {
             "type": [
@@ -4847,7 +5217,8 @@
           "note",
           "body",
           "backlinks",
-          "links"
+          "links",
+          "tasks"
         ],
         "properties": {
           "backlinks": {
@@ -4869,6 +5240,13 @@
           },
           "note": {
             "$ref": "#/components/schemas/NoteSummary"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "description": "Tasks this note is linked to, among those you can see."
           }
         }
       },
@@ -5546,6 +5924,8 @@
           "labels",
           "checklist_done",
           "checklist_total",
+          "comment_count",
+          "note_count",
           "overdue",
           "project_title",
           "project_color"
@@ -5575,6 +5955,11 @@
           "checklist_total": {
             "type": "integer",
             "format": "int64"
+          },
+          "comment_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Comments in the task's log."
           },
           "completed_at": {
             "type": [
@@ -5606,6 +5991,11 @@
             "items": {
               "$ref": "#/components/schemas/Label"
             }
+          },
+          "note_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Notes linked to the task, including any not shared with you."
           },
           "number": {
             "type": "integer",
@@ -5651,7 +6041,10 @@
         "required": [
           "task",
           "checklist",
-          "activity"
+          "activity",
+          "comments",
+          "notes",
+          "hidden_notes"
         ],
         "properties": {
           "activity": {
@@ -5665,6 +6058,25 @@
             "items": {
               "$ref": "#/components/schemas/ChecklistItem"
             }
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Comment"
+            },
+            "description": "The task's log, oldest first."
+          },
+          "hidden_notes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Linked notes that aren't shared with you."
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteSummary"
+            },
+            "description": "Linked notes you can read, most recently updated first."
           },
           "task": {
             "$ref": "#/components/schemas/Task"

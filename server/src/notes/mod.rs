@@ -36,6 +36,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(project_notes))
         .routes(routes!(download_note))
         .routes(routes!(rescan))
+        .routes(routes!(link_task_note, unlink_task_note))
         .routes(routes!(transfer::export_vault))
         .routes(routes!(transfer::import_vault))
 }
@@ -111,6 +112,8 @@ pub struct NoteDetail {
     /// Notes that link here.
     pub backlinks: Vec<NoteSummary>,
     pub links: Vec<NoteLink>,
+    /// Tasks this note is linked to, among those you can see.
+    pub tasks: Vec<crate::tasks::Task>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -125,6 +128,9 @@ pub struct CreateNoteRequest {
     pub project_ids: Vec<String>,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Link the new note to this task (you need to be able to change it).
+    /// Without `project_ids` or `folder`, the note is filed under the task's project.
+    pub task_id: Option<String>,
 }
 
 /// Fields left out stay as they are.
@@ -505,7 +511,15 @@ pub(crate) async fn create_note(
     check_body(&body)?;
     let tags = clean_tags(&req.tags)?;
     let mut conn = state.db.acquire().await?;
-    let projects = project_titles(&mut conn, &user.id, &req.project_ids, &[]).await?;
+    let task = match &req.task_id {
+        Some(t) => Some(crate::tasks::editable_task(&mut conn, &user.id, t).await?),
+        None => None,
+    };
+    let project_ids = match &task {
+        Some(t) if req.project_ids.is_empty() && req.folder.is_none() => vec![t.project_id.clone()],
+        _ => req.project_ids.clone(),
+    };
+    let projects = project_titles(&mut conn, &user.id, &project_ids, &[]).await?;
     let folder = folder_for(req.folder.as_deref(), projects.first().map(String::as_str));
 
     let root = vault::root(&state.config.data_dir, &user.id);
@@ -521,6 +535,9 @@ pub(crate) async fn create_note(
     };
     vault::write_file(&root, &rel, &markdown::render(&fm, &body)).await?;
     let id = vault::index_file(&mut conn, &root, &user.id, &rel).await?;
+    if let Some(task) = &task {
+        add_task_link(&mut conn, &user.id, task, &id).await?;
+    }
     Ok((StatusCode::CREATED, Json(detail(&mut conn, &state.config.data_dir, &user.id, &id).await?)))
 }
 
@@ -576,7 +593,8 @@ async fn detail(
         .await?;
         links.push(NoteLink { kind: kind.into(), title: l.title, id: found });
     }
-    Ok(NoteDetail { note, body, backlinks, links })
+    let tasks = crate::tasks::note_tasks(conn, viewer, id).await?;
+    Ok(NoteDetail { note, body, backlinks, links, tasks })
 }
 
 /// One note with its body, backlinks and resolved links.
@@ -686,6 +704,7 @@ async fn delete_note(
     let _ = tokio::fs::remove_file(root.join(&row.path)).await;
     vault::prune_empty_dirs(&root, &row.path).await;
     vault::unindex(&mut conn, &id).await?;
+    sqlx::query("DELETE FROM task_notes WHERE note_id = ?").bind(&id).execute(&mut *conn).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -773,4 +792,112 @@ async fn rescan(
 ) -> AppResult<Json<ScanResult>> {
     let indexed = vault::scan(&state.db, &state.config.data_dir, &user.id).await?;
     Ok(Json(ScanResult { indexed }))
+}
+
+// ---------------------------------------------------------------------------
+// Notes linked to tasks
+
+/// The notes linked to a task that `viewer` can read, newest first, and how
+/// many more are linked that aren't shared with them.
+pub async fn task_notes(
+    conn: &mut SqliteConnection,
+    viewer: &str,
+    task_id: &str,
+) -> AppResult<(Vec<NoteSummary>, i64)> {
+    let rows = sqlx::query_as::<_, NoteRow>(&format!(
+        "SELECT {NOTE_COLUMNS} FROM task_notes tn JOIN notes n ON n.id = tn.note_id
+         WHERE tn.task_id = ?
+           AND EXISTS (SELECT 1 FROM note_access na WHERE na.note_id = n.id AND na.user_id = ?)
+         ORDER BY n.updated_at DESC"
+    ))
+    .bind(task_id)
+    .bind(viewer)
+    .fetch_all(&mut *conn)
+    .await?;
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM task_notes tn JOIN notes n ON n.id = tn.note_id WHERE tn.task_id = ?",
+    )
+    .bind(task_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    let hidden = total - rows.len() as i64;
+    Ok((summaries(conn, viewer, rows).await?, hidden))
+}
+
+/// Links a note `user_id` can read to a task they may change. Linking twice is fine.
+async fn add_task_link(
+    conn: &mut SqliteConnection,
+    user_id: &str,
+    task: &crate::tasks::Task,
+    note_id: &str,
+) -> AppResult<()> {
+    note_row(conn, user_id, note_id).await?;
+    let added = sqlx::query(
+        "INSERT OR IGNORE INTO task_notes (task_id, note_id, created_by, created_at) VALUES (?, ?, ?, ?)",
+    )
+    .bind(&task.id)
+    .bind(note_id)
+    .bind(user_id)
+    .bind(time::now())
+    .execute(&mut *conn)
+    .await?
+    .rows_affected();
+    if added > 0 {
+        crate::tasks::log_task(
+            conn,
+            &task.project_id,
+            &task.id,
+            user_id,
+            "task.note_linked",
+            serde_json::json!({ "title": task.title }),
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+/// Link a note to a task, so each shows on the other. Needs edit rights on
+/// the task's project and read access to the note. Linking doesn't share the
+/// note: people on the project who can't read it see only that one is linked.
+#[utoipa::path(put, path = "/tasks/{id}/notes/{note_id}", tag = "tasks",
+    params(("id" = String, Path), ("note_id" = String, Path)),
+    responses((status = 200, body = NoteSummary), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody)))]
+pub(crate) async fn link_task_note(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path((id, note_id)): Path<(String, String)>,
+) -> AppResult<Json<NoteSummary>> {
+    let mut tx = state.db.begin().await?;
+    let task = crate::tasks::editable_task(&mut tx, &user.id, &id).await?;
+    add_task_link(&mut tx, &user.id, &task, &note_id).await?;
+    let row = note_row(&mut tx, &user.id, &note_id).await?;
+    let note = summaries(&mut tx, &user.id, vec![row]).await?.remove(0);
+    tx.commit().await?;
+    Ok(Json(note))
+}
+
+/// Unlink a note from a task. The note itself is kept.
+#[utoipa::path(delete, path = "/tasks/{id}/notes/{note_id}", tag = "tasks",
+    params(("id" = String, Path), ("note_id" = String, Path)),
+    responses((status = 204), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody)))]
+pub(crate) async fn unlink_task_note(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path((id, note_id)): Path<(String, String)>,
+) -> AppResult<StatusCode> {
+    let mut tx = state.db.begin().await?;
+    crate::tasks::editable_task(&mut tx, &user.id, &id).await?;
+    let gone = sqlx::query("DELETE FROM task_notes WHERE task_id = ? AND note_id = ?")
+        .bind(&id)
+        .bind(&note_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    if gone == 0 {
+        return Err(AppError::NotFound);
+    }
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
 }

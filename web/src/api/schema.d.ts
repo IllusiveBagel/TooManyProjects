@@ -144,6 +144,24 @@ export interface paths {
         patch: operations["update_checklist_item"];
         trace?: never;
     };
+    "/comments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a comment: your own, or any on a project you own. */
+        delete: operations["delete_comment"];
+        options?: never;
+        head?: never;
+        /** Reword your own comment. */
+        patch: operations["update_comment"];
+        trace?: never;
+    };
     "/databases": {
         parameters: {
             query?: never;
@@ -905,6 +923,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a comment to a task's log. */
+        post: operations["add_comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{id}/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Link a note to a task, so each shows on the other. Needs edit rights on
+         *     the task's project and read access to the note. Linking doesn't share the
+         *     note: people on the project who can't read it see only that one is linked.
+         */
+        put: operations["link_task_note"];
+        post?: never;
+        /** Unlink a note from a task. The note itself is kept. */
+        delete: operations["unlink_task_note"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tasks/{id}/rows": {
         parameters: {
             query?: never;
@@ -1115,6 +1172,27 @@ export interface components {
             /** @description Relation to rows: the database they're in. */
             target_database_id?: string | null;
         };
+        Comment: {
+            /** @description Markdown. */
+            body: string;
+            /** @description You wrote it, or you own the project. */
+            can_delete: boolean;
+            /** @description You wrote it and can still change the project. */
+            can_edit: boolean;
+            created_at: string;
+            edited_at?: string | null;
+            id: string;
+            task_id: string;
+            /** @description Missing when the author's account is gone. */
+            user_id?: string | null;
+            user_name?: string | null;
+            /** @description `web` or `ai`. */
+            via: string;
+        };
+        CommentRequest: {
+            /** @description Markdown, up to 20,000 characters. */
+            body: string;
+        };
         CreateColumnRequest: {
             kind: string;
             name: string;
@@ -1155,6 +1233,11 @@ export interface components {
             folder?: string | null;
             project_ids?: string[];
             tags?: string[];
+            /**
+             * @description Link the new note to this task (you need to be able to change it).
+             *     Without `project_ids` or `folder`, the note is filed under the task's project.
+             */
+            task_id?: string | null;
             /** @description Defaults to "Untitled" (or the date, for the Inbox). */
             title?: string | null;
         };
@@ -1402,6 +1485,8 @@ export interface components {
             body: string;
             links: components["schemas"]["NoteLink"][];
             note: components["schemas"]["NoteSummary"];
+            /** @description Tasks this note is linked to, among those you can see. */
+            tasks: components["schemas"]["Task"][];
         };
         /** @description Where a `[[link]]` in the note leads. */
         NoteLink: {
@@ -1610,6 +1695,11 @@ export interface components {
             checklist_done: number;
             /** Format: int64 */
             checklist_total: number;
+            /**
+             * Format: int64
+             * @description Comments in the task's log.
+             */
+            comment_count: number;
             completed_at?: string | null;
             created_at: string;
             /** @description Markdown. */
@@ -1617,6 +1707,11 @@ export interface components {
             due_date?: string | null;
             id: string;
             labels: components["schemas"]["Label"][];
+            /**
+             * Format: int64
+             * @description Notes linked to the task, including any not shared with you.
+             */
+            note_count: number;
             /**
              * Format: int64
              * @description Per-project number, shown as T-12.
@@ -1637,6 +1732,15 @@ export interface components {
         TaskDetail: {
             activity: components["schemas"]["ActivityItem"][];
             checklist: components["schemas"]["ChecklistItem"][];
+            /** @description The task's log, oldest first. */
+            comments: components["schemas"]["Comment"][];
+            /**
+             * Format: int64
+             * @description Linked notes that aren't shared with you.
+             */
+            hidden_notes: number;
+            /** @description Linked notes you can read, most recently updated first. */
+            notes: components["schemas"]["NoteSummary"][];
             task: components["schemas"]["Task"];
         };
         ThemeModeSummary: {
@@ -2054,6 +2158,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistItem"];
+                };
+            };
+        };
+    };
+    delete_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comment"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };
@@ -4052,6 +4240,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistItem"];
+                };
+            };
+        };
+    };
+    add_comment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comment"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    link_task_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteSummary"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    unlink_task_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

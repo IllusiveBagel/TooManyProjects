@@ -48,6 +48,8 @@ describe("activityText", () => {
     expect(text("task.updated", { title: "Weld", fields: ["title", "due date"] })).toBe(
       "changed the title, due date of “Weld”",
     );
+    expect(text("task.commented", { title: "Weld" })).toBe("commented on “Weld”");
+    expect(text("task.note_linked", { title: "Weld" })).toBe("linked a note to “Weld”");
     expect(text("something.new", {})).toBe("something new");
   });
 });

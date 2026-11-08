@@ -194,6 +194,9 @@ async fn reads_projects_notes_and_briefings() {
         "add_note",
         "append_to_note",
         "spawn_project",
+        "get_task",
+        "add_task_comment",
+        "link_note_to_task",
     ] {
         assert!(names.contains(&n), "missing {n}: {names:?}");
     }
@@ -430,4 +433,80 @@ async fn reads_and_adds_database_rows() {
     assert_eq!(out, "Added “Hoses” to Parts in Beetle.");
     let (_, out) = tool(&app, &read, "query_database", json!({"database": "Parts", "search": "hoses"})).await;
     assert!(out.contains("| Hoses | 12.5 | To order | T-1 Fit brake lines |"), "{out}");
+}
+
+#[tokio::test]
+async fn task_logs_and_linked_notes_over_mcp() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (car, _) = seed(&app, &me).await;
+    let token = make_token(&app, &me, "write").await;
+    let reader = make_token(&app, &me, "read").await;
+
+    let (err, text) = tool(
+        &app,
+        &token,
+        "add_task_comment",
+        json!({"task": "T-1", "project": "Car restoration", "text": "Float needle was stuck. Cleaned with carb spray."}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert!(text.contains("T-1 Rebuild carburettor (1 comment)"), "{text}");
+    let (err, text) =
+        tool(&app, &reader, "add_task_comment", json!({"task": "T-1", "project": car, "text": "nope"})).await;
+    assert!(err && text.contains("read-only"), "{text}");
+
+    let (err, text) = tool(
+        &app,
+        &token,
+        "link_note_to_task",
+        json!({"task": "T-1", "project": car, "note": "brake fluid"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert!(text.contains("Linked “Brake fluid” to T-1"), "{text}");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "add_note",
+        json!({"title": "Carb jets", "body": "Main jet 130.", "task": "T-1", "project": "Car restoration"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert!(text.contains("linked to T-1 Rebuild carburettor"), "{text}");
+
+    let (err, text) = tool(&app, &reader, "get_task", json!({"task": "T-1", "project": car})).await;
+    assert!(!err, "{text}");
+    assert!(text.contains("# T-1 Rebuild carburettor"), "{text}");
+    assert!(text.contains("## Log (1)"), "{text}");
+    assert!(text.contains("Float needle was stuck") && text.contains("(via AI)"), "{text}");
+    assert!(
+        text.contains("## Linked notes")
+            && text.contains("**Brake fluid**")
+            && text.contains("**Carb jets**"),
+        "{text}"
+    );
+
+    let (_, note) = tool(&app, &reader, "get_note", json!({"note": "Carb jets"})).await;
+    assert!(note.contains("Linked tasks:") && note.contains("T-1 Rebuild carburettor"), "{note}");
+    let (_, brief) = tool(&app, &reader, "get_project_context", json!({"project": car})).await;
+    assert!(brief.contains("1 comment; 2 linked notes"), "{brief}");
+    let (_, found) = tool(&app, &reader, "search", json!({"query": "float needle"})).await;
+    assert!(found.contains("Rebuild carburettor"), "{found}");
+
+    let (err, text) = tool(
+        &app,
+        &token,
+        "link_note_to_task",
+        json!({"task": "T-1", "project": car, "note": "Brake fluid", "unlink": true}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let detail = app.call("GET", "/api/v1/tasks", Some(&me), None).await;
+    let t =
+        detail.body.as_array().unwrap().iter().find(|t| t["title"] == "Rebuild carburettor").unwrap().clone();
+    assert_eq!(t["note_count"], 1);
+    let full =
+        app.call("GET", &format!("/api/v1/tasks/{}", t["id"].as_str().unwrap()), Some(&me), None).await;
+    assert_eq!(full.body["comments"][0]["via"], "ai");
 }

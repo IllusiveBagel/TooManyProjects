@@ -46,4 +46,5 @@ export type Status = components["schemas"]["Status"];
 export type Label = components["schemas"]["Label"];
 export type ChecklistItem = components["schemas"]["ChecklistItem"];
 export type ActivityItem = components["schemas"]["ActivityItem"];
+export type Comment = components["schemas"]["Comment"];
 export type Dashboard = components["schemas"]["Dashboard"];

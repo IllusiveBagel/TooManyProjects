@@ -53,6 +53,8 @@ struct TaskRow {
     updated_at: String,
     checklist_done: i64,
     checklist_total: i64,
+    comment_count: i64,
+    note_count: i64,
     category: String,
     project_title: String,
     project_color: String,
@@ -63,6 +65,8 @@ const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.number, t.status_id, t.t
         t.completed_at, t.created_at, t.updated_at,
         (SELECT COUNT(*) FROM task_checklist c WHERE c.task_id = t.id AND c.done = 1) AS checklist_done,
         (SELECT COUNT(*) FROM task_checklist c WHERE c.task_id = t.id) AS checklist_total,
+        (SELECT COUNT(*) FROM task_comments tc WHERE tc.task_id = t.id) AS comment_count,
+        (SELECT COUNT(*) FROM task_notes tn JOIN notes n ON n.id = tn.note_id WHERE tn.task_id = t.id) AS note_count,
         s.category, p.title AS project_title, p.color AS project_color
     FROM tasks t
     JOIN statuses s ON s.id = t.status_id
@@ -94,6 +98,10 @@ pub struct Task {
     pub labels: Vec<Label>,
     pub checklist_done: i64,
     pub checklist_total: i64,
+    /// Comments in the task's log.
+    pub comment_count: i64,
+    /// Notes linked to the task, including any not shared with you.
+    pub note_count: i64,
     /// Open, with a due date before today.
     pub overdue: bool,
     pub project_title: String,
@@ -134,6 +142,12 @@ pub struct TaskDetail {
     pub task: Task,
     pub checklist: Vec<ChecklistItem>,
     pub activity: Vec<ActivityItem>,
+    /// The task's log, oldest first.
+    pub comments: Vec<crate::comments::Comment>,
+    /// Linked notes you can read, most recently updated first.
+    pub notes: Vec<crate::notes::NoteSummary>,
+    /// Linked notes that aren't shared with you.
+    pub hidden_notes: i64,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -274,6 +288,8 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
             updated_at: r.updated_at,
             checklist_done: r.checklist_done,
             checklist_total: r.checklist_total,
+            comment_count: r.comment_count,
+            note_count: r.note_count,
             project_title: r.project_title,
             project_color: r.project_color,
         })
@@ -281,7 +297,7 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
 }
 
 /// A task the person can see, else 404.
-async fn visible_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Task> {
+pub(crate) async fn visible_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Task> {
     let row = sqlx::query_as::<_, TaskRow>(&format!(
         "{TASK_SELECT} WHERE t.id = ?
             AND EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ?)"
@@ -295,7 +311,7 @@ async fn visible_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> A
 }
 
 /// A task the person may change, else 404 or 403.
-async fn editable_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Task> {
+pub(crate) async fn editable_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Task> {
     let task = visible_task(conn, user_id, id).await?;
     require_edit(conn, user_id, &task.project_id).await?;
     Ok(task)
@@ -306,6 +322,21 @@ pub async fn project_tasks(conn: &mut SqliteConnection, project_id: &str) -> App
         "{TASK_SELECT} WHERE t.project_id = ? ORDER BY s.position, t.position"
     ))
     .bind(project_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    attach_labels(conn, rows).await
+}
+
+/// Tasks a note is linked to, among those `viewer` can see, open ones first.
+pub async fn note_tasks(conn: &mut SqliteConnection, viewer: &str, note_id: &str) -> AppResult<Vec<Task>> {
+    let rows = sqlx::query_as::<_, TaskRow>(&format!(
+        "{TASK_SELECT} JOIN task_notes tn ON tn.task_id = t.id
+         WHERE tn.note_id = ?
+           AND EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ?)
+         ORDER BY s.category = 'done', t.updated_at DESC"
+    ))
+    .bind(note_id)
+    .bind(viewer)
     .fetch_all(&mut *conn)
     .await?;
     attach_labels(conn, rows).await
@@ -493,7 +524,7 @@ pub(crate) async fn create_task(
     Ok((StatusCode::CREATED, Json(task)))
 }
 
-async fn log_task(
+pub(crate) async fn log_task(
     conn: &mut SqliteConnection,
     project_id: &str,
     task_id: &str,
@@ -540,7 +571,9 @@ pub(crate) async fn get_task(
     .bind(&id)
     .fetch_all(&mut *conn)
     .await?;
-    Ok(Json(TaskDetail { task, checklist, activity }))
+    let comments = crate::comments::task_comments(&mut conn, &user.id, &task).await?;
+    let (notes, hidden_notes) = crate::notes::task_notes(&mut conn, &user.id, &id).await?;
+    Ok(Json(TaskDetail { task, checklist, activity, comments, notes, hidden_notes }))
 }
 
 /// Edit a task, or move it between columns.
