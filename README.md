@@ -54,7 +54,8 @@ what depends on what. Drag, zoom, and lay it out however your head works.
       <h3>📋 Boards, per project and global</h3>
       Each project gets its own kanban columns. The global board folds every
       project into <em>to do</em>, <em>in progress</em>, <em>blocked</em> and
-      <em>done</em>, filterable by project or a whole family of them.
+      <em>done</em>, filterable by project or a whole family of them. Every
+      task keeps a log of comments and links to the notes it taught you.
     </td>
   </tr>
   <tr>
@@ -161,8 +162,8 @@ claude mcp add --transport http toomanyprojects https://your-host/mcp \
 ```
 
 Your assistant can then list and search projects, pull a full briefing on one,
-read notes, query databases and, with a read-write token, add tasks, notes and
-rows or spawn new projects. Anything it changes is marked *via AI* in the
+read notes and a task's log, query databases and, with a read-write token, add
+tasks, comments, notes and rows or spawn new projects. Anything it changes is marked *via AI* in the
 project's activity. The [user guide](docs/guide.md#ai-access-mcp) has the full
 list of tools, resources and prompts.
 
