@@ -19,7 +19,7 @@ use crate::{
     auth::{self, CurrentUser},
     error::{AppError, AppResult},
     links::{LINK_COLUMNS, Link},
-    projects::{PROJECT_SELECT, Project},
+    projects::{self, PROJECT_SELECT, Project},
     time,
 };
 
@@ -30,8 +30,21 @@ const AUTO_COLUMNS: usize = 4;
 const MAX_BATCH: usize = 500;
 
 pub fn router() -> OpenApiRouter<AppState> {
-    OpenApiRouter::new().routes(routes!(home_canvas)).routes(routes!(save_nodes))
+    OpenApiRouter::new()
+        .routes(routes!(home_canvas))
+        .routes(routes!(save_nodes))
+        .routes(routes!(create_group))
+        .routes(routes!(update_group, delete_group))
 }
+
+/// Groups are labelled areas drawn behind cards. A card belongs to a group
+/// while its centre is inside it; nothing else is stored, so dragging a card
+/// out of the area takes it out of the group.
+const MAX_LABEL: usize = 80;
+/// Where the server takes a card's centre to be, for working out which
+/// group it sits in. Cards are 256 wide and roughly 140 tall.
+const CARD_CENTRE: (f64, f64) = (128.0, 70.0);
+const MIN_GROUP: f64 = 120.0;
 
 #[derive(Serialize, FromRow, ToSchema)]
 pub struct Canvas {
@@ -92,9 +105,52 @@ pub struct NodePosition {
 }
 
 #[derive(Deserialize, ToSchema)]
+pub struct GroupPosition {
+    /// The group's node id.
+    pub id: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+}
+
+#[derive(Deserialize, ToSchema)]
 pub struct SaveNodesRequest {
     /// Up to 500 cards at once, sent after a drag.
+    #[serde(default)]
     pub nodes: Vec<NodePosition>,
+    /// Groups moved or resized in the same drag.
+    #[serde(default)]
+    pub groups: Vec<GroupPosition>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct CreateGroupRequest {
+    /// What the area holds, such as "Electronics". Up to 80 characters.
+    pub label: String,
+    /// A theme slot (slot-1 to slot-8) or #rrggbb. Default slot-1.
+    pub color: Option<String>,
+    pub x: f64,
+    pub y: f64,
+    /// At least 120 each.
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateGroupRequest {
+    pub label: Option<String>,
+    pub color: Option<String>,
+    pub x: Option<f64>,
+    pub y: Option<f64>,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+}
+
+/// A group and the projects whose cards sit inside it.
+pub struct GroupMembers {
+    pub group: CanvasNode,
+    pub project_ids: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +216,96 @@ pub async fn place_project(
     .execute(conn)
     .await?;
     Ok(())
+}
+
+const NODE_COLUMNS: &str = "id, kind, project_id, label, color, x, y, width, height, collapsed";
+
+fn valid_number(v: f64) -> bool {
+    v.is_finite() && v.abs() < 1e7
+}
+
+fn check_label(label: &str) -> AppResult<String> {
+    let label = label.trim();
+    if label.is_empty() || label.chars().count() > MAX_LABEL {
+        return Err(AppError::BadRequest(
+            "invalid_label",
+            format!("Give the group a name of 1 to {MAX_LABEL} characters."),
+        ));
+    }
+    Ok(label.to_string())
+}
+
+fn check_size(width: f64, height: f64) -> AppResult<()> {
+    if !valid_number(width) || !valid_number(height) || width < MIN_GROUP || height < MIN_GROUP {
+        return Err(AppError::BadRequest(
+            "invalid_size",
+            format!("Groups are at least {MIN_GROUP} by {MIN_GROUP}."),
+        ));
+    }
+    Ok(())
+}
+
+async fn own_canvas(conn: &mut SqliteConnection, canvas_id: &str, user_id: &str) -> AppResult<()> {
+    let owned: Option<String> = sqlx::query_scalar("SELECT id FROM canvases WHERE id = ? AND user_id = ?")
+        .bind(canvas_id)
+        .bind(user_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+    owned.map(|_| ()).ok_or(AppError::NotFound)
+}
+
+async fn fetch_group(conn: &mut SqliteConnection, canvas_id: &str, group_id: &str) -> AppResult<CanvasNode> {
+    sqlx::query_as::<_, CanvasNode>(&format!(
+        "SELECT {NODE_COLUMNS} FROM canvas_nodes WHERE id = ? AND canvas_id = ? AND kind = 'group'"
+    ))
+    .bind(group_id)
+    .bind(canvas_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(AppError::NotFound)
+}
+
+/// Whether a card at (x, y) has its centre inside the group.
+pub fn card_in_group(group: &CanvasNode, x: f64, y: f64) -> bool {
+    let (cx, cy) = (x + CARD_CENTRE.0, y + CARD_CENTRE.1);
+    let (w, h) = (group.width.unwrap_or(0.0), group.height.unwrap_or(0.0));
+    cx >= group.x && cx <= group.x + w && cy >= group.y && cy <= group.y + h
+}
+
+/// Every group on someone's home canvas, biggest first, with the projects
+/// (that they can see) whose cards sit inside it.
+pub async fn groups_with_members(conn: &mut SqliteConnection, user_id: &str) -> AppResult<Vec<GroupMembers>> {
+    let canvas_id = home_canvas_id(conn, user_id).await?;
+    let mut groups = sqlx::query_as::<_, CanvasNode>(&format!(
+        "SELECT {NODE_COLUMNS} FROM canvas_nodes WHERE canvas_id = ? AND kind = 'group'"
+    ))
+    .bind(&canvas_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    groups.sort_by(|a, b| {
+        let area = |n: &CanvasNode| n.width.unwrap_or(0.0) * n.height.unwrap_or(0.0);
+        area(b).total_cmp(&area(a))
+    });
+    let cards: Vec<(String, f64, f64)> = sqlx::query_as(
+        "SELECT n.project_id, n.x, n.y FROM canvas_nodes n
+         JOIN project_access a ON a.project_id = n.project_id AND a.user_id = ?
+         WHERE n.canvas_id = ?",
+    )
+    .bind(user_id)
+    .bind(&canvas_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(groups
+        .into_iter()
+        .map(|group| {
+            let project_ids = cards
+                .iter()
+                .filter(|(_, x, y)| card_in_group(&group, *x, *y))
+                .map(|(id, _, _)| id.clone())
+                .collect();
+            GroupMembers { group, project_ids }
+        })
+        .collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -283,31 +429,54 @@ async fn save_nodes(
     Path(id): Path<String>,
     Json(req): Json<SaveNodesRequest>,
 ) -> AppResult<StatusCode> {
-    if req.nodes.len() > MAX_BATCH {
+    if req.nodes.len() + req.groups.len() > MAX_BATCH {
         return Err(AppError::BadRequest(
             "too_many_nodes",
             format!("Save at most {MAX_BATCH} cards at once."),
         ));
     }
-    let valid = |v: f64| v.is_finite() && v.abs() < 1e7;
-    if req.nodes.iter().any(|n| {
-        !valid(n.x)
-            || !valid(n.y)
-            || n.width.is_some_and(|w| !valid(w))
-            || n.height.is_some_and(|h| !valid(h))
-    }) {
+    let valid = valid_number;
+    let bad = |x: f64, y: f64, w: Option<f64>, h: Option<f64>| {
+        !valid(x) || !valid(y) || w.is_some_and(|w| !valid(w)) || h.is_some_and(|h| !valid(h))
+    };
+    if req.nodes.iter().any(|n| bad(n.x, n.y, n.width, n.height))
+        || req.groups.iter().any(|g| bad(g.x, g.y, g.width, g.height))
+    {
         return Err(AppError::BadRequest("invalid_position", "Positions must be finite numbers.".into()));
     }
-    let mut tx = state.db.begin().await?;
-    let owned: Option<String> = sqlx::query_scalar("SELECT id FROM canvases WHERE id = ? AND user_id = ?")
-        .bind(&id)
-        .bind(&user.id)
-        .fetch_optional(&mut *tx)
-        .await?;
-    if owned.is_none() {
-        return Err(AppError::NotFound);
+    if req
+        .groups
+        .iter()
+        .any(|g| g.width.is_some_and(|w| w < MIN_GROUP) || g.height.is_some_and(|h| h < MIN_GROUP))
+    {
+        return Err(AppError::BadRequest(
+            "invalid_size",
+            format!("Groups are at least {MIN_GROUP} by {MIN_GROUP}."),
+        ));
     }
+    let mut tx = state.db.begin().await?;
+    own_canvas(&mut tx, &id, &user.id).await?;
     let now = time::now();
+    for g in &req.groups {
+        let changed = sqlx::query(
+            "UPDATE canvas_nodes SET x = ?, y = ?, width = COALESCE(?, width), height = COALESCE(?, height),
+                updated_at = ?
+             WHERE canvas_id = ? AND id = ? AND kind = 'group'",
+        )
+        .bind(g.x)
+        .bind(g.y)
+        .bind(g.width)
+        .bind(g.height)
+        .bind(&now)
+        .bind(&id)
+        .bind(&g.id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if changed == 0 {
+            return Err(AppError::NotFound);
+        }
+    }
     for n in &req.nodes {
         // Only cards already on this canvas, which the server placed for
         // projects this person can see or for locked cards beside them.
@@ -334,9 +503,144 @@ async fn save_nodes(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Draw a group: a labelled, coloured area behind cards. Dragging it moves
+/// the cards inside. Groups live on your own canvas, so nobody else sees them.
+#[utoipa::path(post, path = "/canvases/{id}/groups", tag = "canvas", params(("id" = String, Path)),
+    request_body = CreateGroupRequest,
+    responses((status = 201, body = CanvasNode), (status = 400, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody)))]
+async fn create_group(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(id): Path<String>,
+    Json(req): Json<CreateGroupRequest>,
+) -> AppResult<(StatusCode, Json<CanvasNode>)> {
+    let label = check_label(&req.label)?;
+    let color = req.color.unwrap_or_else(|| "slot-1".into());
+    projects::check_color(&color)?;
+    if !valid_number(req.x) || !valid_number(req.y) {
+        return Err(AppError::BadRequest("invalid_position", "Positions must be finite numbers.".into()));
+    }
+    check_size(req.width, req.height)?;
+    let mut tx = state.db.begin().await?;
+    own_canvas(&mut tx, &id, &user.id).await?;
+    let group_id = time::new_id();
+    sqlx::query(
+        "INSERT INTO canvas_nodes (id, canvas_id, kind, label, color, x, y, width, height, updated_at)
+         VALUES (?, ?, 'group', ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&group_id)
+    .bind(&id)
+    .bind(&label)
+    .bind(&color)
+    .bind(req.x)
+    .bind(req.y)
+    .bind(req.width)
+    .bind(req.height)
+    .bind(time::now())
+    .execute(&mut *tx)
+    .await?;
+    let group = fetch_group(&mut tx, &id, &group_id).await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(group)))
+}
+
+/// Rename, recolour, move or resize a group. Moving it here does not move
+/// the cards inside; the canvas sends those in the same drag.
+#[utoipa::path(patch, path = "/canvases/{id}/groups/{group_id}", tag = "canvas",
+    params(("id" = String, Path), ("group_id" = String, Path)),
+    request_body = UpdateGroupRequest,
+    responses((status = 200, body = CanvasNode), (status = 400, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody)))]
+async fn update_group(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path((id, group_id)): Path<(String, String)>,
+    Json(req): Json<UpdateGroupRequest>,
+) -> AppResult<Json<CanvasNode>> {
+    let mut tx = state.db.begin().await?;
+    own_canvas(&mut tx, &id, &user.id).await?;
+    let cur = fetch_group(&mut tx, &id, &group_id).await?;
+    let label = match &req.label {
+        Some(l) => check_label(l)?,
+        None => cur.label.clone().unwrap_or_default(),
+    };
+    let color = req.color.or(cur.color).unwrap_or_else(|| "slot-1".into());
+    projects::check_color(&color)?;
+    let (x, y) = (req.x.unwrap_or(cur.x), req.y.unwrap_or(cur.y));
+    if !valid_number(x) || !valid_number(y) {
+        return Err(AppError::BadRequest("invalid_position", "Positions must be finite numbers.".into()));
+    }
+    let (w, h) =
+        (req.width.or(cur.width).unwrap_or(MIN_GROUP), req.height.or(cur.height).unwrap_or(MIN_GROUP));
+    check_size(w, h)?;
+    sqlx::query(
+        "UPDATE canvas_nodes SET label = ?, color = ?, x = ?, y = ?, width = ?, height = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(&label)
+    .bind(&color)
+    .bind(x)
+    .bind(y)
+    .bind(w)
+    .bind(h)
+    .bind(time::now())
+    .bind(&group_id)
+    .execute(&mut *tx)
+    .await?;
+    let group = fetch_group(&mut tx, &id, &group_id).await?;
+    tx.commit().await?;
+    Ok(Json(group))
+}
+
+/// Remove a group. The cards inside stay where they are.
+#[utoipa::path(delete, path = "/canvases/{id}/groups/{group_id}", tag = "canvas",
+    params(("id" = String, Path), ("group_id" = String, Path)),
+    responses((status = 204), (status = 404, body = crate::error::ErrorBody)))]
+async fn delete_group(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path((id, group_id)): Path<(String, String)>,
+) -> AppResult<StatusCode> {
+    let mut conn = state.db.acquire().await?;
+    own_canvas(&mut conn, &id, &user.id).await?;
+    let gone = sqlx::query("DELETE FROM canvas_nodes WHERE id = ? AND canvas_id = ? AND kind = 'group'")
+        .bind(&group_id)
+        .bind(&id)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected();
+    if gone == 0 {
+        return Err(AppError::NotFound);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::free_spot;
+    use super::{CanvasNode, card_in_group, free_spot};
+
+    #[test]
+    fn a_card_is_in_a_group_when_its_centre_is() {
+        let g = CanvasNode {
+            id: "g".into(),
+            kind: "group".into(),
+            project_id: None,
+            label: Some("Cars".into()),
+            color: None,
+            x: 0.0,
+            y: 0.0,
+            width: Some(600.0),
+            height: Some(400.0),
+            collapsed: false,
+        };
+        assert!(card_in_group(&g, 20.0, 20.0));
+        // Mostly hanging off the right edge: centre at 728.
+        assert!(!card_in_group(&g, 600.0, 20.0));
+        // Half over the edge still counts while the centre is inside.
+        assert!(card_in_group(&g, 400.0, 300.0));
+        assert!(!card_in_group(&g, 20.0, 340.0));
+    }
 
     #[test]
     fn fills_the_grid_in_rows() {

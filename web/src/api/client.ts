@@ -40,6 +40,7 @@ export type Project = components["schemas"]["Project"];
 export type ProjectDetail = components["schemas"]["ProjectDetail"];
 export type Link = components["schemas"]["Link"];
 export type CanvasView = components["schemas"]["CanvasView"];
+export type CanvasNode = components["schemas"]["CanvasNode"];
 export type Task = components["schemas"]["Task"];
 export type TaskDetail = components["schemas"]["TaskDetail"];
 export type Status = components["schemas"]["Status"];

@@ -37,7 +37,9 @@ update your projects through MCP.
 
 Projects are cards showing live progress, late tasks and last activity.
 Spawned projects hang off their parents, and *related* and *blocks* links show
-what depends on what. Drag, zoom, and lay it out however your head works.
+what depends on what. Draw labelled, coloured groups round related cards
+(electronics, cars, code) and drag a group to carry everything in it. Drag,
+zoom, and lay it out however your head works.
 
 <p align="center">
   <img src="docs/images/canvas.png" alt="The canvas: project cards joined by spawned, related and blocking links" width="100%">

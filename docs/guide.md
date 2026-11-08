@@ -4,6 +4,7 @@ How each part of **too many projects** works. For installing it, see the
 [README](../README.md#quick-start); for working on the code, see
 [development.md](development.md).
 
+- [Canvas groups](#canvas-groups)
 - [Boards](#boards)
 - [Notes](#notes)
 - [Sharing](#sharing)
@@ -11,6 +12,42 @@ How each part of **too many projects** works. For installing it, see the
 - [AI access (MCP)](#ai-access-mcp)
 - [Theming](#theming)
 - [Updating](#updating)
+
+## Canvas groups
+
+A group is a labelled, coloured area on the canvas, such as *Electronics*,
+*Car projects* or *Programming*. Grab it by its label and everything inside
+moves with it. (Not to be confused with *blocks* links, which say one project
+holds up another.)
+
+- **Make one:** press **Group** at the top left, then drag out the area, or
+  tap for a standard-sized one, and type its name. To wrap cards you already
+  have, select two or more first by holding Shift and dragging a box round them,
+  then press **Group**. Escape or **Cancel** stops drawing.
+- **What's inside:** a card is in a group while its centre is inside the area.
+  There's nothing to tick: drag a card in to add it, drag it out to take it
+  out. The number on the label is how many cards are inside.
+- **Move:** drag the label. The cards inside, and any smaller group drawn
+  wholly inside it, come too. What it carries is fixed when you start
+  dragging, so cards it passes over on the way are left where they are.
+- **Resize, rename, recolour, remove:** click the label to select the group.
+  Drag a corner or edge to resize (the cards stay put), and use the bar above
+  it to rename (or double-click the label), pick one of the eight theme
+  colours, or remove it. Removing a group never touches the projects in it.
+- **Overlaps and nesting:** groups can overlap and sit inside each other.
+  Smaller ones draw on top, so their labels stay reachable. A card in two
+  overlapping groups moves with whichever you drag.
+- **Inside a group** the canvas still pans and box-selects as normal; only the
+  label and the resize handles pick the group up.
+- **Phones:** the same, with bigger resize handles, and the group's tools in a
+  bar above the tabs. A new group zooms in so you can read its name as you
+  type it.
+- **Sharing:** groups are part of your own canvas layout, like card positions,
+  so nobody else sees them. You can put projects shared with you in your
+  groups, and people you share with arrange their own.
+- **AI access:** `list_projects` ends with the groups and the projects in
+  each, and takes a `group` filter, so you can ask about "my electronics
+  projects".
 
 ## Boards
 
@@ -137,7 +174,8 @@ if you let it, add to them.
   make a token. The token goes in an `Authorization: Bearer` header; OAuth sign
   in isn't supported yet, so connectors that only do OAuth (such as custom
   connectors in the Claude web app) can't connect.
-- **Tools:** `list_projects`, `get_project_context` (a full briefing, with the
+- **Tools:** `list_projects` (with the canvas groups each project sits in, and
+  a `group` filter), `get_project_context` (a full briefing, with the
   family on request), `search` (projects, tasks and their comments, and notes), `list_notes`,
   `get_note`, `get_task` (a task with its log, linked notes and history),
   `query_database` (a saved view or a search as a markdown table, with
