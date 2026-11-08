@@ -172,6 +172,43 @@
     height: 22px;
   }
 }
+/* Groups: only the label tab and the resize handles take the pointer, so
+   the canvas still pans and box-selects inside a group. */
+.tmp-flow .react-flow__node.tmp-group-node {
+  pointer-events: none;
+  cursor: default;
+}
+.tmp-flow .tmp-group-handle,
+.tmp-flow .tmp-group-node .react-flow__resize-control {
+  pointer-events: all;
+}
+.tmp-flow .tmp-group-handle {
+  cursor: grab;
+  touch-action: none;
+}
+.tmp-flow .tmp-group-node.dragging .tmp-group-handle {
+  cursor: grabbing;
+}
+.tmp-flow .react-flow__resize-control.handle.tmp-group-resize {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--tmp-radius-sm);
+  border: 2px solid var(--tmp-surface);
+}
+.tmp-flow .react-flow__resize-control.line.tmp-group-resize-line {
+  border-width: 0;
+}
+@media (hover: none) {
+  .tmp-flow .react-flow__resize-control.handle.tmp-group-resize {
+    width: 18px;
+    height: 18px;
+  }
+}
+/* Drawing a group: a dashed accent rectangle that follows the pointer. */
+.tmp-draw-layer {
+  cursor: crosshair;
+  touch-action: none;
+}
 .tmp-flow .react-flow__edge.selected .react-flow__edge-path {
   filter: drop-shadow(0 0 3px var(--tmp-accent));
 }

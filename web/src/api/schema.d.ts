@@ -109,6 +109,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/canvases/{id}/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draw a group: a labelled, coloured area behind cards. Dragging it moves
+         *     the cards inside. Groups live on your own canvas, so nobody else sees them.
+         */
+        post: operations["create_group"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/canvases/{id}/groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a group. The cards inside stay where they are. */
+        delete: operations["delete_group"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, recolour, move or resize a group. Moving it here does not move
+         *     the cards inside; the canvas sends those in the same drag.
+         */
+        patch: operations["update_group"];
+        trace?: never;
+    };
     "/canvases/{id}/nodes": {
         parameters: {
             query?: never;
@@ -1235,6 +1276,23 @@ export interface components {
         CreateDatabaseRequest: {
             name: string;
         };
+        CreateGroupRequest: {
+            /** @description A theme slot (slot-1 to slot-8) or #rrggbb. Default slot-1. */
+            color?: string | null;
+            /** Format: double */
+            height: number;
+            /** @description What the area holds, such as "Electronics". Up to 80 characters. */
+            label: string;
+            /**
+             * Format: double
+             * @description At least 120 each.
+             */
+            width: number;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
         CreateInviteRequest: {
             /**
              * Format: int64
@@ -1400,6 +1458,18 @@ export interface components {
             /** @description `is`, `is_not`, `contains`, `empty`, `not_empty`, `gt` or `lt`. */
             op: string;
             value?: unknown;
+        };
+        GroupPosition: {
+            /** Format: double */
+            height?: number | null;
+            /** @description The group's node id. */
+            id: string;
+            /** Format: double */
+            width?: number | null;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         Health: {
             status: string;
@@ -1677,8 +1747,10 @@ export interface components {
             };
         };
         SaveNodesRequest: {
+            /** @description Groups moved or resized in the same drag. */
+            groups?: components["schemas"]["GroupPosition"][];
             /** @description Up to 500 cards at once, sent after a drag. */
-            nodes: components["schemas"]["NodePosition"][];
+            nodes?: components["schemas"]["NodePosition"][];
         };
         ScanResult: {
             /** @description Files read again because they were new or had changed. */
@@ -1807,6 +1879,18 @@ export interface components {
             /** @description Put it after this database, or first when `null`. */
             after_id?: string | null;
             name?: string | null;
+        };
+        UpdateGroupRequest: {
+            color?: string | null;
+            /** Format: double */
+            height?: number | null;
+            label?: string | null;
+            /** Format: double */
+            width?: number | null;
+            /** Format: double */
+            x?: number | null;
+            /** Format: double */
+            y?: number | null;
         };
         UpdateLinkRequest: {
             kind?: string | null;
@@ -2131,6 +2215,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CanvasView"];
+                };
+            };
+        };
+    };
+    create_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CanvasNode"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_group: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGroupRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CanvasNode"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

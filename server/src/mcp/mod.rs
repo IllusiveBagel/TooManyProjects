@@ -39,7 +39,7 @@ use sqlx::SqliteConnection;
 use crate::{
     AppState,
     auth::{CurrentUser, User},
-    board, comments, dashboard,
+    board, canvas, comments, dashboard,
     error::{AppError, AppResult},
     notes,
     projects::{self, Project, as_ai, visible_project},
@@ -108,6 +108,8 @@ pub struct ListProjectsArgs {
     pub status: Option<String>,
     /// Only this project and everything spawned from it (id or exact title).
     pub family: Option<String>,
+    /// Only projects whose cards sit inside this canvas group (its label, any case).
+    pub group: Option<String>,
     /// Include archived projects. Default false.
     pub include_archived: Option<bool>,
 }
@@ -590,7 +592,7 @@ impl Mcp {
 #[tool_router]
 impl Mcp {
     #[tool(
-        description = "List the user's projects with status, open, in-progress, overdue and done task counts, and ids. Filter by status or by a family (a project and everything spawned from it)."
+        description = "List the user's projects with status, open, in-progress, overdue and done task counts, and ids, then the canvas groups they are arranged in (labelled areas such as Electronics or Cars). Filter by status, by a family (a project and everything spawned from it) or by a group."
     )]
     async fn list_projects(
         &self,
@@ -618,12 +620,52 @@ impl Mcp {
                     ids.push(root.id);
                     list.retain(|p| ids.contains(&p.id));
                 }
+                let groups = {
+                    let mut conn = self.conn().await?;
+                    canvas::groups_with_members(&mut conn, &user.id).await?
+                };
+                if let Some(g) = &args.group {
+                    let Some(m) = groups
+                        .iter()
+                        .find(|m| m.group.label.as_deref().is_some_and(|l| l.eq_ignore_ascii_case(g.trim())))
+                    else {
+                        let names: Vec<&str> =
+                            groups.iter().filter_map(|m| m.group.label.as_deref()).collect();
+                        return Ok(if names.is_empty() {
+                            "There are no groups on the canvas.".to_string()
+                        } else {
+                            format!("No group is called \"{g}\". Groups: {}.", names.join(", "))
+                        });
+                    };
+                    list.retain(|p| m.project_ids.contains(&p.id));
+                }
                 if list.is_empty() {
                     return Ok("No projects match.".to_string());
                 }
                 let mut out = format!("{} projects:\n\n", list.len());
                 for p in &list {
                     out.push_str(&brief::project_line(p));
+                    out.push('\n');
+                }
+                let titles: std::collections::HashMap<&str, &str> =
+                    list.iter().map(|p| (p.id.as_str(), p.title.as_str())).collect();
+                let lines: Vec<String> = groups
+                    .iter()
+                    .filter_map(|m| {
+                        let inside: Vec<&str> =
+                            m.project_ids.iter().filter_map(|id| titles.get(id.as_str()).copied()).collect();
+                        (!inside.is_empty()).then(|| {
+                            format!(
+                                "- **{}**: {}",
+                                m.group.label.as_deref().unwrap_or("Group"),
+                                inside.join(", ")
+                            )
+                        })
+                    })
+                    .collect();
+                if !lines.is_empty() {
+                    out.push_str("\nCanvas groups:\n\n");
+                    out.push_str(&lines.join("\n"));
                     out.push('\n');
                 }
                 Ok(out)

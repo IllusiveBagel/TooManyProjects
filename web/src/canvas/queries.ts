@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap, type CanvasView, type Link, type Project } from "../api/client";
+import { api, unwrap, type CanvasNode, type CanvasView, type Link, type Project } from "../api/client";
 import type { components } from "../api/schema";
 
 type CreateProject = components["schemas"]["CreateProjectRequest"];
 type UpdateProject = components["schemas"]["UpdateProjectRequest"];
 type UpdateLink = components["schemas"]["UpdateLinkRequest"];
 type NodePosition = components["schemas"]["NodePosition"];
+type GroupPosition = components["schemas"]["GroupPosition"];
+type CreateGroup = components["schemas"]["CreateGroupRequest"];
+type UpdateGroup = components["schemas"]["UpdateGroupRequest"];
 
 export const canvasKeys = {
   all: ["canvas"] as const,
@@ -108,23 +111,61 @@ export function useDeleteLink() {
   });
 }
 
-/** Saves card positions. The cache is updated first so cards never jump back. */
+/** Saves card and group positions. The cache is updated first so nothing jumps back. */
 export function useSaveNodes() {
   const edit = useEditCanvases();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ canvasId, nodes }: { canvasId: string; nodes: NodePosition[] }) =>
-      unwrap(api.PATCH("/canvases/{id}/nodes", { params: { path: { id: canvasId } }, body: { nodes } })),
-    onMutate: ({ nodes }) => {
+    mutationFn: ({ canvasId, nodes, groups = [] }: { canvasId: string; nodes: NodePosition[]; groups?: GroupPosition[] }) =>
+      unwrap(api.PATCH("/canvases/{id}/nodes", { params: { path: { id: canvasId } }, body: { nodes, groups } })),
+    onMutate: ({ nodes, groups = [] }) => {
       const moved = new Map(nodes.map((n) => [n.project_id, n]));
+      const movedGroups = new Map(groups.map((g) => [g.id, g]));
       edit((v) => ({
         ...v,
         nodes: v.nodes.map((n) => {
+          const g = n.kind === "group" ? movedGroups.get(n.id) : undefined;
+          if (g) return { ...n, x: g.x, y: g.y, width: g.width ?? n.width, height: g.height ?? n.height };
           const m = n.project_id ? moved.get(n.project_id) : undefined;
           return m ? { ...n, x: m.x, y: m.y } : n;
         }),
       }));
     },
+    onError: () => qc.invalidateQueries({ queryKey: canvasKeys.all }),
+  });
+}
+
+export function useCreateGroup() {
+  const edit = useEditCanvases();
+  return useMutation({
+    mutationFn: ({ canvasId, ...body }: CreateGroup & { canvasId: string }) =>
+      unwrap(api.POST("/canvases/{id}/groups", { params: { path: { id: canvasId } }, body })),
+    onSuccess: (group: CanvasNode) => edit((v) => ({ ...v, nodes: [...v.nodes, group] })),
+  });
+}
+
+export function useUpdateGroup() {
+  const edit = useEditCanvases();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ canvasId, groupId, ...body }: UpdateGroup & { canvasId: string; groupId: string }) =>
+      unwrap(api.PATCH("/canvases/{id}/groups/{group_id}", { params: { path: { id: canvasId, group_id: groupId } }, body })),
+    onMutate: ({ groupId, label, color }) =>
+      edit((v) => ({
+        ...v,
+        nodes: v.nodes.map((n) => (n.id === groupId ? { ...n, label: label ?? n.label, color: color ?? n.color } : n)),
+      })),
+    onError: () => qc.invalidateQueries({ queryKey: canvasKeys.all }),
+  });
+}
+
+export function useDeleteGroup() {
+  const edit = useEditCanvases();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ canvasId, groupId }: { canvasId: string; groupId: string }) =>
+      unwrap(api.DELETE("/canvases/{id}/groups/{group_id}", { params: { path: { id: canvasId, group_id: groupId } } })),
+    onMutate: ({ groupId }) => edit((v) => ({ ...v, nodes: v.nodes.filter((n) => n.id !== groupId) })),
     onError: () => qc.invalidateQueries({ queryKey: canvasKeys.all }),
   });
 }

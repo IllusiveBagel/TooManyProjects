@@ -510,3 +510,45 @@ async fn task_logs_and_linked_notes_over_mcp() {
         app.call("GET", &format!("/api/v1/tasks/{}", t["id"].as_str().unwrap()), Some(&me), None).await;
     assert_eq!(full.body["comments"][0]["via"], "ai");
 }
+
+#[tokio::test]
+async fn list_projects_shows_canvas_groups() {
+    let app = TestApp::new().await;
+    let cookie = app.setup_owner().await;
+    for (title, x) in [("Beetle", 0.0), ("Amp kit", 2000.0)] {
+        app.call(
+            "POST",
+            "/api/v1/projects",
+            Some(&cookie),
+            Some(json!({"title": title, "position": {"x": x, "y": 0}})),
+        )
+        .await;
+    }
+    let view = app.call("GET", "/api/v1/canvases/home", Some(&cookie), None).await;
+    let canvas = view.body["canvas"]["id"].as_str().unwrap();
+    for (label, x) in [("Cars", -50.0), ("Electronics", 1950.0)] {
+        let res = app
+            .call(
+                "POST",
+                &format!("/api/v1/canvases/{canvas}/groups"),
+                Some(&cookie),
+                Some(json!({"label": label, "x": x, "y": -50, "width": 400, "height": 300})),
+            )
+            .await;
+        assert_eq!(res.status, StatusCode::CREATED);
+    }
+    let token = make_token(&app, &cookie, "read").await;
+    initialize(&app, &token).await;
+
+    let (_, all) = tool(&app, &token, "list_projects", json!({})).await;
+    assert!(
+        all.contains("Canvas groups")
+            && all.contains("**Cars**: Beetle")
+            && all.contains("**Electronics**: Amp kit"),
+        "{all}"
+    );
+    let (_, cars) = tool(&app, &token, "list_projects", json!({"group": "cars"})).await;
+    assert!(cars.starts_with("1 projects") && cars.contains("Beetle") && !cars.contains("Amp kit"), "{cars}");
+    let (_, none) = tool(&app, &token, "list_projects", json!({"group": "Garden"})).await;
+    assert!(none.contains("No group is called") && none.contains("Electronics"), "{none}");
+}
