@@ -727,6 +727,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/oauth/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allow (or cancel) a connection. Returns the address to send the person back to. */
+        post: operations["approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Apps you've allowed, newest first. */
+        get: operations["list_connections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop an app at once: its tokens stop working and it leaves the list. */
+        delete: operations["disconnect"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What an app is asking for, for the Allow page. */
+        get: operations["describe_request"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people": {
         parameters: {
             query?: never;
@@ -1233,6 +1301,23 @@ export interface components {
             /** @description `read` or `write`. */
             scope: string;
         };
+        ApproveRequest: {
+            /** @description False for Cancel. */
+            allow: boolean;
+            client_id: string;
+            code_challenge?: string | null;
+            code_challenge_method?: string | null;
+            redirect_uri: string;
+            response_type?: string | null;
+            /** @description `read` or `write`. */
+            scope: string;
+            /** @description Passed back to the app untouched. */
+            state?: string | null;
+        };
+        ApproveResponse: {
+            /** @description Where to send the browser next: back to the app. */
+            redirect_to: string;
+        };
         AuthStatus: {
             /** @description True until the owner account exists. The web app shows setup instead of login. */
             needs_setup: boolean;
@@ -1374,6 +1459,26 @@ export interface components {
         CommentRequest: {
             /** @description Markdown, up to 20,000 characters. */
             body: string;
+        };
+        ConnectRequest: {
+            /** @description The name the app gave itself, such as "Claude". */
+            client_name: string;
+            /** @description Where the person goes back to, such as claude.ai. */
+            redirect_host: string;
+            /** @description The access to preselect: `read` when the app asked for read only. */
+            suggested_scope: string;
+            /** @description Set when the return address looks wrong for the app's name. */
+            warning?: string | null;
+        };
+        Connection: {
+            client_name: string;
+            created_at: string;
+            id: string;
+            last_used_at?: string | null;
+            /** @description Where it signed in from, such as claude.ai or localhost. */
+            redirect_host: string;
+            /** @description `read` or `write`. */
+            scope: string;
         };
         CreateColumnRequest: {
             kind: string;
@@ -4025,6 +4130,121 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproveResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_connections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"][];
+                };
+            };
+        };
+    };
+    disconnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    describe_request: {
+        parameters: {
+            query: {
+                client_id: string;
+                redirect_uri: string;
+                /** @description Must be `code`. */
+                response_type?: string;
+                /** @description The PKCE challenge: base64url SHA-256 of the app's verifier. */
+                code_challenge?: string;
+                /** @description Must be `S256`. */
+                code_challenge_method?: string;
+                /** @description What the app asked for: `read`, `write` or both, space separated. */
+                scope?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectRequest"];
+                };
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

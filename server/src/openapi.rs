@@ -20,6 +20,7 @@ use utoipa::OpenApi;
         (name = "databases", description = "Project databases: columns, rows, views, import and export"),
         (name = "calendar", description = "Work sessions, busy time and who is joining"),
         (name = "tokens", description = "API tokens for AI assistants using the MCP server"),
+        (name = "oauth", description = "Apps connected by signing in (OAuth), and the Allow page"),
         (name = "system", description = "Health, the running version and update checks"),
     )
 )]

@@ -11,6 +11,7 @@ How each part of **too many projects** works. For installing it, see the
 - [Sharing](#sharing)
 - [Project databases](#project-databases)
 - [AI access (MCP)](#ai-access-mcp)
+- [Put it online with HTTPS](#put-it-online-with-https)
 - [Theming](#theming)
 - [Updating](#updating)
 
@@ -195,41 +196,159 @@ The server speaks the [Model Context Protocol](https://modelcontextprotocol.io)
 at `/mcp`, so an assistant such as Claude can read your projects and notes and,
 if you let it, add to them.
 
-- **Tokens:** make one under **Settings → AI access**. It acts as you, and is
-  either *read only* or *read and write*. The secret (`tmp_…`) is shown once;
-  only a hash is kept. Revoke a token there and anything using it stops at
-  once.
-- **Connect Claude Code:**
+- **Connect Claude (web, desktop or phone):** under **Settings → AI access**,
+  copy your server address (`https://your-host/mcp`). In Claude, open
+  **Settings → Connectors → Add custom connector**, name it TooManyProjects,
+  paste the address and press **Add**, then **Connect**. A TooManyProjects
+  page opens: sign in if asked, choose **Read only** or **Read and write**,
+  and press **Allow**. You're sent back to Claude, connected. Claude reaches
+  your server from the internet, so this needs an `https://` address it can
+  reach; see [Put it online with HTTPS](#put-it-online-with-https).
+- **Connect Claude Code:** it can sign in the same way, and works on a home
+  network address too:
 
   ```sh
-  claude mcp add --transport http toomanyprojects https://your-host/mcp \
-    --header "Authorization: Bearer tmp_…"
+  claude mcp add --transport http toomanyprojects https://your-host/mcp
   ```
 
-  Other clients that let you set a header take the JSON config shown when you
-  make a token. The token goes in an `Authorization: Bearer` header; OAuth sign
-  in isn't supported yet, so connectors that only do OAuth (such as custom
-  connectors in the Claude web app) can't connect.
+  Then type `/mcp` in Claude Code, pick toomanyprojects and choose
+  **Authenticate**. A browser tab opens for the same sign-in and Allow.
+- **Connected apps:** each app you allowed is listed under **Settings → AI
+  access** with when it was last used. **Disconnect** stops it at once. To
+  change read only to read and write, disconnect and connect again. A
+  connection acts as you, so it sees what you see, shared projects included.
+- **How sign-in works:** this is standard MCP authorization (OAuth 2.1). The
+  app is its own sign-in server, so there is nothing else to run: apps find it
+  through `/.well-known/oauth-protected-resource` and
+  `/.well-known/oauth-authorization-server`, register themselves at
+  `/oauth/register`, and use the authorization code flow with PKCE. Access
+  tokens (`tmp_at_…`) last an hour and refresh tokens (`tmp_rt_…`) 30 days,
+  replaced on every use. Only hashes are stored.
+- **API tokens:** for scripts and apps that can't sign in, open **Advanced:
+  API tokens** under **Settings → AI access** and make one. It acts as you,
+  either *read only* or *read and write*. The secret (`tmp_…`) is shown once;
+  only a hash is kept. Send it as `Authorization: Bearer tmp_…`, for example
+  `claude mcp add … --header "Authorization: Bearer tmp_…"`. Revoke a token
+  there and anything using it stops at once.
 - **Tools:** `list_projects` (with the canvas groups each project sits in, and
   a `group` filter), `get_project_context` (a full briefing, with the
   family on request), `search` (projects, tasks and their comments, and notes), `list_notes`,
   `get_note`, `get_task` (a task with its log, linked notes and history),
   `query_database` (a saved view or a search as a markdown table, with
-  totals), and with a read-write token `create_task`, `update_task` (move,
+  totals), and with read-write access `create_task`, `update_task` (move,
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
   `link_note_to_task`, `add_note` (optionally linked to a task), `append_to_note`,
   `add_row` (values by column name), `spawn_project` and `plan_time` (a
   session or busy time, optionally repeating). `get_calendar` reads a stretch
   of the calendar (a week by default) with who's joining and hours per
-  project; busy time shows only for the token's owner. Projects and notes
+  project; busy time shows only for the person connected. Projects and notes
   can be named by title or id.
 - **Resources and prompts:** each project (`tmp://projects/{id}`) and note
   (`tmp://notes/{id}`) is a resource, and there are `project_briefing` and
   `weekly_review` prompts. Project briefings list the next two weeks of
   sessions, and the weekly review includes what was planned last week and
   this week.
-- **History:** anything changed through a token shows as *via AI* in the
+- **History:** anything changed through a connection or token shows as *via AI* in the
   project's activity and the task's history.
+
+## Put it online with HTTPS
+
+The Claude app (on the web, desktop and phone) connects to your server from
+Anthropic's cloud, not from your computer. So your server needs an address
+that works from anywhere on the internet, over HTTPS. If you only use Claude
+Code on your home network, you can skip this.
+
+You need two things:
+
+1. **An `https://` address** that reaches the app's port 8080. Pick one of the
+   three ways below.
+2. **`TMP_PUBLIC_URL` set to that address** in `docker-compose.yml`, such as
+   `TMP_PUBLIC_URL: "https://projects.example.com"`, then
+   `docker compose up -d`.
+
+> [!IMPORTANT]
+> Once `TMP_PUBLIC_URL` starts with `https://`, sign-in cookies are only sent
+> over HTTPS, so open the app at that address from then on. To keep signing in
+> at a plain `http://` home address as well, also set
+> `TMP_COOKIE_SECURE: "false"`.
+
+### Option 1: Cloudflare Tunnel (you have a domain on Cloudflare)
+
+No ports to open on your router, and Cloudflare handles the certificate.
+Free for this.
+
+1. In the Cloudflare dashboard, go to **Zero Trust → Networks → Tunnels →
+   Create a tunnel**, choose **Cloudflared**, name it, and copy the token it
+   shows.
+2. Add `cloudflared` next to the app in `docker-compose.yml`:
+
+   ```yaml
+   services:
+     toomanyprojects:
+       # … as before, with:
+       environment:
+         TMP_PUBLIC_URL: "https://projects.example.com"
+     cloudflared:
+       image: cloudflare/cloudflared:latest
+       restart: unless-stopped
+       command: tunnel --no-autoupdate run
+       environment:
+         TUNNEL_TOKEN: "paste-the-token-here"
+   ```
+
+3. Back in the tunnel's settings, add a **public hostname**:
+   `projects.example.com`, service type **HTTP**, URL `toomanyprojects:8080`.
+4. `docker compose up -d`.
+
+If you put **Cloudflare Access** in front of the app, Claude can't get past
+it. Either leave Access off (the app has its own sign-in) or add a bypass for
+the paths `/mcp`, `/oauth/*` and `/.well-known/*`.
+
+### Option 2: Tailscale Funnel (no domain needed)
+
+Gives you a free address like `https://myserver.tail1234.ts.net`.
+
+1. [Install Tailscale](https://tailscale.com/download) on the server and sign
+   in.
+2. In the Tailscale admin console, under **DNS**, turn on **HTTPS
+   certificates**, and make sure your access controls allow **Funnel** (the
+   console offers to add it the first time you run the next step).
+3. On the server, run:
+
+   ```sh
+   sudo tailscale funnel --bg 8080
+   ```
+
+   It prints your public address. Set `TMP_PUBLIC_URL` to it.
+
+Use **funnel**, not `tailscale serve`: serve only works inside your tailnet,
+and Claude isn't in it.
+
+### Option 3: your own domain and a reverse proxy
+
+If you can forward ports 80 and 443 on your router to the server and point a
+domain's DNS at your home IP, [Caddy](https://caddyserver.com) gets and renews
+the certificate for you. A whole `Caddyfile`:
+
+```
+projects.example.com {
+    reverse_proxy localhost:8080
+}
+```
+
+Any other reverse proxy (nginx, Traefik, Nginx Proxy Manager) works too, as
+long as it passes on the `Host` header and sets `X-Forwarded-Proto: https`.
+
+### Check it works
+
+From your phone on mobile data (not Wi-Fi), open
+`https://your-address/.well-known/oauth-protected-resource`. You should see a
+few lines of text whose `resource` is your `https://` address followed by
+`/mcp`. Then go to **Settings → AI access** at that address: the warning about
+Claude not reaching it is gone, and you can connect.
+
+Putting the app online makes its sign-in page public. Accounts are invite-only
+and passwords are at least 10 characters, but use a strong one.
 
 ## Theming
 

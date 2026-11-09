@@ -41,13 +41,13 @@ use crate::{
     auth::{CurrentUser, User},
     board, calendar, canvas, comments, dashboard,
     error::{AppError, AppResult},
-    notes,
+    notes, oauth,
     projects::{self, Project, as_ai, visible_project},
     tasks::{self, Task},
     tokens::{self, TokenCaller},
 };
 
-/// `/mcp`, behind bearer-token sign-in.
+/// `/mcp`, behind bearer-token sign-in (OAuth or an API token).
 pub fn router(state: AppState) -> Router<AppState> {
     let service_state = state.clone();
     let service = StreamableHttpService::new(
@@ -66,17 +66,27 @@ pub fn router(state: AppState) -> Router<AppState> {
     Router::new().nest_service("/mcp", service).layer(middleware::from_fn_with_state(state, require_token))
 }
 
-fn unauthorized(message: &str) -> Response {
+/// A 401 that tells an MCP client where to sign in (RFC 9728), and with
+/// `invalid_token` when it sent one that no longer works, so it refreshes.
+fn unauthorized(base: &str, sent_token: bool, message: &str) -> Response {
     let mut res = (StatusCode::UNAUTHORIZED, Json(json!({ "code": "unauthorized", "message": message })))
         .into_response();
-    res.headers_mut()
-        .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer realm=\"TooManyProjects\""));
+    let error = if sent_token { ", error=\"invalid_token\"" } else { "" };
+    let value = format!(
+        "Bearer realm=\"TooManyProjects\", resource_metadata=\"{}\"{error}",
+        oauth::resource_metadata_url(base)
+    );
+    if let Ok(v) = HeaderValue::from_str(&value) {
+        res.headers_mut().insert(header::WWW_AUTHENTICATE, v);
+    }
     res
 }
 
-/// Finds the person behind `Authorization: Bearer tmp_…` and passes them on
-/// to the tools through the request's extensions.
+/// Finds the person behind `Authorization: Bearer …` (a connection made by
+/// signing in, or an API token) and passes them on to the tools through the
+/// request's extensions.
 async fn require_token(State(state): State<AppState>, mut req: Request, next: Next) -> Response {
+    let base = oauth::base_url(&state, req.headers());
     let secret = req
         .headers()
         .get(header::AUTHORIZATION)
@@ -86,15 +96,22 @@ async fn require_token(State(state): State<AppState>, mut req: Request, next: Ne
         .map(|(_, t)| t.trim().to_string());
     let Some(secret) = secret else {
         return unauthorized(
-            "Send an API token from Settings → AI access as `Authorization: Bearer <token>`.",
+            &base,
+            false,
+            "Connect by signing in (add this address as a connector in Claude), or send an API token from Settings → AI access as `Authorization: Bearer <token>`.",
         );
     };
-    match tokens::caller_for(&state, &secret).await {
+    let found = if secret.starts_with(oauth::ACCESS_PREFIX) {
+        oauth::caller_for(&state, &secret).await
+    } else {
+        tokens::caller_for(&state, &secret).await
+    };
+    match found {
         Ok(Some(caller)) => {
             req.extensions_mut().insert(caller);
             next.run(req).await
         }
-        Ok(None) => unauthorized("That token is unknown or has been revoked."),
+        Ok(None) => unauthorized(&base, true, "That token is unknown, expired or has been revoked."),
         Err(e) => e.into_response(),
     }
 }
@@ -349,7 +366,7 @@ fn writer(ctx: &RequestContext<RoleServer>) -> Result<Result<TokenCaller, CallTo
         Ok(c)
     } else {
         Err(CallToolResult::error(vec![ContentBlock::text(
-            "This token is read-only. Make a read-write token in Settings → AI access to change things.",
+            "This connection is read-only. To change things, reconnect with Read and write, or use a read-write token (Settings → AI access).",
         )]))
     })
 }
@@ -501,7 +518,7 @@ or search, then get_project_context for a full briefing on one project. Notes li
 comments and can have notes linked to them: read both with get_task, and log progress or lessons with \
 add_task_comment. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
-(create_task, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, spawn_project, add_row, plan_time) need a read-write token, and everything they change shows in the project's history as done via AI. Prefer adding to \
+(create_task, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, spawn_project, add_row, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
 
@@ -900,7 +917,7 @@ impl Mcp {
         reply(self.note_text(&user, &args.note).await)
     }
 
-    #[tool(description = "Add a task to a project's board. Needs a read-write token.")]
+    #[tool(description = "Add a task to a project's board. Needs read-write access.")]
     async fn create_task(
         &self,
         Parameters(args): Parameters<CreateTaskArgs>,
@@ -947,7 +964,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Change a task: rename it, move it to another column, mark it done, or set its description, priority or due date. Needs a read-write token."
+        description = "Change a task: rename it, move it to another column, mark it done, or set its description, priority or due date. Needs read-write access."
     )]
     async fn update_task(
         &self,
@@ -1050,7 +1067,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Log a comment on a task: progress, what was tried, a measurement, a decision. Comments build the task's work log. Needs a read-write token."
+        description = "Log a comment on a task: progress, what was tried, a measurement, a decision. Comments build the task's work log. Needs read-write access."
     )]
     async fn add_task_comment(
         &self,
@@ -1090,7 +1107,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Link an existing note to a task (or unlink it), so the note shows on the task and the task on the note. To write a new note for a task, use add_note with `task`. Needs a read-write token."
+        description = "Link an existing note to a task (or unlink it), so the note shows on the task and the task on the note. To write a new note for a task, use add_note with `task`. Needs read-write access."
     )]
     async fn link_note_to_task(
         &self,
@@ -1124,7 +1141,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Save a new markdown note: in the Inbox, under a project, or in a folder. Needs a read-write token."
+        description = "Save a new markdown note: in the Inbox, under a project, or in a folder. Needs read-write access."
     )]
     async fn add_note(
         &self,
@@ -1186,7 +1203,7 @@ impl Mcp {
         )
     }
 
-    #[tool(description = "Add markdown to the end of an existing note. Needs a read-write token.")]
+    #[tool(description = "Add markdown to the end of an existing note. Needs read-write access.")]
     async fn append_to_note(
         &self,
         Parameters(args): Parameters<AppendArgs>,
@@ -1245,7 +1262,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Add a row to a project database, with values by column name. Needs a read-write token."
+        description = "Add a row to a project database, with values by column name. Needs read-write access."
     )]
     async fn add_row(
         &self,
@@ -1270,7 +1287,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Start a new project spawned from an existing one, so it appears linked to its parent on the canvas. Needs a read-write token."
+        description = "Start a new project spawned from an existing one, so it appears linked to its parent on the canvas. Needs read-write access."
     )]
     async fn spawn_project(
         &self,
@@ -1343,7 +1360,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Put time in the user's calendar: a work session on a project (seen by everyone the project is shared with, who can join it) or busy time (seen only by the user). Can repeat weekly. Needs a read-write token."
+        description = "Put time in the user's calendar: a work session on a project (seen by everyone the project is shared with, who can join it) or busy time (seen only by the user). Can repeat weekly. Needs read-write access."
     )]
     async fn plan_time(
         &self,
