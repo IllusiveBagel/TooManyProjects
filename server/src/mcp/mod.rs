@@ -39,7 +39,7 @@ use sqlx::SqliteConnection;
 use crate::{
     AppState,
     auth::{CurrentUser, User},
-    board, canvas, comments, dashboard,
+    board, calendar, canvas, comments, dashboard,
     error::{AppError, AppResult},
     notes,
     projects::{self, Project, as_ai, visible_project},
@@ -274,6 +274,40 @@ pub struct AddRowArgs {
     pub values: std::collections::HashMap<String, serde_json::Value>,
 }
 
+#[derive(Deserialize, JsonSchema)]
+pub struct CalendarArgs {
+    /// First day, YYYY-MM-DD. Default: today.
+    pub from: Option<String>,
+    /// How many days. Default 7, at most 31.
+    pub days: Option<i64>,
+    /// Only this project's sessions (id or exact title).
+    pub project: Option<String>,
+    /// Only what the user planned or is joining. Default false.
+    pub mine: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct PlanTimeArgs {
+    /// `session` (time on a project, the default) or `busy` (time the user can't give to projects).
+    pub kind: Option<String>,
+    /// For a session: project id or exact title.
+    pub project: Option<String>,
+    /// What the time is for, such as "Rear brakes" or "Work".
+    pub title: Option<String>,
+    /// Local start, YYYY-MM-DDTHH:MM, such as 2026-11-14T13:00.
+    pub start: String,
+    /// Length in minutes (15 to 1440). Give this or `end`.
+    pub minutes: Option<i64>,
+    /// Local end time HH:MM on the same day (or past midnight). Give this or `minutes`.
+    pub end: Option<String>,
+    /// Repeat weekly on these days: "weekdays", "weekends", "daily" or names like "Mon, Thu". Default: once.
+    pub repeat: Option<String>,
+    /// Last day a repeat may start on, YYYY-MM-DD.
+    pub until: Option<String>,
+    /// IANA time zone. Default: the zone the user last planned in, else UTC.
+    pub tz: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 
@@ -465,8 +499,9 @@ spawned another), each with a kanban board of tasks, plus a vault of markdown no
 or search, then get_project_context for a full briefing on one project. Notes link with [[Note title]] and \
 [[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Tasks keep a log of \
 comments and can have notes linked to them: read both with get_task, and log progress or lessons with \
-add_task_comment. Write tools (create_task, update_task, add_task_comment, link_note_to_task, add_note, \
-append_to_note, spawn_project, add_row) need a read-write token, and everything they change shows in the project's history as done via AI. Prefer adding to \
+add_task_comment. A calendar holds work sessions on projects (which people a project is shared with can \
+join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
+(create_task, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, spawn_project, add_row, plan_time) need a read-write token, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
 
@@ -533,6 +568,23 @@ impl Mcp {
                 ));
             }
         }
+        let now = chrono::Utc::now();
+        let coming = calendar::occurrences_between(
+            &mut conn,
+            &user.id,
+            now,
+            now + chrono::Duration::days(14),
+            Some(&id),
+            false,
+        )
+        .await?;
+        if !coming.is_empty() {
+            out.push_str("\n## Coming up (work sessions, next 14 days)\n\n");
+            for o in coming.iter().take(12) {
+                out.push_str(&calendar::line(o));
+                out.push('\n');
+            }
+        }
         if family {
             let kin = descendants(&mut conn, user, &id).await?;
             if !kin.is_empty() {
@@ -585,6 +637,38 @@ impl Mcp {
         out.push_str(&section("Overdue", all.iter().filter(|t| t.overdue).collect()));
         out.push_str(&section("In progress", all.iter().filter(|t| t.category == "in_progress").collect()));
         out.push_str(&section("Blocked", all.iter().filter(|t| t.category == "blocked").collect()));
+        let now = chrono::Utc::now();
+        let mut conn = self.conn().await?;
+        let past = calendar::occurrences_between(
+            &mut conn,
+            &user.id,
+            now - chrono::Duration::days(7),
+            now,
+            None,
+            true,
+        )
+        .await?;
+        let next = calendar::occurrences_between(
+            &mut conn,
+            &user.id,
+            now,
+            now + chrono::Duration::days(7),
+            None,
+            true,
+        )
+        .await?;
+        out.push('\n');
+        out.push_str(
+            &brief::calendar(&past, "the last 7 days")
+                .replacen("# ", "## ", 1)
+                .replace("\n## Planned", "\n### Planned"),
+        );
+        out.push('\n');
+        out.push_str(
+            &brief::calendar(&next, "the next 7 days")
+                .replacen("# ", "## ", 1)
+                .replace("\n## Planned", "\n### Planned"),
+        );
         Ok(out)
     }
 }
@@ -1215,6 +1299,129 @@ impl Mcp {
             .await,
         )
     }
+
+    #[tool(
+        description = "Read the user's calendar: work sessions planned on projects (with who is joining), and the user's own busy time (work, appointments). Default: the next 7 days. Ends with hours planned per project."
+    )]
+    async fn get_calendar(
+        &self,
+        Parameters(args): Parameters<CalendarArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            async {
+                let mut conn = self.conn().await?;
+                let tz = calendar::parse_tz(&calendar::usual_tz(&mut conn, &user.id).await?)?;
+                let first = match &args.from {
+                    Some(d) => calendar::parse_date(d)?,
+                    None => chrono::Utc::now().with_timezone(&tz).date_naive(),
+                };
+                let days = args.days.unwrap_or(7).clamp(1, 31);
+                let from = calendar::to_utc(tz, first.and_hms_opt(0, 0, 0).unwrap_or_default());
+                let to = calendar::to_utc(
+                    tz,
+                    (first + chrono::Duration::days(days)).and_hms_opt(0, 0, 0).unwrap_or_default(),
+                );
+                let project = match &args.project {
+                    Some(p) => Some(find_project(&mut conn, &user, p).await?.id),
+                    None => None,
+                };
+                let list = calendar::occurrences_between(
+                    &mut conn,
+                    &user.id,
+                    from,
+                    to,
+                    project.as_deref(),
+                    args.mine.unwrap_or(false),
+                )
+                .await?;
+                Ok(brief::calendar(&list, &format!("{first}, {days} days ({})", tz.name())))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Put time in the user's calendar: a work session on a project (seen by everyone the project is shared with, who can join it) or busy time (seen only by the user). Can repeat weekly. Needs a read-write token."
+    )]
+    async fn plan_time(
+        &self,
+        Parameters(args): Parameters<PlanTimeArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let mut conn = self.conn().await?;
+                let kind = args.kind.as_deref().unwrap_or("session").to_lowercase();
+                let project = match (&kind[..], &args.project) {
+                    ("session", Some(p)) => Some(find_project(&mut conn, &user, p).await?),
+                    ("session", None) => {
+                        return Err(bad("invalid_project", "Name the project for the session."));
+                    }
+                    _ => None,
+                };
+                let tz = match &args.tz {
+                    Some(t) => t.clone(),
+                    None => calendar::usual_tz(&mut conn, &user.id).await?,
+                };
+                drop(conn);
+                let start = calendar::parse_local(&args.start)?;
+                let minutes = match (args.minutes, &args.end) {
+                    (Some(m), _) => m,
+                    (None, Some(end)) => {
+                        let end = chrono::NaiveTime::parse_from_str(end, "%H:%M")
+                            .map_err(|_| bad("invalid_end", "End times look like 17:00."))?;
+                        let mut m = (end - start.time()).num_minutes();
+                        if m <= 0 {
+                            m += 24 * 60;
+                        }
+                        m
+                    }
+                    (None, None) => return Err(bad("invalid_length", "Give `minutes` or an `end` time.")),
+                };
+                let repeat = match &args.repeat {
+                    Some(r) => calendar::parse_days(r)?,
+                    None => 0,
+                };
+                let req = serde_json::from_value(json!({
+                    "kind": kind,
+                    "project_id": project.as_ref().map(|p| p.id.clone()),
+                    "title": args.title,
+                    "start_local": args.start,
+                    "minutes": minutes,
+                    "tz": tz,
+                    "repeat_days": repeat,
+                    "repeat_until": args.until,
+                }))
+                .map_err(|e| bad("invalid_event", e.to_string()))?;
+                let (_, Json(e)) =
+                    calendar::create_event(State(self.state.clone()), CurrentUser(user.clone()), Json(req))
+                        .await?;
+                let what = match &project {
+                    Some(p) => format!("a session on {}", p.title),
+                    None => "busy time".into(),
+                };
+                let repeats = if e.repeat_days != 0 {
+                    format!(", repeating {}", calendar::days_text(e.repeat_days))
+                } else {
+                    String::new()
+                };
+                Ok(format!(
+                    "Planned {what} from {} for {} ({}){repeats} · event id `{}`",
+                    e.start_local.replace('T', " "),
+                    calendar::hours(e.minutes),
+                    e.tz,
+                    e.id
+                ))
+            })
+            .await,
+        )
+    }
 }
 
 const PROJECT_URI: &str = "tmp://projects/";
@@ -1352,7 +1559,7 @@ impl ServerHandler for Mcp {
                 "Weekly review",
                 self.weekly_review(&user).await.map_err(fail)?,
                 "Using the summary above, give me a weekly review: what got done, which projects moved and \
-                 which stalled, what's overdue or blocked, and a short, realistic focus list for next week.",
+                 which stalled, what's overdue or blocked, and a short, realistic focus list for next week that fits the time planned in the calendar, and which projects got no time.",
             ),
             other => return Err(McpError::invalid_params(format!("No prompt called {other}"), None)),
         };

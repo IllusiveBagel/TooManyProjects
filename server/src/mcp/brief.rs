@@ -103,6 +103,8 @@ pub fn activity_line(a: &ActivityItem) -> String {
         "project.updated" => "edited the project".into(),
         "link.created" => format!("drew a {} link", s("kind")),
         "link.deleted" => format!("removed a {} link", s("kind")),
+        "session.planned" => format!("planned a session for {}", s("when")),
+        "session.joined" => format!("is joining the session on {}", s("when")),
         other => other.replace('.', " "),
     };
     let via = if a.via == "ai" { " (via AI)" } else { "" };
@@ -346,6 +348,40 @@ pub fn task(d: &TaskDetail, column: &str) -> String {
             out.push_str(&activity_line(a));
             out.push('\n');
         }
+    }
+    out
+}
+
+/// A stretch of the calendar, one line per occurrence, then hours per project.
+pub fn calendar(list: &[crate::calendar::Occurrence], range: &str) -> String {
+    use crate::calendar::{hours, line};
+    let mut out = format!("# Calendar: {range}\n\n");
+    if list.is_empty() {
+        out.push_str("Nothing planned.\n");
+        return out;
+    }
+    for o in list {
+        out.push_str(&line(o));
+        out.push('\n');
+    }
+    let mut per: Vec<(String, i64)> = Vec::new();
+    let mut busy = 0;
+    for o in list {
+        match &o.event.project_title {
+            Some(t) if o.event.kind == "session" => match per.iter_mut().find(|(n, _)| n == t) {
+                Some((_, m)) => *m += o.event.minutes,
+                None => per.push((t.clone(), o.event.minutes)),
+            },
+            _ => busy += o.event.minutes,
+        }
+    }
+    per.sort_by_key(|p| std::cmp::Reverse(p.1));
+    out.push_str("\n## Planned time per project\n\n");
+    for (title, m) in &per {
+        out.push_str(&format!("- {title}: {}\n", hours(*m)));
+    }
+    if busy > 0 {
+        out.push_str(&format!("- Busy (only the user sees this): {}\n", hours(busy)));
     }
     out
 }

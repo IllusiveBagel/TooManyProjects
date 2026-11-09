@@ -89,6 +89,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your calendar between two times: sessions on every project you can see,
+         *     your own busy time, and who's joining. Repeats come back once per week.
+         */
+        get: operations["list_calendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/calendar/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Plan a session on a project, or block out busy time. */
+        post: operations["create_event"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/calendar/events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One event, as you see it. */
+        get: operations["get_event"];
+        put?: never;
+        post?: never;
+        /** Delete an event, or with `occurrence`, take one week out of a repeat. */
+        delete: operations["delete_event"];
+        options?: never;
+        head?: never;
+        /** Change an event. On a repeat, every week changes. */
+        patch: operations["update_event"];
+        trace?: never;
+    };
+    "/calendar/events/{id}/joins/{occurrence}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Say you'll join a session that week. Anyone who can see the project can. */
+        put: operations["join_session"];
+        post?: never;
+        /** Take back saying you'll join. */
+        delete: operations["leave_session"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/canvases/home": {
         parameters: {
             query?: never;
@@ -1164,6 +1238,39 @@ export interface components {
             needs_setup: boolean;
             user?: null | components["schemas"]["User"];
         };
+        CalendarEvent: {
+            /** @description You may change or delete it. */
+            can_edit: boolean;
+            created_at: string;
+            id: string;
+            /** @description `session` (time on a project) or `busy` (only you see these). */
+            kind: string;
+            /** Format: int64 */
+            minutes: number;
+            project_color?: string | null;
+            /** @description Set for sessions. */
+            project_id?: string | null;
+            project_title?: string | null;
+            /**
+             * Format: int64
+             * @description Repeats weekly on these days: bit 0 is Monday, bit 6 Sunday. 0 = once.
+             */
+            repeat_days: number;
+            /** @description Last day a repeat may start on, local `YYYY-MM-DD`. */
+            repeat_until?: string | null;
+            /** @description First occurrence, local wall-clock time: `2026-11-14T13:00`. */
+            start_local: string;
+            /** @description What the time is for: "Rear brakes", "Work". */
+            title?: string | null;
+            /** @description IANA time zone, such as `Europe/London`. */
+            tz: string;
+            updated_at: string;
+            /** @description Who put it in the calendar. */
+            user_id: string;
+            user_name: string;
+            /** @description `web` or `ai`. */
+            via: string;
+        };
         Canvas: {
             id: string;
             name: string;
@@ -1275,6 +1382,29 @@ export interface components {
         };
         CreateDatabaseRequest: {
             name: string;
+        };
+        CreateEventRequest: {
+            /** @description `session` or `busy`. */
+            kind: string;
+            /**
+             * Format: int64
+             * @description 15 to 1440.
+             */
+            minutes: number;
+            /** @description Required for a session; not allowed for busy time. */
+            project_id?: string | null;
+            /**
+             * Format: int64
+             * @description Weekly repeat days, bit 0 Monday to bit 6 Sunday. Default 0 (once).
+             */
+            repeat_days?: number;
+            /** @description Last day a repeat may start on, `YYYY-MM-DD`. */
+            repeat_until?: string | null;
+            /** @description Local wall-clock start, `2026-11-14T13:00`. */
+            start_local: string;
+            title?: string | null;
+            /** @description IANA time zone, such as `Europe/London`. */
+            tz: string;
         };
         CreateGroupRequest: {
             /** @description A theme slot (slot-1 to slot-8) or #rrggbb. Default slot-1. */
@@ -1511,6 +1641,10 @@ export interface components {
             /** @description `server`, `account` or `project`. */
             scope: string;
         };
+        Joiner: {
+            name: string;
+            user_id: string;
+        };
         Label: {
             color?: string | null;
             id: string;
@@ -1628,6 +1762,21 @@ export interface components {
             /** @description The file name without `.md`. */
             title: string;
             updated_at: string;
+        };
+        /** @description One time an event happens. */
+        Occurrence: {
+            /** @description You can say you'll join: a session someone else planned. */
+            can_join: boolean;
+            end_at: string;
+            event: components["schemas"]["CalendarEvent"];
+            /** @description You are one of the joiners. */
+            joined: boolean;
+            /** @description People who said they'll join (sessions only), in the order they did. */
+            joiners: components["schemas"]["Joiner"][];
+            /** @description The local date it starts on, `YYYY-MM-DD`. Joins and skips use it. */
+            occurrence: string;
+            /** @description UTC, RFC 3339. */
+            start_at: string;
         };
         /** @description Someone with an account on this install. */
         Person: {
@@ -1879,6 +2028,22 @@ export interface components {
             /** @description Put it after this database, or first when `null`. */
             after_id?: string | null;
             name?: string | null;
+        };
+        /**
+         * @description Fields left out stay as they are; `null` clears `title` or `repeat_until`.
+         *     Changes to a repeating event apply to every week.
+         */
+        UpdateEventRequest: {
+            /** Format: int64 */
+            minutes?: number | null;
+            /** @description Move a session to another project you can edit. */
+            project_id?: string | null;
+            /** Format: int64 */
+            repeat_days?: number | null;
+            repeat_until?: string | null;
+            start_local?: string | null;
+            title?: string | null;
+            tz?: string | null;
         };
         UpdateGroupRequest: {
             color?: string | null;
@@ -2193,6 +2358,286 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthStatus"];
+                };
+            };
+        };
+    };
+    list_calendar: {
+        parameters: {
+            query: {
+                /** @description Start of the range, RFC 3339. */
+                from: string;
+                /** @description End of the range, RFC 3339. At most 62 days after `from`. */
+                to: string;
+                /** @description Only this project's sessions. */
+                project_id?: string | null;
+                /** @description Only what you put in or are joining. */
+                mine?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Occurrence"][];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_event: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEventRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarEvent"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_event: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarEvent"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_event: {
+        parameters: {
+            query?: {
+                /**
+                 * @description On a repeating event, take out only the week starting on this local
+                 *     date (`YYYY-MM-DD`). Leave out to delete every week.
+                 */
+                occurrence?: string | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_event: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEventRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarEvent"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    join_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                /** @description Local date, YYYY-MM-DD */
+                occurrence: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Occurrence"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    leave_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                /** @description Local date, YYYY-MM-DD */
+                occurrence: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Occurrence"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

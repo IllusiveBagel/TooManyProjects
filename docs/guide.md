@@ -6,6 +6,7 @@ How each part of **too many projects** works. For installing it, see the
 
 - [Canvas groups](#canvas-groups)
 - [Boards](#boards)
+- [Calendar](#calendar)
 - [Notes](#notes)
 - [Sharing](#sharing)
 - [Project databases](#project-databases)
@@ -70,6 +71,41 @@ holds up another.)
   into them by category, and dropping a card moves it to that project's first
   column of the category (adding one if the project has none). Filter by one
   project or by a project and everything spawned from it.
+
+## Calendar
+
+The **Calendar** tab is your week, Monday first, for giving projects real
+time.
+
+- **Work sessions** are time on one project, with an optional focus such as
+  "Rear brakes". They're drawn in the project's colour, and everyone who can
+  see the project sees them. You can plan sessions on projects you own or can
+  edit.
+- **Busy time** is time you can't give to projects: work, appointments, a
+  family day. It's hatched grey and **only you ever see it**. Nobody else is
+  told you're busy; it only counts against your own free hours.
+- **Repeats:** either kind can repeat weekly on the days you tick (Weekdays
+  and Weekends are one click), with an optional end date. Times are kept as
+  local wall-clock time plus your time zone, so 9 to 5 stays 9 to 5 when the
+  clocks change. Changing a repeat changes every week. To drop one week, open
+  it and choose **Delete this one**; **Every week** removes the series.
+- **Planning:** drag across empty time on the week (or tap it on a phone),
+  use **+ Plan time** in the top bar, or **Plan** beside a project under
+  *No time yet*. Drag a one-off session to move it, or its bottom edge to
+  change its length; open a repeating one to change it.
+- **This week** adds up the hours you've planned per project and the hours
+  still free between 07:00 and 22:00 once busy time and sessions are taken
+  out. **No time yet** lists active projects with nothing planned this week.
+- **Joining:** a session someone else planned on a project shared with you
+  shows dashed. Open it and press **I'll join**; you join that one week (even
+  on a repeat), and the planner sees you on the session and in the project's
+  activity. Press it again to take it back. Viewers can join but not plan.
+- **Everyone / Just mine** switches between every session you can see and
+  only those you planned or are joining.
+- **On a phone** the calendar shows one day at a time with a Monday-to-Sunday
+  strip, and the week's totals as chips above it.
+- Each project's **Overview** has a *Coming up* panel with its next sessions
+  over two weeks and a **+ Plan session** button.
 
 ## Notes
 
@@ -182,11 +218,16 @@ if you let it, add to them.
   totals), and with a read-write token `create_task`, `update_task` (move,
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
   `link_note_to_task`, `add_note` (optionally linked to a task), `append_to_note`,
-  `add_row` (values by column name) and `spawn_project`. Projects and notes
+  `add_row` (values by column name), `spawn_project` and `plan_time` (a
+  session or busy time, optionally repeating). `get_calendar` reads a stretch
+  of the calendar (a week by default) with who's joining and hours per
+  project; busy time shows only for the token's owner. Projects and notes
   can be named by title or id.
 - **Resources and prompts:** each project (`tmp://projects/{id}`) and note
   (`tmp://notes/{id}`) is a resource, and there are `project_briefing` and
-  `weekly_review` prompts.
+  `weekly_review` prompts. Project briefings list the next two weeks of
+  sessions, and the weekly review includes what was planned last week and
+  this week.
 - **History:** anything changed through a token shows as *via AI* in the
   project's activity and the task's history.
 
@@ -198,7 +239,7 @@ mode. Tokens come in three layers:
 
 - **Primitives**, raw values like `graphite-900: #121110`. Only the theme file refers to them, as `{graphite-900}`.
 - **Semantic** tokens components use: `surface`, `surface-card`, `line`, `text`, `text-quiet`, `accent`, `late` and so on, plus project colour **slots 1 to 8**.
-- **Component** tokens for signature details: card shadows, the canvas grid.
+- **Component** tokens for signature details: card shadows, the canvas grid, the calendar's busy hatching (`calendar-busy`) and hour lines (`calendar-hour`).
 
 The web app turns the active theme into `--tmp-*` CSS variables, and Tailwind's
 `@theme` maps utilities onto them (`bg-surface-card`, `text-accent`,

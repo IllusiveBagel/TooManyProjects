@@ -92,14 +92,26 @@ zoom, and lay it out however your head works.
   </tr>
 </table>
 
+### 📅 A week to give projects real time
+
+Plan work sessions on projects, block out time you can't use (work 9 to 5 on
+weekdays, a busy Saturday) with weekly repeats, and see how many free hours
+are left and which active projects got no time at all. Friends you share a
+project with see its sessions and can say they'll join.
+
+<p align="center">
+  <img src="docs/images/calendar.png" alt="The calendar: a week of work sessions on projects between hatched busy blocks" width="100%">
+</p>
+
 And the rest:
 
 - **🤝 Sharing.** Invite-only accounts. Share one project (and what it
   spawns) or everything, as *Can edit* or *View only*, and assign tasks to
   each other.
 - **🤖 AI assistants.** A built-in [MCP](https://modelcontextprotocol.io)
-  server gives Claude and other assistants a briefing on any project, and can
-  create tasks, notes and rows with a read-write token.
+  server gives Claude and other assistants a briefing on any project and your
+  calendar, and can create tasks, notes, rows and sessions with a read-write
+  token.
 - **📱 Works on your phone.** Every screen has a phone layout with bottom tabs
   and full-screen drawers.
 - **🎨 Themeable.** Every colour, font and shadow comes from one theme file.
@@ -174,7 +186,7 @@ list of tools, resources and prompts.
 
 ## Documentation
 
-- **[User guide](docs/guide.md):** boards, notes, sharing, databases, AI access
+- **[User guide](docs/guide.md):** boards, calendar, notes, sharing, databases, AI access
   and theming, in detail.
 - **[Development](docs/development.md):** running it locally, the checks CI
   runs, the code layout, and how releases are made.

@@ -18,6 +18,7 @@ use utoipa::OpenApi;
         (name = "tasks", description = "Tasks, checklists, the global board and project dashboards"),
         (name = "notes", description = "Markdown notes in your vault, search, backlinks, import and export"),
         (name = "databases", description = "Project databases: columns, rows, views, import and export"),
+        (name = "calendar", description = "Work sessions, busy time and who is joining"),
         (name = "tokens", description = "API tokens for AI assistants using the MCP server"),
         (name = "system", description = "Health, the running version and update checks"),
     )

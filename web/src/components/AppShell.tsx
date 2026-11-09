@@ -16,6 +16,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 const TABS = [
   { to: "/", label: "Canvas", end: true, icon: "M4 4h6v6H4zM14 14h6v6h-6zM10 7h4v10" },
   { to: "/board", label: "Board", end: false, icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
+  { to: "/calendar", label: "Calendar", end: false, icon: "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5" },
   { to: "/notes", label: "Notes", end: false, icon: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" },
   { to: "/settings", label: "Settings", end: false, icon: "M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4" },
 ];
@@ -31,6 +32,7 @@ export function AppShell() {
   useQuickNoteShortcut();
   // In Notes, the top bar's New button makes a note; everywhere else, a project.
   const inNotes = pathname.startsWith("/notes");
+  const inCalendar = pathname.startsWith("/calendar");
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-rule bg-surface flex items-center gap-x-6 border-x-0 border-t-0 px-4 py-2.5 sm:px-5">
@@ -40,6 +42,7 @@ export function AppShell() {
         <nav className="hidden gap-5 sm:flex" aria-label="Main">
           <NavLink to="/" end className={navClass}>Canvas</NavLink>
           <NavLink to="/board" className={navClass}>Board</NavLink>
+          <NavLink to="/calendar" className={navClass}>Calendar</NavLink>
           <NavLink to="/notes" className={navClass}>Notes</NavLink>
           <NavLink to="/settings" className={navClass}>Settings</NavLink>
         </nav>
@@ -49,12 +52,13 @@ export function AppShell() {
             className="min-h-10 px-3 text-sm"
             onClick={() => {
               if (inNotes) return startQuickNote();
+              if (inCalendar) return navigate("/calendar?plan=new");
               navigate("/");
               startNewProject();
             }}
           >
-            <span className="sm:hidden">+ New</span>
-            <span className="hidden sm:inline">{inNotes ? "+ Quick note" : "+ New project"}</span>
+            <span className="sm:hidden">{inCalendar ? "+ Plan" : "+ New"}</span>
+            <span className="hidden sm:inline">{inNotes ? "+ Quick note" : inCalendar ? "+ Plan time" : "+ New project"}</span>
           </Button>
           <span className="label-mono text-text-quiet hidden sm:inline">{me.name}</span>
           <button

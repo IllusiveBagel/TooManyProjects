@@ -78,7 +78,9 @@
         "canvas-grid-major": "{graphite-450}",
         "card-shadow": "5px 5px 0 {black}",
         "card-shadow-selected": "5px 5px 0 {sage-300}",
-        "button-shadow": "3px 3px 0 {black}"
+        "button-shadow": "3px 3px 0 {black}",
+        "calendar-busy": "{graphite-700}",
+        "calendar-hour": "{graphite-450}"
       }
     },
     "light": {
@@ -112,7 +114,9 @@
         "canvas-grid-major": "{paper-200}",
         "card-shadow": "4px 4px 0 {ink-900}",
         "card-shadow-selected": "4px 4px 0 {sage-700}",
-        "button-shadow": "3px 3px 0 {ink-900}"
+        "button-shadow": "3px 3px 0 {ink-900}",
+        "calendar-busy": "{paper-200}",
+        "calendar-hour": "{paper-200}"
       }
     }
   },

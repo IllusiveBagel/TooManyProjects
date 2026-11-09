@@ -127,6 +127,24 @@
   }
 }
 
+/* Busy time in the calendar: diagonal hatching. */
+@utility calendar-busy {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--tmp-calendar-busy) 0 6px,
+    var(--tmp-surface-card) 6px 12px
+  );
+}
+
+/* One line per hour down a calendar day; set --hour to the hour's height. */
+@utility calendar-hours {
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--tmp-calendar-hour) 0 1px,
+    transparent 1px var(--hour, 40px)
+  );
+}
+
 /* React Flow, drawn with theme tokens. */
 .tmp-flow {
   --xy-edge-stroke-default: var(--tmp-text-quiet);
