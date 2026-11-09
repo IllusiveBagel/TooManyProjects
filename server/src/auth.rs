@@ -356,6 +356,7 @@ async fn setup(
     responses(
         (status = 200, body = User),
         (status = 400, body = crate::error::ErrorBody, description = "Wrong email or password"),
+        (status = 429, body = crate::error::ErrorBody, description = "Too many wrong passwords; wait"),
     ))]
 async fn login(
     State(state): State<AppState>,
@@ -363,6 +364,13 @@ async fn login(
     Json(req): Json<LoginRequest>,
 ) -> AppResult<Response> {
     let email = req.email.trim().to_lowercase();
+    if let Err(secs) = state.logins.check(&email) {
+        let wait =
+            if secs > 90 { format!("{} minutes", secs.div_ceil(60)) } else { format!("{secs} seconds") };
+        return Err(AppError::TooManyRequests(format!(
+            "Too many wrong passwords for that email. Try again in {wait}."
+        )));
+    }
     let row: Option<(String, String)> = sqlx::query_as("SELECT id, password_hash FROM users WHERE email = ?")
         .bind(&email)
         .fetch_optional(&state.db)
@@ -373,11 +381,13 @@ async fn login(
     };
     let ok = verify_password(req.password, hash).await?;
     let Some(id) = id.filter(|_| ok) else {
+        state.logins.failed(&email);
         return Err(AppError::BadRequest(
             "invalid_credentials",
             "That email and password don't match an account.".into(),
         ));
     };
+    state.logins.succeeded(&email);
     let mut conn = state.db.acquire().await?;
     let cookie = start_session(&mut conn, &state, &id, &headers).await?;
     let user = user_by_id(&mut *conn, &id).await?;

@@ -4,6 +4,10 @@ services:
     image: ghcr.io/illusivebagel/toomanyprojects:latest
     container_name: toomanyprojects
     restart: unless-stopped
+    # The app needs no Linux capabilities and never gains privileges.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "8080:8080"
     environment:

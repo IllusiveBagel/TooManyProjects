@@ -319,7 +319,7 @@ async fn imports_obsidian_and_notion_and_exports() {
     let (status, zip) = app.call_raw("GET", "/api/v1/notes/export", &me, "", vec![]).await;
     assert_eq!(status, StatusCode::OK);
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip)).unwrap();
-    let mut names: Vec<String> = archive.file_names().map(String::from).collect();
+    let mut names: Vec<String> = archive.file_names().map(|n| n.unwrap().to_string()).collect();
     names.sort();
     assert_eq!(
         names,

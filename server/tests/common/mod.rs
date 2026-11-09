@@ -32,8 +32,13 @@ impl TestApp {
         let config = Config::for_tests(dir.path().to_path_buf());
         let db = db::connect(&config.data_dir).await.unwrap();
         let updates = UpdateChecker::from_config(&config);
-        let state =
-            AppState { db, config: Arc::new(config), themes: Arc::new(ThemeStore::bundled()), updates };
+        let state = AppState {
+            db,
+            config: Arc::new(config),
+            themes: Arc::new(ThemeStore::bundled()),
+            updates,
+            logins: Default::default(),
+        };
         Self { router: build_router(state.clone()), data_dir: dir.path().to_path_buf(), state, _dir: dir }
     }
 

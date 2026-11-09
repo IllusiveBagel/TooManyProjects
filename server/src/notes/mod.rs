@@ -38,7 +38,11 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(rescan))
         .routes(routes!(link_task_note, unlink_task_note))
         .routes(routes!(transfer::export_vault))
-        .routes(routes!(transfer::import_vault))
+        .merge(
+            OpenApiRouter::new()
+                .routes(routes!(transfer::import_vault))
+                .layer(axum::extract::DefaultBodyLimit::max(transfer::MAX_IMPORT_BYTES + 1024)),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -534,7 +538,7 @@ pub(crate) async fn create_note(
         other: vec![],
     };
     vault::write_file(&root, &rel, &markdown::render(&fm, &body)).await?;
-    let id = vault::index_file(&mut conn, &root, &user.id, &rel).await?;
+    let id = vault::index_file_chosen(&mut conn, &root, &user.id, &rel, &project_ids).await?;
     if let Some(task) = &task {
         add_task_link(&mut conn, &user.id, task, &id).await?;
     }
@@ -680,7 +684,8 @@ pub(crate) async fn update_note(
         tokio::fs::rename(root.join(&current.path), &to).await.map_err(|e| AppError::Internal(e.into()))?;
         vault::prune_empty_dirs(&root, &current.path).await;
     }
-    vault::index_file(&mut conn, &root, &owner, &rel).await?;
+    vault::index_file_chosen(&mut conn, &root, &owner, &rel, req.project_ids.as_deref().unwrap_or(&[]))
+        .await?;
     if title != current.title {
         rewrite_links(&mut conn, &root, &owner, "note", &current.title, &title).await?;
     }

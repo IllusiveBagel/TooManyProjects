@@ -39,7 +39,13 @@ async fn main() -> anyhow::Result<()> {
     let bind = config.bind;
     let updates = UpdateChecker::from_config(&config);
     updates.spawn();
-    let state = AppState { db, config: Arc::new(config), themes: Arc::new(themes), updates };
+    let state = AppState {
+        db,
+        config: Arc::new(config),
+        themes: Arc::new(themes),
+        updates,
+        logins: Default::default(),
+    };
     // Pick up notes edited outside the app (another editor, a synced folder).
     // Polling, because file watching is unreliable on Docker volumes.
     let scan_state = state.clone();

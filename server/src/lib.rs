@@ -12,6 +12,7 @@ pub mod databases;
 pub mod db;
 pub mod error;
 pub mod invites;
+pub mod limits;
 pub mod links;
 pub mod mcp;
 pub mod notes;

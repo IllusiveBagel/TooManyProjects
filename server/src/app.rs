@@ -24,7 +24,9 @@ use crate::{
     config::Config,
     dashboard, databases,
     error::AppError,
-    invites, links, mcp, notes, oauth,
+    invites,
+    limits::LoginLimiter,
+    links, mcp, notes, oauth,
     openapi::ApiDoc,
     projects, sharing, tasks,
     themes::{self, ThemeStore},
@@ -38,6 +40,8 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub themes: Arc<ThemeStore>,
     pub updates: Arc<UpdateChecker>,
+    /// Wrong-password counts, to slow down guessing.
+    pub logins: Arc<LoginLimiter>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -83,6 +87,10 @@ pub fn openapi_json() -> String {
     api().1.to_pretty_json().expect("OpenAPI serialises")
 }
 
+/// Largest request body outside the import routes. A note is at most 2 MB of
+/// text, which JSON escaping can grow.
+pub const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+
 /// Refuses state-changing API calls whose `Origin` is another site. Together
 /// with `SameSite=Lax` cookies and JSON-only bodies this blocks CSRF.
 async fn same_origin(req: Request, next: Next) -> Response {
@@ -103,7 +111,9 @@ async fn same_origin(req: Request, next: Next) -> Response {
 pub fn build_router(state: AppState) -> Router {
     let (api, _) = api();
     let api = api
-        .layer(axum::extract::DefaultBodyLimit::max(notes::transfer::MAX_IMPORT_BYTES + 1024))
+        // Imports raise their own limit; everything else is a JSON body, the
+        // largest a 2 MB note.
+        .layer(axum::extract::DefaultBodyLimit::max(MAX_BODY_BYTES))
         .fallback(|| async { AppError::NotFound })
         .layer(middleware::from_fn(same_origin))
         .layer(SetResponseHeaderLayer::overriding(

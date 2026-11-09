@@ -220,6 +220,18 @@ pub async fn index_file(
     user_id: &str,
     rel: &str,
 ) -> AppResult<String> {
+    index_file_chosen(conn, root, user_id, rel, &[]).await
+}
+
+/// [`index_file`], when the person just picked the note's projects by id in
+/// the app: those win when a title in the front matter matches more than one.
+pub async fn index_file_chosen(
+    conn: &mut SqliteConnection,
+    root: &Path,
+    user_id: &str,
+    rel: &str,
+    chosen: &[String],
+) -> AppResult<String> {
     let text = read_file(root, rel).await?;
     let (mut fm, body) = markdown::split(&text);
 
@@ -245,7 +257,7 @@ pub async fn index_file(
     }
     let id = fm.id.clone().unwrap();
     let (size, mtime) = stat(&root.join(rel)).ok_or(AppError::NotFound)?;
-    write_index(conn, user_id, &id, rel, &fm, &body, size, mtime).await?;
+    write_index(conn, user_id, &id, rel, &fm, &body, size, mtime, chosen).await?;
     Ok(id)
 }
 
@@ -259,6 +271,7 @@ async fn write_index(
     body: &str,
     size: i64,
     mtime: i64,
+    chosen: &[String],
 ) -> AppResult<()> {
     let title = Path::new(rel).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let folder = rel.split('/').next().filter(|_| rel.contains('/')).unwrap_or("").to_string();
@@ -297,18 +310,30 @@ async fn write_index(
     .execute(&mut *conn)
     .await?;
 
+    // Filing a note under a project shares it with everyone on that project,
+    // so a title must never pick up a stranger's project of the same name
+    // (anyone here can make one and share it with you).
+    let before: Vec<String> = sqlx::query_scalar("SELECT project_id FROM note_projects WHERE note_id = ?")
+        .bind(id)
+        .fetch_all(&mut *conn)
+        .await?;
     sqlx::query("DELETE FROM note_projects WHERE note_id = ?").bind(id).execute(&mut *conn).await?;
     for p in &fm.projects {
-        sqlx::query(
-            "INSERT OR IGNORE INTO note_projects (note_id, project_id)
-             SELECT ?, p.id FROM projects p JOIN project_access a ON a.project_id = p.id
-             WHERE a.user_id = ? AND p.title = ? COLLATE NOCASE",
+        let candidates: Vec<(String, String)> = sqlx::query_as(
+            "SELECT p.id, p.owner_id FROM projects p JOIN project_access a ON a.project_id = p.id
+             WHERE a.user_id = ? AND p.title = ? COLLATE NOCASE ORDER BY p.created_at",
         )
-        .bind(id)
         .bind(user_id)
         .bind(p.trim())
-        .execute(&mut *conn)
+        .fetch_all(&mut *conn)
         .await?;
+        for project_id in file_under(&candidates, user_id, chosen, &before) {
+            sqlx::query("INSERT OR IGNORE INTO note_projects (note_id, project_id) VALUES (?, ?)")
+                .bind(id)
+                .bind(project_id)
+                .execute(&mut *conn)
+                .await?;
+        }
     }
 
     sqlx::query("DELETE FROM note_links WHERE note_id = ?").bind(id).execute(&mut *conn).await?;
@@ -329,6 +354,33 @@ async fn write_index(
         .execute(&mut *conn)
         .await?;
     Ok(())
+}
+
+/// Which of the projects called by one front-matter title a note is filed
+/// under. `candidates` are (id, owner) pairs the note's owner can see. In
+/// order: the ones just picked in the app, the owner's own, the ones it was
+/// already filed under, or a shared one when it is the only one by that name.
+/// Two shared projects with the same name and nothing to choose between them
+/// file the note under neither.
+fn file_under(
+    candidates: &[(String, String)],
+    owner: &str,
+    chosen: &[String],
+    before: &[String],
+) -> Vec<String> {
+    let pick = |keep: &dyn Fn(&(String, String)) -> bool| -> Vec<String> {
+        candidates.iter().filter(|c| keep(c)).map(|(id, _)| id.clone()).collect()
+    };
+    for found in [
+        pick(&|(id, _)| chosen.contains(id)),
+        pick(&|(_, o)| o == owner),
+        pick(&|(id, _)| before.contains(id)),
+    ] {
+        if !found.is_empty() {
+            return found;
+        }
+    }
+    if candidates.len() == 1 { vec![candidates[0].0.clone()] } else { vec![] }
 }
 
 /// Replaces `[[Old]]`, `[[Old|…]]` and `[[Old#…]]` with the new title.

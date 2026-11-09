@@ -329,7 +329,7 @@ async fn csv_import_and_export() {
     assert_eq!(status, StatusCode::OK);
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(zip)).unwrap();
     let mut names: Vec<String> =
-        (0..archive.len()).map(|i| archive.by_index(i).unwrap().name().to_string()).collect();
+        (0..archive.len()).map(|i| archive.by_index(i).unwrap().name().unwrap().to_string()).collect();
     names.sort();
     assert_eq!(
         names,
