@@ -15,6 +15,7 @@ pub mod invites;
 pub mod links;
 pub mod mcp;
 pub mod notes;
+pub mod oauth;
 pub mod openapi;
 pub mod position;
 pub mod projects;

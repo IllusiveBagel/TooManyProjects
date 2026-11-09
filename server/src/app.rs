@@ -24,7 +24,7 @@ use crate::{
     config::Config,
     dashboard, databases,
     error::AppError,
-    invites, links, mcp, notes,
+    invites, links, mcp, notes, oauth,
     openapi::ApiDoc,
     projects, sharing, tasks,
     themes::{self, ThemeStore},
@@ -71,6 +71,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(notes::router())
         .merge(sharing::router())
         .merge(tokens::router())
+        .merge(oauth::api_router())
         .merge(updates::router())
         .split_for_parts();
     // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.
@@ -113,7 +114,8 @@ pub fn build_router(state: AppState) -> Router {
     let mut router = Router::new()
         .nest("/api/v1", api)
         .merge(mcp::router(state.clone()))
-        // MCP clients look here for OAuth; say plainly there is none rather than serve the web app.
+        .merge(oauth::routes())
+        // Anything else under .well-known is not ours; say so rather than serve the web app.
         .route("/.well-known/{*rest}", get(|| async { AppError::NotFound }))
         .route("/api/health", get(health))
         .route(

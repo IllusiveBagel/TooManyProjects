@@ -2620,6 +2620,190 @@
         }
       }
     },
+    "/oauth/approve": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Allow (or cancel) a connection. Returns the address to send the person back to.",
+        "operationId": "approve",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApproveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/connections": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Apps you've allowed, newest first.",
+        "operationId": "list_connections",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Connection"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/connections/{id}": {
+      "delete": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Stop an app at once: its tokens stop working and it leaves the list.",
+        "operationId": "disconnect",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/request": {
+      "get": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "What an app is asking for, for the Allow page.",
+        "operationId": "describe_request",
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "response_type",
+            "in": "query",
+            "description": "Must be `code`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code_challenge",
+            "in": "query",
+            "description": "The PKCE challenge: base64url SHA-256 of the app's verifier.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code_challenge_method",
+            "in": "query",
+            "description": "Must be `S256`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "What the app asked for: `read`, `write` or both, space separated.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/people": {
       "get": {
         "tags": [
@@ -4477,6 +4661,68 @@
           }
         }
       },
+      "ApproveRequest": {
+        "type": "object",
+        "required": [
+          "client_id",
+          "redirect_uri",
+          "scope",
+          "allow"
+        ],
+        "properties": {
+          "allow": {
+            "type": "boolean",
+            "description": "False for Cancel."
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "code_challenge": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code_challenge_method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "redirect_uri": {
+            "type": "string"
+          },
+          "response_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "description": "`read` or `write`."
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Passed back to the app untouched."
+          }
+        }
+      },
+      "ApproveResponse": {
+        "type": "object",
+        "required": [
+          "redirect_to"
+        ],
+        "properties": {
+          "redirect_to": {
+            "type": "string",
+            "description": "Where to send the browser next: back to the app."
+          }
+        }
+      },
       "AuthStatus": {
         "type": "object",
         "required": [
@@ -4952,6 +5198,70 @@
           "body": {
             "type": "string",
             "description": "Markdown, up to 20,000 characters."
+          }
+        }
+      },
+      "ConnectRequest": {
+        "type": "object",
+        "required": [
+          "client_name",
+          "redirect_host",
+          "suggested_scope"
+        ],
+        "properties": {
+          "client_name": {
+            "type": "string",
+            "description": "The name the app gave itself, such as \"Claude\"."
+          },
+          "redirect_host": {
+            "type": "string",
+            "description": "Where the person goes back to, such as claude.ai."
+          },
+          "suggested_scope": {
+            "type": "string",
+            "description": "The access to preselect: `read` when the app asked for read only."
+          },
+          "warning": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the return address looks wrong for the app's name."
+          }
+        }
+      },
+      "Connection": {
+        "type": "object",
+        "required": [
+          "id",
+          "client_name",
+          "redirect_host",
+          "scope",
+          "created_at"
+        ],
+        "properties": {
+          "client_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "redirect_host": {
+            "type": "string",
+            "description": "Where it signed in from, such as claude.ai or localhost."
+          },
+          "scope": {
+            "type": "string",
+            "description": "`read` or `write`."
           }
         }
       },
@@ -7783,6 +8093,10 @@
     {
       "name": "tokens",
       "description": "API tokens for AI assistants using the MCP server"
+    },
+    {
+      "name": "oauth",
+      "description": "Apps connected by signing in (OAuth), and the Allow page"
     },
     {
       "name": "system",

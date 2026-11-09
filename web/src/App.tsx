@@ -6,6 +6,7 @@ import { AuthLayout } from "./components/AuthLayout";
 import { Button } from "./components/ui";
 import { CalendarPage } from "./pages/CalendarPage";
 import { CanvasPage } from "./pages/CanvasPage";
+import { ConnectPage } from "./pages/ConnectPage";
 import { GlobalBoardPage } from "./pages/GlobalBoardPage";
 import { ProjectBoardPage } from "./pages/ProjectBoardPage";
 import { ProjectDataPage } from "./pages/ProjectDataPage";
@@ -33,8 +34,10 @@ function Gate({ need, children }: { need: "setup" | "guest" | "user"; children: 
   const { needs_setup, user } = status.data;
   if (needs_setup && need !== "setup") return <Navigate to="/setup" replace />;
   if (!needs_setup && need === "setup") return <Navigate to={user ? "/" : "/login"} replace />;
-  if (need === "user" && !user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  if (need === "guest" && user) return <Navigate to="/" replace />;
+  if (need === "user" && !user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  // Signing in lands here first; carry on to where the person was going (such as the Allow page).
+  if (need === "guest" && user)
+    return <Navigate to={(location.state as { from?: string } | null)?.from ?? "/"} replace />;
   return <MeContext.Provider value={user ?? null}>{children}</MeContext.Provider>;
 }
 
@@ -42,6 +45,8 @@ const router = createBrowserRouter([
   { path: "/setup", element: <Gate need="setup"><SetupPage /></Gate> },
   { path: "/login", element: <Gate need="guest"><LoginPage /></Gate> },
   { path: "/invite/:token", element: <Gate need="guest"><InvitePage /></Gate> },
+  // The Allow page an app such as Claude opens when it connects by signing in.
+  { path: "/connect", element: <Gate need="user"><ConnectPage /></Gate> },
   {
     element: <Gate need="user"><AppShell /></Gate>,
     children: [

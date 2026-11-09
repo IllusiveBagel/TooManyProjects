@@ -110,8 +110,8 @@ And the rest:
   each other.
 - **🤖 AI assistants.** A built-in [MCP](https://modelcontextprotocol.io)
   server gives Claude and other assistants a briefing on any project and your
-  calendar, and can create tasks, notes, rows and sessions with a read-write
-  token.
+  calendar, and can create tasks, notes, rows and sessions. Connect Claude
+  by signing in: no tokens to copy.
 - **📱 Works on your phone.** Every screen has a phone layout with bottom tabs
   and full-screen drawers.
 - **🎨 Themeable.** Every colour, font and shadow comes from one theme file.
@@ -157,7 +157,7 @@ in a clone of this repo.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `TMP_PUBLIC_URL` | unset | The address people reach the app at, such as `https://projects.example.com`. Used for invite links. When it starts with `https://`, session cookies are marked secure. |
+| `TMP_PUBLIC_URL` | unset | The address people reach the app at, such as `https://projects.example.com`. Used for invite links and for connecting Claude by signing in, which needs a public `https://` address (see [Put it online with HTTPS](docs/guide.md#put-it-online-with-https)). When it starts with `https://`, session cookies are marked secure. |
 | `TMP_COOKIE_SECURE` | from `TMP_PUBLIC_URL` | Force secure cookies on (`true`) or off (`false`). |
 | `TMP_SESSION_DAYS` | `30` | How long a sign-in lasts. |
 | `TMP_DATA_DIR` | `/data` in Docker | Where the database, themes and notes live. |
@@ -165,21 +165,28 @@ in a clone of this repo.
 | `TMP_UPDATE_CHECK` | `on` | Set to `off` to stop the server asking GitHub for new releases, such as on an offline server. |
 | `RUST_LOG` | `toomanyprojects=info` | Log level. |
 
-Put the app behind your usual reverse proxy for HTTPS.
+Put the app behind your usual reverse proxy for HTTPS, or follow
+[Put it online with HTTPS](docs/guide.md#put-it-online-with-https) for a
+Cloudflare Tunnel, Tailscale Funnel or Caddy setup.
 
 ## AI assistants (MCP)
 
-The server speaks the Model Context Protocol at `/mcp`. Make a token under
-**Settings → AI access** (read only, or read and write), then connect Claude
-Code:
+The server speaks the Model Context Protocol at `/mcp`, and you connect Claude
+by signing in. Copy the address from **Settings → AI access**, add it in
+Claude under **Settings → Connectors → Add custom connector**, then sign in
+and press **Allow**. Claude Code works the same way:
 
 ```sh
-claude mcp add --transport http toomanyprojects https://your-host/mcp \
-  --header "Authorization: Bearer tmp_…"
+claude mcp add --transport http toomanyprojects https://your-host/mcp
 ```
 
+then `/mcp` → **Authenticate**. The Claude app connects from the internet, so
+it needs a public `https://` address
+([how to set one up](docs/guide.md#put-it-online-with-https)). API tokens are
+still there for scripts.
+
 Your assistant can then list and search projects, pull a full briefing on one,
-read notes and a task's log, query databases and, with a read-write token, add
+read notes and a task's log, query databases and, with read-write access, add
 tasks, comments, notes and rows or spawn new projects. Anything it changes is marked *via AI* in the
 project's activity. The [user guide](docs/guide.md#ai-access-mcp) has the full
 list of tools, resources and prompts.

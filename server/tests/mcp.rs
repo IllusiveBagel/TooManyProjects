@@ -164,7 +164,10 @@ async fn mcp_needs_a_live_token() {
         .body(Body::from("{}"))
         .unwrap();
     assert_eq!(app.router.clone().oneshot(req).await.unwrap().status(), StatusCode::UNAUTHORIZED);
+    // Clients are pointed at sign-in (see tests/oauth.rs); other .well-known paths stay a 404.
     let wk = app.call("GET", "/.well-known/oauth-protected-resource", None, None).await;
+    assert_eq!(wk.status, StatusCode::OK);
+    let wk = app.call("GET", "/.well-known/security.txt", None, None).await;
     assert_eq!(wk.status, StatusCode::NOT_FOUND);
 }
 
