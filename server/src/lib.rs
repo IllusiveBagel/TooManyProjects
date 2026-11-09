@@ -12,6 +12,7 @@ pub mod databases;
 pub mod db;
 pub mod error;
 pub mod invites;
+pub mod limits;
 pub mod links;
 pub mod mcp;
 pub mod notes;
@@ -23,6 +24,7 @@ pub mod sharing;
 pub mod tasks;
 pub mod themes;
 pub mod time;
+pub mod tls;
 pub mod tokens;
 pub mod updates;
 

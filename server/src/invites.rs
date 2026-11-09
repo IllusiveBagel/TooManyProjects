@@ -247,6 +247,18 @@ async fn accept_invite(
     Json(req): Json<AcceptInviteRequest>,
 ) -> AppResult<Response> {
     let account = auth::validate_account(&req.name, &req.email, &req.password)?;
+    // Check the invite before the slow password hash, and before saying
+    // whether an email has an account, so neither is open to anyone without one.
+    let live: Option<i64> = sqlx::query_scalar(
+        "SELECT 1 FROM invites WHERE token_hash = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?",
+    )
+    .bind(auth::hash_token(&req.token))
+    .bind(time::now())
+    .fetch_optional(&state.db)
+    .await?;
+    if live.is_none() {
+        return Err(AppError::NotFound);
+    }
     let password_hash = auth::hash_password(account.password).await?;
     let user_id = time::new_id();
     let now = time::now();

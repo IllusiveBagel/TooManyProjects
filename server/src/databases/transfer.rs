@@ -28,7 +28,7 @@ use crate::{
     projects::editable_project,
 };
 
-const MAX_CSV_BYTES: usize = 20 * 1024 * 1024;
+pub(super) const MAX_CSV_BYTES: usize = 20 * 1024 * 1024;
 
 /// A cell as plain text, relations as their titles.
 fn cell_text(column: &Column, row: &super::Row) -> String {

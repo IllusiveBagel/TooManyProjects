@@ -28,12 +28,25 @@ pub struct Res {
 
 impl TestApp {
     pub async fn new() -> Self {
+        Self::with_config(|_| {}).await
+    }
+
+    /// A test app with some settings changed from [`Config::for_tests`].
+    pub async fn with_config(change: impl FnOnce(&mut Config)) -> Self {
         let dir = tempfile::tempdir().unwrap();
-        let config = Config::for_tests(dir.path().to_path_buf());
+        let mut config = Config::for_tests(dir.path().to_path_buf());
+        change(&mut config);
+        let tls = toomanyprojects::tls::Tls::start(&config).await.unwrap();
         let db = db::connect(&config.data_dir).await.unwrap();
         let updates = UpdateChecker::from_config(&config);
-        let state =
-            AppState { db, config: Arc::new(config), themes: Arc::new(ThemeStore::bundled()), updates };
+        let state = AppState {
+            db,
+            config: Arc::new(config),
+            themes: Arc::new(ThemeStore::bundled()),
+            updates,
+            logins: Default::default(),
+            tls,
+        };
         Self { router: build_router(state.clone()), data_dir: dir.path().to_path_buf(), state, _dir: dir }
     }
 

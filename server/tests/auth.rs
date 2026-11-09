@@ -225,3 +225,49 @@ async fn themes_and_health() {
     assert_eq!(app.call("GET", "/api/health", None, None).await.body["status"], "ok");
     assert_eq!(app.call("GET", "/api/v1/nope", None, None).await.status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn wrong_passwords_slow_down_and_a_bad_invite_says_nothing() {
+    let app = TestApp::new().await;
+    app.setup_owner().await;
+    let login = |password: &'static str| {
+        app.call(
+            "POST",
+            "/api/v1/auth/login",
+            None,
+            Some(json!({"email": "logan@example.com", "password": password})),
+        )
+    };
+    for _ in 0..5 {
+        assert_eq!(login("wrong password").await.body["code"], "invalid_credentials");
+    }
+    // Now even the right password has to wait.
+    let res = login("correct horse").await;
+    assert_eq!(res.status, StatusCode::TOO_MANY_REQUESTS, "{:?}", res.body);
+    assert_eq!(res.body["code"], "too_many_attempts");
+    // Other emails are unaffected.
+    let other = app
+        .call("POST", "/api/v1/auth/login", None, Some(json!({"email": "sam@example.com", "password": "x"})))
+        .await;
+    assert_eq!(other.body["code"], "invalid_credentials");
+
+    // Without a live invite, accepting one doesn't reveal that the email is taken.
+    let res = app
+        .call(
+            "POST",
+            "/api/v1/auth/accept-invite",
+            None,
+            Some(json!({"token": "made-up", "name": "X", "email": "logan@example.com", "password": "a long password"})),
+        )
+        .await;
+    assert_eq!(res.status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn big_bodies_are_refused_outside_imports() {
+    let app = TestApp::new().await;
+    let big = "x".repeat(toomanyprojects::app::MAX_BODY_BYTES + 1);
+    let res =
+        app.call("POST", "/api/v1/auth/login", None, Some(json!({"email": "a@b.co", "password": big}))).await;
+    assert_eq!(res.status, StatusCode::PAYLOAD_TOO_LARGE);
+}

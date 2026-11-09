@@ -6,6 +6,7 @@ import { useImportNotes, useRescan } from "../notes/queries";
 import { AiAccessPanel } from "./AiAccessPanel";
 import { SharingPanel } from "./SharingPanel";
 import { UpdatesPanel } from "../system/UpdatesPanel";
+import { HttpsPanel } from "../system/HttpsPanel";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
@@ -19,6 +20,7 @@ export function SettingsPage() {
       <SharingPanel />
       <NotesPanel />
       <AiAccessPanel />
+      <HttpsPanel owner={me.role === "owner"} />
       {me.role === "owner" && <InvitesPanel />}
       {me.role === "owner" && <UpdatesPanel />}
       <AccountPanel />

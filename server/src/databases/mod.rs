@@ -49,7 +49,11 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(update_row, delete_row))
         .routes(routes!(task_rows))
         .routes(routes!(transfer::export_database))
-        .routes(routes!(transfer::import_database))
+        .merge(
+            OpenApiRouter::new()
+                .routes(routes!(transfer::import_database))
+                .layer(axum::extract::DefaultBodyLimit::max(transfer::MAX_CSV_BYTES + 1024)),
+        )
 }
 
 // ---------------------------------------------------------------------------

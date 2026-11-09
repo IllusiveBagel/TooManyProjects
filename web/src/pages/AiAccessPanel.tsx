@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { api, unwrap } from "../api/client";
 import type { components } from "../api/schema";
+import { httpsOrigin, useHttpsInfo } from "../system/queries";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { ago } from "../notes/format";
 
@@ -152,8 +153,12 @@ export function AiAccessPanel() {
   const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => unwrap(api.GET("/tokens")) });
   const liveTokens = tokens.data?.filter((t) => !t.revoked_at).length ?? 0;
 
-  const url = `${window.location.origin}/mcp`;
-  const offline = unreachableFromInternet(new URL(window.location.origin));
+  const https = useHttpsInfo();
+  // Claude Code needs https to sign in; use the server's own HTTPS when this page isn't.
+  const base = httpsOrigin(window.location, https.data) ?? window.location.origin;
+  const url = `${base}/mcp`;
+  const offline = unreachableFromInternet(new URL(base));
+  const ownCert = https.data?.mode === "generated" && window.location.protocol !== "https:";
   const claudeCode = `claude mcp add --transport http toomanyprojects ${url}`;
   const copy = async (key: string, text: string) => {
     await navigator.clipboard?.writeText(text);
@@ -235,6 +240,11 @@ export function AiAccessPanel() {
               </p>
             ) : (
               <>
+                {ownCert && (
+                  <p className="text-text-quiet text-sm leading-relaxed">
+                    First trust the server's certificate on this computer: see <b className="text-text">HTTPS</b> below.
+                  </p>
+                )}
                 {copyRow("code", claudeCode)}
                 <p className="text-text-quiet text-sm leading-relaxed">
                   Then type <code className="text-text font-mono text-[12px]">/mcp</code> in Claude Code, pick toomanyprojects and choose{" "}

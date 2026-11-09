@@ -182,7 +182,7 @@ fn unpack(bytes: &[u8], root: &Path, folder: &str, source: ImportSource) -> AppR
         if file.is_dir() {
             continue;
         }
-        let raw = file.name().replace('\\', "/");
+        let raw = file.name().map_err(|_| bad_zip())?.replace('\\', "/");
         if raw.starts_with("__MACOSX/") || raw.split('/').any(|s| s.starts_with('.')) {
             result.skipped += 1;
             continue;

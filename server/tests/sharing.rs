@@ -379,3 +379,70 @@ async fn invites_can_carry_a_share() {
     let names: Vec<&str> = people.as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
     assert_eq!(names, vec!["Alex", "Sam"]);
 }
+
+#[tokio::test]
+async fn a_project_with_the_same_name_does_not_pick_up_your_notes() {
+    let app = TestApp::new().await;
+    let logan = app.setup_owner().await;
+    let logan_id = user_id(&app, &logan).await;
+    let sam = join(&app, &logan, "Sam", json!({})).await;
+    let eve = join(&app, &logan, "Eve", json!({})).await;
+
+    // Logan's own Beetle, and a note filed under it.
+    let beetle = project(&app, &logan, json!({"title": "Beetle"})).await;
+    // Eve makes a project with the same name and shares it with Logan, which
+    // needs nothing from Logan.
+    let eves = project(&app, &eve, json!({"title": "beetle"})).await;
+    share(&app, &eve, json!({"grantee_id": logan_id, "project_id": eves, "role": "editor"})).await;
+    let note = app
+        .call(
+            "POST",
+            "/api/v1/notes",
+            Some(&logan),
+            Some(json!({"title": "Secret", "body": "vin", "project_ids": [beetle]})),
+        )
+        .await;
+    assert_eq!(note.status, StatusCode::CREATED, "{:?}", note.body);
+    let id = note.body["note"]["id"].as_str().unwrap().to_string();
+    let filed: Vec<&str> =
+        note.body["note"]["projects"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect();
+    assert_eq!(filed, [beetle.as_str()]);
+    let res = app.call("GET", &format!("/api/v1/notes/{id}"), Some(&eve), None).await;
+    assert_eq!(res.status, StatusCode::NOT_FOUND);
+    let res = app.call("PATCH", &format!("/api/v1/notes/{id}"), Some(&eve), Some(json!({"body": "x"}))).await;
+    assert_eq!(res.status, StatusCode::NOT_FOUND);
+    // Editing the note (which re-reads its front matter) doesn't either.
+    let res =
+        app.call("PATCH", &format!("/api/v1/notes/{id}"), Some(&logan), Some(json!({"body": "vin 2"}))).await;
+    assert_eq!(res.status, StatusCode::OK);
+    let res = app.call("GET", &format!("/api/v1/notes/{id}"), Some(&eve), None).await;
+    assert_eq!(res.status, StatusCode::NOT_FOUND);
+
+    // Filing a note under a project someone shared with you still works...
+    let garden = project(&app, &sam, json!({"title": "Garden"})).await;
+    share(&app, &sam, json!({"grantee_id": logan_id, "project_id": garden, "role": "editor"})).await;
+    let plan = app
+        .call("POST", "/api/v1/notes", Some(&logan), Some(json!({"title": "Beds", "project_ids": [garden]})))
+        .await;
+    assert_eq!(plan.status, StatusCode::CREATED, "{:?}", plan.body);
+    let plan_id = plan.body["note"]["id"].as_str().unwrap().to_string();
+    assert_eq!(
+        app.call("GET", &format!("/api/v1/notes/{plan_id}"), Some(&sam), None).await.status,
+        StatusCode::OK
+    );
+    // ...and stays with that project when a second "Garden" turns up.
+    let decoy = project(&app, &eve, json!({"title": "Garden"})).await;
+    share(&app, &eve, json!({"grantee_id": logan_id, "project_id": decoy, "role": "viewer"})).await;
+    let res = app
+        .call("PATCH", &format!("/api/v1/notes/{plan_id}"), Some(&logan), Some(json!({"body": "tomatoes"})))
+        .await;
+    assert_eq!(res.status, StatusCode::OK);
+    assert_eq!(
+        app.call("GET", &format!("/api/v1/notes/{plan_id}"), Some(&sam), None).await.status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        app.call("GET", &format!("/api/v1/notes/{plan_id}"), Some(&eve), None).await.status,
+        StatusCode::NOT_FOUND
+    );
+}

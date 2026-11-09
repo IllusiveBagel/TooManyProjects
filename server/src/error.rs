@@ -27,6 +27,8 @@ pub enum AppError {
     NotFound,
     #[error("{1}")]
     Conflict(&'static str, String),
+    #[error("{0}")]
+    TooManyRequests(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -49,6 +51,7 @@ impl IntoResponse for AppError {
             AppError::Forbidden(m) => (StatusCode::FORBIDDEN, "forbidden", m),
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found", "Not found.".to_string()),
             AppError::Conflict(code, m) => (StatusCode::CONFLICT, code, m),
+            AppError::TooManyRequests(m) => (StatusCode::TOO_MANY_REQUESTS, "too_many_attempts", m),
             AppError::Internal(e) => {
                 tracing::error!(error = ?e, "internal error");
                 (

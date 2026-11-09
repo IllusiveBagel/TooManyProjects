@@ -54,7 +54,17 @@ const MAX_CLIENTS: i64 = 500;
 /// reverse proxy passed on in `X-Forwarded-Proto`.
 pub fn base_url(state: &AppState, headers: &HeaderMap) -> String {
     let host = headers.get(header::HOST).and_then(|v| v.to_str().ok());
-    if let Some(public) = &state.config.public_url {
+    let proto = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|p| p.split(',').next())
+        .map(str::trim)
+        .filter(|p| *p == "https" || *p == "http");
+    // A request that came in over HTTPS (the app's own, or a proxy's) never
+    // gets sent back to a plain http:// public address.
+    let public =
+        state.config.public_url.as_ref().filter(|p| proto != Some("https") || p.starts_with("https://"));
+    if let Some(public) = public {
         let public_host = public.split_once("://").map(|(_, h)| h).unwrap_or(public);
         // A proxy that rewrote Host to a local address (Tailscale, some tunnels)
         // still means the public address.
@@ -70,14 +80,7 @@ pub fn base_url(state: &AppState, headers: &HeaderMap) -> String {
         }
     }
     let Some(host) = host else { return "http://localhost:8080".into() };
-    let proto = headers
-        .get("x-forwarded-proto")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|p| p.split(',').next())
-        .map(str::trim)
-        .filter(|p| *p == "https" || *p == "http")
-        .unwrap_or("http");
-    format!("{proto}://{host}")
+    format!("{}://{host}", proto.unwrap_or("http"))
 }
 
 /// Where an MCP client reads how to sign in, for the 401 from `/mcp`.

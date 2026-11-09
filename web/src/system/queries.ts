@@ -48,3 +48,46 @@ export function dismissVersion(version: string) {
     // Without storage the banner just comes back on the next visit.
   }
 }
+
+export type HttpsInfo = components["schemas"]["HttpsInfo"];
+
+const httpsKey = ["system", "https"] as const;
+
+/** Whether the server serves HTTPS itself, and what its certificate covers. */
+export function useHttpsInfo() {
+  return useQuery({ queryKey: httpsKey, queryFn: () => unwrap(api.GET("/https")), staleTime: 60_000 });
+}
+
+export function useAddHttpsHost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) => unwrap(api.POST("/https/hosts", { body: { host } })),
+    onSuccess: (info) => qc.setQueryData(httpsKey, info),
+  });
+}
+
+export function useRemoveHttpsHost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) => unwrap(api.DELETE("/https/hosts/{host}", { params: { path: { host } } })),
+    onSuccess: (info) => qc.setQueryData(httpsKey, info),
+  });
+}
+
+/**
+ * The address to give Claude Code: this page's own when it is already
+ * https, otherwise the same host on the server's HTTPS port.
+ */
+export function httpsOrigin(location: Pick<Location, "protocol" | "hostname" | "origin">, info: HttpsInfo | undefined): string | null {
+  if (location.protocol === "https:") return location.origin;
+  if (!info || info.mode === "off" || !info.port) return null;
+  const host = location.hostname.includes(":") ? `[${location.hostname}]` : location.hostname;
+  return `https://${host}${info.port === 443 ? "" : `:${info.port}`}`;
+}
+
+/** Whether the app's own certificate covers `hostname`. Unknown (own certificate, or off) counts as covered. */
+export function covers(info: HttpsInfo | undefined, hostname: string): boolean {
+  if (!info || info.mode !== "generated") return true;
+  const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return info.hosts.some((x) => x.host === h);
+}
