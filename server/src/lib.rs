@@ -24,6 +24,7 @@ pub mod sharing;
 pub mod tasks;
 pub mod themes;
 pub mod time;
+pub mod tls;
 pub mod tokens;
 pub mod updates;
 

@@ -1740,6 +1740,150 @@
         }
       }
     },
+    "/https": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Whether HTTPS is on, and what its certificate covers.",
+        "operationId": "https_info",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpsInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/https/certificate": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "The certificate authority to trust, as a PEM file. Public, like any\ncertificate, so a phone can fetch it before anyone signs in.",
+        "operationId": "certificate",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/x-pem-file": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/https/hosts": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Cover another address with the certificate. The owner only. Anyone who\nalready trusts the app's authority needn't do anything again.",
+        "operationId": "add_host",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddHostRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpsInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/https/hosts/{host}": {
+      "delete": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Stop covering an address added in Settings. The owner only.",
+        "operationId": "remove_host",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpsInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/invites": {
       "get": {
         "tags": [
@@ -4635,6 +4779,18 @@
           }
         }
       },
+      "AddHostRequest": {
+        "type": "object",
+        "required": [
+          "host"
+        ],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "A name such as `nas.local`, or an IP address such as `192.168.1.50`."
+          }
+        }
+      },
       "ApiToken": {
         "type": "object",
         "required": [
@@ -6016,6 +6172,66 @@
           },
           "version": {
             "type": "string"
+          }
+        }
+      },
+      "HttpsHost": {
+        "type": "object",
+        "required": [
+          "host",
+          "added"
+        ],
+        "properties": {
+          "added": {
+            "type": "boolean",
+            "description": "Added in Settings, so it can be removed there. The rest come from\nthe server's own addresses, `TMP_PUBLIC_URL` and `TMP_TLS_HOSTS`."
+          },
+          "host": {
+            "type": "string",
+            "description": "A name or IP address the certificate covers."
+          }
+        }
+      },
+      "HttpsInfo": {
+        "type": "object",
+        "required": [
+          "mode",
+          "hosts"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When the generated server certificate runs out. It renews itself."
+          },
+          "fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "SHA-256 of the certificate authority to trust, to compare after downloading."
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HttpsHost"
+            },
+            "description": "Addresses the generated certificate covers."
+          },
+          "mode": {
+            "type": "string",
+            "description": "`off`, `generated` (the app's own certificate) or `own` (`TMP_TLS_CERT`)."
+          },
+          "port": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The port HTTPS listens on inside the container.",
+            "minimum": 0
           }
         }
       },

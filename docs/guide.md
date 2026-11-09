@@ -205,7 +205,8 @@ if you let it, add to them.
   your server from the internet, so this needs an `https://` address it can
   reach; see [Put it online with HTTPS](#put-it-online-with-https).
 - **Connect Claude Code:** it can sign in the same way, and works on a home
-  network address too:
+  network address too. Signing in needs HTTPS: the server has its own, see
+  [HTTPS on your home network](#https-on-your-home-network).
 
   ```sh
   claude mcp add --transport http toomanyprojects https://your-host/mcp
@@ -251,12 +252,50 @@ if you let it, add to them.
 - **History:** anything changed through a connection or token shows as *via AI* in the
   project's activity and the task's history.
 
+## HTTPS on your home network
+
+Claude Code only signs in over HTTPS. The server provides it itself on port
+**8443**, with no proxy or tunnel: the first time it starts it makes a small
+certificate authority of its own (kept in `/data/tls`) and uses it to sign the
+certificate it serves. Each computer trusts that authority once; after that the
+certificate renews itself and can cover new addresses without anyone doing
+anything again.
+
+1. **Make sure the certificate covers the address you use.** Open
+   **Settings → HTTPS**. If it says the certificate doesn't cover the address
+   in your browser bar, press **Add** (owner only). Inside Docker the server
+   can't see your network's addresses, so add the name or IP you open it at,
+   such as `192.168.1.50` or `nas.local`. You can also list them up front with
+   `TMP_TLS_HOSTS: "192.168.1.50,nas.local"`.
+2. **On each computer that runs Claude Code**, download the certificate from
+   **Settings → HTTPS** and tell Claude Code to trust it with the line shown
+   there, which sets `NODE_EXTRA_CA_CERTS` to the downloaded file. Open a new
+   terminal afterwards.
+3. **Add the server** with the `https://…:8443/mcp` address from
+   **Settings → AI access**, then `/mcp` → **Authenticate** in Claude Code.
+
+The sign-in page opens in your browser, which warns about the certificate until
+you trust it there too (Mac: open the file in Keychain Access and choose
+*Always Trust*; Windows: *Install Certificate* → *Trusted Root Certification
+Authorities*), or you can continue past the warning.
+
+- **Your own certificate:** if you have one (for example from your own domain),
+  set `TMP_TLS_CERT` and `TMP_TLS_KEY` to the certificate (full chain) and key
+  files, mounted into the container. Nothing needs installing on other
+  computers.
+- **Turn it off** with `TMP_HTTPS: "off"`, or move it with
+  `TMP_HTTPS: "0.0.0.0:9443"`. Port 8080 keeps serving plain HTTP either way.
+- **Keep `/data/tls/ca-key.pem` private.** Anyone with it could make
+  certificates that computers trusting this authority would accept. It lives
+  in the data volume with everything else, readable only by the app.
+
 ## Put it online with HTTPS
 
 The Claude app (on the web, desktop and phone) connects to your server from
 Anthropic's cloud, not from your computer. So your server needs an address
 that works from anywhere on the internet, over HTTPS. If you only use Claude
-Code on your home network, you can skip this.
+Code on your home network, you can skip this: see
+[HTTPS on your home network](#https-on-your-home-network).
 
 You need two things:
 

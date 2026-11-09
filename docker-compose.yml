@@ -10,6 +10,9 @@ services:
       - no-new-privileges:true
     ports:
       - "8080:8080"
+      # HTTPS with the app's own certificate, for Claude Code on your network.
+      # See "HTTPS on your home network" in docs/guide.md.
+      - "8443:8443"
     environment:
       # The address people open the app at. Used for invite links, and turns on
       # secure cookies when it starts with https://. Connecting the Claude app
@@ -19,6 +22,12 @@ services:
       # The owner sees a banner when a new release is out. Uncomment to stop
       # the server asking GitHub, such as on an offline server.
       # TMP_UPDATE_CHECK: "off"
+      # Names or IPs you open the app at, for the HTTPS certificate. Can also
+      # be added later in Settings -> HTTPS.
+      # TMP_TLS_HOSTS: "192.168.1.50,nas.local"
+      # Serve your own certificate instead (mount the files into the container).
+      # TMP_TLS_CERT: "/certs/fullchain.pem"
+      # TMP_TLS_KEY: "/certs/privkey.pem"
     volumes:
       # Database, themes and (later) the notes vault. Back up this one folder.
       - tmp-data:/data

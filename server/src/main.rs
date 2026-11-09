@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use axum::http::{HeaderName, HeaderValue};
 use toomanyprojects::{
     AppState, Config, app, build_router, db, notes, themes::ThemeStore, updates::UpdateChecker,
 };
+use tower_http::set_header::SetRequestHeaderLayer;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -39,12 +41,14 @@ async fn main() -> anyhow::Result<()> {
     let bind = config.bind;
     let updates = UpdateChecker::from_config(&config);
     updates.spawn();
+    let tls = toomanyprojects::tls::Tls::start(&config).await.context("setting up HTTPS")?;
     let state = AppState {
         db,
         config: Arc::new(config),
         themes: Arc::new(themes),
         updates,
         logins: Default::default(),
+        tls,
     };
     // Pick up notes edited outside the app (another editor, a synced folder).
     // Polling, because file watching is unreliable on Docker volumes.
@@ -58,9 +62,28 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
+    let https = axum_server::Handle::new();
+    if let (Some(tls), Some(addr)) = (state.tls.clone(), state.config.https_bind) {
+        // Tell the app the request came in over HTTPS, as a proxy would, so
+        // sign-in addresses and the like start with https://. Overriding
+        // drops whatever a client sent.
+        let app = build_router(state.clone()).layer(SetRequestHeaderLayer::overriding(
+            HeaderName::from_static("x-forwarded-proto"),
+            HeaderValue::from_static("https"),
+        ));
+        let handle = https.clone();
+        let server = axum_server::bind_rustls(addr, tls.rustls.clone()).handle(handle);
+        tracing::info!(%addr, "listening for HTTPS");
+        tokio::spawn(async move {
+            if let Err(e) = server.serve(app.into_make_service()).await {
+                tracing::error!(error = %e, %addr, "HTTPS stopped");
+            }
+        });
+    }
     let listener = tokio::net::TcpListener::bind(bind).await.with_context(|| format!("binding {bind}"))?;
     tracing::info!(%bind, "listening");
     axum::serve(listener, build_router(state)).with_graceful_shutdown(shutdown()).await?;
+    https.graceful_shutdown(Some(std::time::Duration::from_secs(5)));
     Ok(())
 }
 

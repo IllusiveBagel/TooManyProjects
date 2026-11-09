@@ -162,6 +162,9 @@ in a clone of this repo.
 | `TMP_SESSION_DAYS` | `30` | How long a sign-in lasts. |
 | `TMP_DATA_DIR` | `/data` in Docker | Where the database, themes and notes live. |
 | `TMP_BIND` | `0.0.0.0:8080` | Address and port to listen on. |
+| `TMP_HTTPS` | `0.0.0.0:8443` | Where the app serves HTTPS with its own certificate, for Claude Code on your network (see [HTTPS on your home network](docs/guide.md#https-on-your-home-network)). `off` turns it off. |
+| `TMP_TLS_HOSTS` | unset | Extra names or IPs the app's certificate covers, comma separated, such as `192.168.1.50,nas.local`. More can be added in Settings → HTTPS. |
+| `TMP_TLS_CERT`, `TMP_TLS_KEY` | unset | Serve your own certificate (full chain) and key instead of the app's. |
 | `TMP_UPDATE_CHECK` | `on` | Set to `off` to stop the server asking GitHub for new releases, such as on an offline server. |
 | `RUST_LOG` | `toomanyprojects=info` | Log level. |
 

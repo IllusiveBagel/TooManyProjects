@@ -19,6 +19,13 @@ pub struct Config {
     pub update_check: bool,
     /// Where to ask; only changed for tests or a fork (`TMP_UPDATE_CHECK_URL`).
     pub update_check_url: String,
+    /// Where HTTPS listens (`TMP_HTTPS`: host:port, or `off`). On by default.
+    pub https_bind: Option<SocketAddr>,
+    /// A certificate and key to serve instead of the app's own (`TMP_TLS_CERT`, `TMP_TLS_KEY`).
+    pub tls_cert: Option<PathBuf>,
+    pub tls_key: Option<PathBuf>,
+    /// More names or addresses for the app's own certificate (`TMP_TLS_HOSTS`, comma separated).
+    pub tls_hosts: Vec<String>,
 }
 
 impl Config {
@@ -51,6 +58,24 @@ impl Config {
             .ok()
             .filter(|u| !u.is_empty())
             .unwrap_or_else(|| crate::updates::DEFAULT_RELEASES_URL.into());
+        let https_bind = match env::var("TMP_HTTPS").ok().map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            Some("0" | "false" | "no" | "off") => None,
+            None | Some("" | "1" | "true" | "yes" | "on") => Some("0.0.0.0:8443".parse().unwrap()),
+            Some(addr) => Some(addr.parse().context("TMP_HTTPS must be host:port or off")?),
+        };
+        let path = |name: &str| env::var(name).ok().filter(|v| !v.trim().is_empty()).map(PathBuf::from);
+        let (tls_cert, tls_key) = (path("TMP_TLS_CERT"), path("TMP_TLS_KEY"));
+        anyhow::ensure!(
+            tls_cert.is_some() == tls_key.is_some(),
+            "set both TMP_TLS_CERT and TMP_TLS_KEY, or neither"
+        );
+        let tls_hosts = env::var("TMP_TLS_HOSTS")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|h| !h.is_empty())
+            .map(String::from)
+            .collect();
         Ok(Self {
             data_dir,
             bind,
@@ -60,6 +85,10 @@ impl Config {
             session_days,
             update_check,
             update_check_url,
+            https_bind,
+            tls_cert,
+            tls_key,
+            tls_hosts,
         })
     }
 
@@ -75,6 +104,10 @@ impl Config {
             // Tests never reach the network; the update tests point the checker at a local server.
             update_check: false,
             update_check_url: crate::updates::DEFAULT_RELEASES_URL.into(),
+            https_bind: None,
+            tls_cert: None,
+            tls_key: None,
+            tls_hosts: vec![],
         }
     }
 }

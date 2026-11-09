@@ -41,7 +41,7 @@ ENV TMP_DATA_DIR=/data \
     TMP_STATIC_DIR=/app/web \
     TMP_BIND=0.0.0.0:8080
 VOLUME /data
-EXPOSE 8080
+EXPOSE 8080 8443
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD ["/app/toomanyprojects", "healthcheck"]
 ENTRYPOINT ["/app/toomanyprojects"]
 CMD ["serve"]

@@ -42,6 +42,8 @@ pub struct AppState {
     pub updates: Arc<UpdateChecker>,
     /// Wrong-password counts, to slow down guessing.
     pub logins: Arc<LoginLimiter>,
+    /// HTTPS served by the app itself, when on.
+    pub tls: Option<Arc<crate::tls::Tls>>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -75,6 +77,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(notes::router())
         .merge(sharing::router())
         .merge(tokens::router())
+        .merge(crate::tls::router())
         .merge(oauth::api_router())
         .merge(updates::router())
         .split_for_parts();
@@ -104,6 +107,18 @@ async fn same_origin(req: Request, next: Next) -> Response {
                 return AppError::Forbidden("Cross-site request refused.".into()).into_response();
             }
         }
+    }
+    next.run(req).await
+}
+
+/// HTTP/2 (which browsers use over HTTPS) carries the host in the request
+/// line instead of a `Host` header. Copy it across so everything that reads
+/// `Host` sees it either way.
+async fn host_header(mut req: Request, next: Next) -> Response {
+    if !req.headers().contains_key(header::HOST)
+        && let Some(value) = req.uri().authority().and_then(|a| HeaderValue::from_str(a.as_str()).ok())
+    {
+        req.headers_mut().insert(header::HOST, value);
     }
     next.run(req).await
 }
@@ -153,6 +168,7 @@ pub fn build_router(state: AppState) -> Router {
             HeaderValue::from_static("DENY"),
         ))
         .layer(CompressionLayer::new())
+        .layer(middleware::from_fn(host_header))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

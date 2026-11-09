@@ -462,6 +462,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/https": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether HTTPS is on, and what its certificate covers. */
+        get: operations["https_info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/https/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The certificate authority to trust, as a PEM file. Public, like any
+         *     certificate, so a phone can fetch it before anyone signs in.
+         */
+        get: operations["certificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/https/hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cover another address with the certificate. The owner only. Anyone who
+         *     already trusts the app's authority needn't do anything again.
+         */
+        post: operations["add_host"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/https/hosts/{host}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop covering an address added in Settings. The owner only. */
+        delete: operations["remove_host"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/invites": {
         parameters: {
             query?: never;
@@ -1292,6 +1366,10 @@ export interface components {
             /** @description `web` or `ai`. */
             via: string;
         };
+        AddHostRequest: {
+            /** @description A name such as `nas.local`, or an IP address such as `192.168.1.50`. */
+            host: string;
+        };
         ApiToken: {
             created_at: string;
             id: string;
@@ -1709,6 +1787,30 @@ export interface components {
         Health: {
             status: string;
             version: string;
+        };
+        HttpsHost: {
+            /**
+             * @description Added in Settings, so it can be removed there. The rest come from
+             *     the server's own addresses, `TMP_PUBLIC_URL` and `TMP_TLS_HOSTS`.
+             */
+            added: boolean;
+            /** @description A name or IP address the certificate covers. */
+            host: string;
+        };
+        HttpsInfo: {
+            /** @description When the generated server certificate runs out. It renews itself. */
+            expires_at?: string | null;
+            /** @description SHA-256 of the certificate authority to trust, to compare after downloading. */
+            fingerprint?: string | null;
+            /** @description Addresses the generated certificate covers. */
+            hosts: components["schemas"]["HttpsHost"][];
+            /** @description `off`, `generated` (the app's own certificate) or `own` (`TMP_TLS_CERT`). */
+            mode: string;
+            /**
+             * Format: int32
+             * @description The port HTTPS listens on inside the container.
+             */
+            port?: number | null;
         };
         ImportResult: {
             /** @description Other files kept, such as images and PDFs. */
@@ -3522,6 +3624,120 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    https_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpsInfo"];
+                };
+            };
+        };
+    };
+    certificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-pem-file": string;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    add_host: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddHostRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpsInfo"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_host: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpsInfo"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };
