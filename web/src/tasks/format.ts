@@ -129,6 +129,10 @@ export function activityText(a: Pick<ActivityItem, "kind" | "payload">): string 
       return "edited the project";
     case "link.created":
       return `drew a ${p.kind} link`;
+    case "session.planned":
+      return `planned a session for ${p.when}`;
+    case "session.joined":
+      return `is joining the session on ${p.when}`;
     case "link.deleted":
       return `removed a ${p.kind} link`;
     default:

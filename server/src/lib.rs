@@ -3,6 +3,7 @@
 pub mod app;
 pub mod auth;
 pub mod board;
+pub mod calendar;
 pub mod canvas;
 pub mod comments;
 pub mod config;

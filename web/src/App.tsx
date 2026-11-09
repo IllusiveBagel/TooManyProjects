@@ -4,6 +4,7 @@ import { MeContext, useAuthStatus } from "./auth/queries";
 import { AppShell } from "./components/AppShell";
 import { AuthLayout } from "./components/AuthLayout";
 import { Button } from "./components/ui";
+import { CalendarPage } from "./pages/CalendarPage";
 import { CanvasPage } from "./pages/CanvasPage";
 import { GlobalBoardPage } from "./pages/GlobalBoardPage";
 import { ProjectBoardPage } from "./pages/ProjectBoardPage";
@@ -46,6 +47,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <CanvasPage /> },
       { path: "board", element: <GlobalBoardPage /> },
+      { path: "calendar", element: <CalendarPage /> },
       {
         path: "projects/:id",
         element: <ProjectPage />,

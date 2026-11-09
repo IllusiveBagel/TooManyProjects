@@ -199,6 +199,424 @@
         }
       }
     },
+    "/calendar": {
+      "get": {
+        "tags": [
+          "calendar"
+        ],
+        "summary": "Your calendar between two times: sessions on every project you can see,\nyour own busy time, and who's joining. Repeats come back once per week.",
+        "operationId": "list_calendar",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of the range, RFC 3339.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of the range, RFC 3339. At most 62 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "description": "Only this project's sessions.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "description": "Only what you put in or are joining.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Occurrence"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events": {
+      "post": {
+        "tags": [
+          "calendar"
+        ],
+        "summary": "Plan a session on a project, or block out busy time.",
+        "operationId": "create_event",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events/{id}": {
+      "get": {
+        "tags": [
+          "calendar"
+        ],
+        "summary": "One event, as you see it.",
+        "operationId": "get_event",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "calendar"
+        ],
+        "summary": "Delete an event, or with `occurrence`, take one week out of a repeat.",
+        "operationId": "delete_event",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "occurrence",
+            "in": "query",
+            "description": "On a repeating event, take out only the week starting on this local\ndate (`YYYY-MM-DD`). Leave out to delete every week.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "calendar"
+        ],
+        "summary": "Change an event. On a repeat, every week changes.",
+        "operationId": "update_event",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events/{id}/joins/{occurrence}": {
+      "put": {
+        "tags": [
+          "calendar"
+        ],
+        "summary": "Say you'll join a session that week. Anyone who can see the project can.",
+        "operationId": "join_session",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "occurrence",
+            "in": "path",
+            "description": "Local date, YYYY-MM-DD",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Occurrence"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "calendar"
+        ],
+        "summary": "Take back saying you'll join.",
+        "operationId": "leave_session",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "occurrence",
+            "in": "path",
+            "description": "Local date, YYYY-MM-DD",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Occurrence"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/canvases/home": {
       "get": {
         "tags": [
@@ -4082,6 +4500,103 @@
           }
         }
       },
+      "CalendarEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "user_name",
+          "kind",
+          "start_local",
+          "minutes",
+          "tz",
+          "repeat_days",
+          "via",
+          "created_at",
+          "updated_at",
+          "can_edit"
+        ],
+        "properties": {
+          "can_edit": {
+            "type": "boolean",
+            "description": "You may change or delete it."
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`session` (time on a project) or `busy` (only you see these)."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "project_color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set for sessions."
+          },
+          "project_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repeat_days": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Repeats weekly on these days: bit 0 is Monday, bit 6 Sunday. 0 = once."
+          },
+          "repeat_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last day a repeat may start on, local `YYYY-MM-DD`."
+          },
+          "start_local": {
+            "type": "string",
+            "description": "First occurrence, local wall-clock time: `2026-11-14T13:00`."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What the time is for: \"Rear brakes\", \"Work\"."
+          },
+          "tz": {
+            "type": "string",
+            "description": "IANA time zone, such as `Europe/London`."
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Who put it in the calendar."
+          },
+          "user_name": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "description": "`web` or `ai`."
+          }
+        }
+      },
       "Canvas": {
         "type": "object",
         "required": [
@@ -4466,6 +4981,59 @@
         "properties": {
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "CreateEventRequest": {
+        "type": "object",
+        "required": [
+          "kind",
+          "start_local",
+          "minutes",
+          "tz"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "`session` or `busy`."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "15 to 1440."
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Required for a session; not allowed for busy time."
+          },
+          "repeat_days": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Weekly repeat days, bit 0 Monday to bit 6 Sunday. Default 0 (once)."
+          },
+          "repeat_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Last day a repeat may start on, `YYYY-MM-DD`."
+          },
+          "start_local": {
+            "type": "string",
+            "description": "Local wall-clock start, `2026-11-14T13:00`."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tz": {
+            "type": "string",
+            "description": "IANA time zone, such as `Europe/London`."
           }
         }
       },
@@ -5266,6 +5834,21 @@
           }
         }
       },
+      "Joiner": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
       "Label": {
         "type": "object",
         "required": [
@@ -5650,6 +6233,50 @@
           },
           "updated_at": {
             "type": "string"
+          }
+        }
+      },
+      "Occurrence": {
+        "type": "object",
+        "description": "One time an event happens.",
+        "required": [
+          "event",
+          "occurrence",
+          "start_at",
+          "end_at",
+          "joiners",
+          "joined",
+          "can_join"
+        ],
+        "properties": {
+          "can_join": {
+            "type": "boolean",
+            "description": "You can say you'll join: a session someone else planned."
+          },
+          "end_at": {
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/CalendarEvent"
+          },
+          "joined": {
+            "type": "boolean",
+            "description": "You are one of the joiners."
+          },
+          "joiners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Joiner"
+            },
+            "description": "People who said they'll join (sessions only), in the order they did."
+          },
+          "occurrence": {
+            "type": "string",
+            "description": "The local date it starts on, `YYYY-MM-DD`. Joins and skips use it."
+          },
+          "start_at": {
+            "type": "string",
+            "description": "UTC, RFC 3339."
           }
         }
       },
@@ -6498,6 +7125,57 @@
           }
         }
       },
+      "UpdateEventRequest": {
+        "type": "object",
+        "description": "Fields left out stay as they are; `null` clears `title` or `repeat_until`.\nChanges to a repeating event apply to every week.",
+        "properties": {
+          "minutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Move a session to another project you can edit."
+          },
+          "repeat_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "repeat_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_local": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tz": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "UpdateGroupRequest": {
         "type": "object",
         "properties": {
@@ -7097,6 +7775,10 @@
     {
       "name": "databases",
       "description": "Project databases: columns, rows, views, import and export"
+    },
+    {
+      "name": "calendar",
+      "description": "Work sessions, busy time and who is joining"
     },
     {
       "name": "tokens",

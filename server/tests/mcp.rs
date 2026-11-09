@@ -197,6 +197,8 @@ async fn reads_projects_notes_and_briefings() {
         "get_task",
         "add_task_comment",
         "link_note_to_task",
+        "get_calendar",
+        "plan_time",
     ] {
         assert!(names.contains(&n), "missing {n}: {names:?}");
     }
@@ -551,4 +553,61 @@ async fn list_projects_shows_canvas_groups() {
     assert!(cars.starts_with("1 projects") && cars.contains("Beetle") && !cars.contains("Amp kit"), "{cars}");
     let (_, none) = tool(&app, &token, "list_projects", json!({"group": "Garden"})).await;
     assert!(none.contains("No group is called") && none.contains("Electronics"), "{none}");
+}
+
+#[tokio::test]
+async fn the_ai_reads_and_plans_the_calendar() {
+    let app = TestApp::new().await;
+    let cookie = app.setup_owner().await;
+    app.call("POST", "/api/v1/projects", Some(&cookie), Some(json!({"title": "Beetle restoration"}))).await;
+    let read = make_token(&app, &cookie, "read").await;
+    let write = make_token(&app, &cookie, "write").await;
+    initialize(&app, &write).await;
+
+    let (err, text) = tool(
+        &app,
+        &read,
+        "plan_time",
+        json!({"project": "Beetle restoration", "start": "2026-11-14T13:00", "end": "17:00"}),
+    )
+    .await;
+    assert!(err && text.contains("read-only"), "{text}");
+
+    // Saturdays from now on, plus work on weekdays.
+    let (err, text) = tool(
+        &app,
+        &write,
+        "plan_time",
+        json!({"project": "beetle restoration", "title": "Rear brakes", "start": "2026-11-14T13:00",
+               "end": "17:00", "repeat": "Sat", "tz": "Europe/London"}),
+    )
+    .await;
+    assert!(!err && text.contains("4h") && text.contains("repeating Sat"), "{text}");
+    let (err, text) = tool(
+        &app,
+        &write,
+        "plan_time",
+        json!({"kind": "busy", "title": "Work", "start": "2026-11-09T09:00", "minutes": 480, "repeat": "weekdays"}),
+    )
+    .await;
+    assert!(!err && text.contains("Europe/London"), "the zone carries over: {text}");
+    let (err, text) =
+        tool(&app, &write, "plan_time", json!({"start": "2026-11-14T13:00", "minutes": 60})).await;
+    assert!(err && text.contains("project"), "{text}");
+
+    let (err, cal) = tool(&app, &read, "get_calendar", json!({"from": "2026-11-09"})).await;
+    assert!(!err, "{cal}");
+    assert!(
+        cal.contains("Sat 14 Nov 13:00–17:00 (4h, repeats Sat) · Beetle restoration: Rear brakes"),
+        "{cal}"
+    );
+    assert!(
+        cal.contains("Busy: Work")
+            && cal.contains("Beetle restoration: 4h")
+            && cal.contains("Busy (only the user sees this): 40h"),
+        "{cal}"
+    );
+
+    let (_, brief) = tool(&app, &read, "get_project_context", json!({"project": "Beetle restoration"})).await;
+    assert!(brief.contains("## Coming up") && brief.contains("Rear brakes"), "{brief}");
 }
