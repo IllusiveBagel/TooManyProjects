@@ -5,7 +5,7 @@ how releases are made.
 
 ## Run it locally
 
-You need Rust (stable) and Node 22.
+You need Rust (stable) and Node 24.
 
 ```sh
 # Terminal 1: API on :8080, data in server/data
