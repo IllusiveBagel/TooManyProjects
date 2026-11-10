@@ -411,19 +411,23 @@ if you let it, add to them.
   `get_note`, `get_task` (a task with its log, linked notes, photos and history),
   `list_attachments` (a project's or task's photos and files) and
   `get_attachment` (shows Claude the photo itself, or a small text file),
+  `weekly_review` (the week across every project: finished, overdue, due
+  next, blocked and stuck tasks, and planned time),
   `query_database` (a saved view or a search as a markdown table, with
   totals), `get_shopping_list` (parts to buy across projects, by supplier),
   and with read-write access `mark_parts` (move parts to ordered, shipped,
   arrived or fitted), `quick_add` (a line into a project or
   the Inbox), `create_task`, `update_task` (move,
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
-  `link_note_to_task`, `add_note` (optionally linked to a task), `append_to_note`,
+  `link_note_to_task`, `attach_file` (a file Claude made, such as a CSV or
+  cut list, onto a project, task or note), `add_note` (optionally linked to a task), `append_to_note`,
   `add_row` (values by column name), `spawn_project`, `create_project`,
   `update_project` (title, description, status, tags), `update_note` (a new
   title or body, or one `##` section replaced), `add_column` and
   `update_column` (rename, recategorise or move a board column) and
   `plan_time` (a session or busy time, optionally repeating). `create_task`
-  can also log work that is already finished, with `done` and `completed_on`. `get_calendar` reads a stretch
+  can also log work that is already finished, with `done` and `completed_on`,
+  and `update_task` takes `completed_on` to finish a task on the day it was really done. `get_calendar` reads a stretch
   of the calendar (a week by default) with who's joining and hours per
   project; busy time shows only for the person connected. Projects and notes
   can be named by title or id.
@@ -431,7 +435,9 @@ if you let it, add to them.
   (`tmp://notes/{id}`) is a resource, and there are `project_briefing` and
   `weekly_review` prompts. Project briefings list the next two weeks of
   sessions, and the weekly review includes what was planned last week and
-  this week.
+  this week, counts a task as stuck when it is in progress with nothing
+  logged for 7 days, and ends with suggested changes for you to approve. The
+  same review is a `weekly_review` tool, for apps that don't show prompts.
 - **History:** anything changed through a connection or token shows as *via AI* in the
   project's activity and the task's history.
 
