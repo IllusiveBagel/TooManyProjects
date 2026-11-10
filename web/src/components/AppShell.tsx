@@ -153,7 +153,13 @@ export function AppShell() {
             end={t.end}
             className={({ isActive }) =>
               // A project's pages open from the canvas, so they keep the Canvas tab lit.
-              tabClass({ isActive: isActive || (t.to === "/" && pathname.startsWith("/projects/")) })
+              // The Shopping list opens from Today, so it keeps Today lit.
+              tabClass({
+                isActive:
+                  isActive ||
+                  (t.to === "/" && pathname.startsWith("/projects/")) ||
+                  (t.to === "/today" && pathname.startsWith("/shopping")),
+              })
             }
           >
             <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">

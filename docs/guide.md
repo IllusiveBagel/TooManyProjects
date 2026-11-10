@@ -11,6 +11,7 @@ How each part of **too many projects** works. For installing it, see the
 - [Notes](#notes)
 - [Sharing](#sharing)
 - [Project databases](#project-databases)
+- [Parts and the Shopping list](#parts-and-the-shopping-list)
 - [AI access (MCP)](#ai-access-mcp)
 - [Put it online with HTTPS](#put-it-online-with-https)
 - [Theming](#theming)
@@ -294,6 +295,40 @@ an episode tracker or a budget.
 - **Limits:** 50 databases a project, 60 columns, 20 views and 10,000 rows a
   database.
 
+## Parts and the Shopping list
+
+For builds that need things bought: one Parts database per project, and one
+Shopping list across all of them.
+
+- **Make one:** in a project's **Data** tab, **+ Database → Parts**. It comes
+  with Item, Qty, Unit cost, Supplier, Link, Status, For task, Ordered on,
+  Arrived on and Notes, and views All, By status (a board), To buy and
+  Gallery. Status runs **Need → Ordered → Shipped → Arrived → Fitted**, and a
+  new part starts in Need. It's an ordinary database afterwards: rename
+  columns, add your own, add views. The Shopping list reads Qty, Unit cost,
+  Supplier, Link and Status, so those keep their type (renaming is fine).
+- **Shopping list** (`/shopping`, linked from Today when there's something to
+  buy): every part in Need on projects you can change, grouped by supplier
+  with a total each; suppliers match ignoring case. Tick parts and press
+  **Mark ordered** to move them together; Ordered on is set to today. **On the
+  way** lists ordered and shipped parts (**Mark shipped**, **Mark arrived**),
+  and **Arrived this month** what came in (**Mark fitted**). **Copy links**
+  copies a supplier's product links, one per line. A part's name opens its row.
+- **Dates fill themselves:** moving a part to Ordered (or further) fills
+  Ordered on, and to Arrived or Fitted fills Arrived on, unless you set them.
+- **Tasks that wait on parts:** link a part to a task with **For task**. The
+  task's card shows *Waiting on 2 parts*, then *Parts in* once they've all
+  arrived, and the task's log gets a "Parts arrived" comment. The card doesn't
+  move columns by itself.
+- **Spend:** a project's Overview (and the Parts database's Data tab) shows
+  what's spent so far (ordered, shipped, arrived, fitted) and what's still to
+  buy, plus a family total with the projects spawned from it, and the tasks
+  still waiting on parts.
+- **Currency:** one for the whole install, set by the owner in **Settings →
+  Money** (GBP to start). Changing it relabels prices; it doesn't convert them.
+- **With Claude:** `get_shopping_list` reads the list, `mark_parts` moves parts
+  along, and `add_row` adds a part.
+
 ## AI access (MCP)
 
 The server speaks the [Model Context Protocol](https://modelcontextprotocol.io)
@@ -343,7 +378,9 @@ if you let it, add to them.
   `list_attachments` (a project's or task's photos and files) and
   `get_attachment` (shows Claude the photo itself, or a small text file),
   `query_database` (a saved view or a search as a markdown table, with
-  totals), and with read-write access `quick_add` (a line into a project or
+  totals), `get_shopping_list` (parts to buy across projects, by supplier),
+  and with read-write access `mark_parts` (move parts to ordered, shipped,
+  arrived or fitted), `quick_add` (a line into a project or
   the Inbox), `create_task`, `update_task` (move,
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
   `link_note_to_task`, `add_note` (optionally linked to a task), `append_to_note`,

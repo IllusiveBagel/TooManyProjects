@@ -2,6 +2,7 @@ import type { Task } from "../api/client";
 import { dueLabel } from "../canvas/format";
 import { initials } from "../sharing/format";
 import { projectColor } from "../theme/resolve";
+import { partsBadge } from "../parts/format";
 import { PRIORITY_LABEL, taskRef } from "./format";
 
 /** A card on a board. `showProject` adds the project's colour strip and name. */
@@ -18,6 +19,7 @@ export function TaskCard({
 }) {
   const done = task.category === "done";
   const hot = task.priority === "urgent" || task.priority === "high";
+  const parts = done ? null : partsBadge(task);
   return (
     <div
       role="button"
@@ -42,6 +44,15 @@ export function TaskCard({
               {l.name}
             </span>
           ))}
+        </span>
+      )}
+      {parts && (
+        <span
+          className="label-mono border-rule self-start rounded-sm border-current px-1.5 py-0.5 text-[10px]"
+          style={{ color: task.parts_waiting > 0 ? "var(--tmp-slot-6)" : "var(--tmp-done)" }}
+          title={task.parts_waiting > 0 ? `${task.parts_waiting} of ${task.parts_total} parts not arrived yet` : "Every part for this task has arrived"}
+        >
+          {parts}
         </span>
       )}
       <span className="label-mono text-text-quiet flex items-center gap-3 text-[10px]">

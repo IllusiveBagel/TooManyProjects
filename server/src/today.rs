@@ -64,6 +64,8 @@ pub struct Today {
     pub quiet: Vec<QuietProject>,
     /// Quick captures not filed under a project yet, newest first.
     pub inbox: Vec<NoteSummary>,
+    /// Parts to buy across your projects, for the Shopping list link.
+    pub shopping: crate::parts::ShoppingSummary,
 }
 
 /// What to touch next, across every project.
@@ -114,6 +116,7 @@ pub async fn build(state: &AppState, user: &User, tz: Option<&str>) -> AppResult
     .bind(&cutoff)
     .fetch_all(&mut *conn)
     .await?;
+    let shopping = crate::parts::summary(&mut conn, &user.id).await?;
     drop(conn);
 
     let Json(inbox) = notes::list_notes(
@@ -130,5 +133,14 @@ pub async fn build(state: &AppState, user: &User, tz: Option<&str>) -> AppResult
     )
     .await?;
     let inbox = inbox.into_iter().filter(|n| n.projects.is_empty()).take(20).collect();
-    Ok(Today { date: local_today.format("%Y-%m-%d").to_string(), now, blocked, due, sessions, quiet, inbox })
+    Ok(Today {
+        date: local_today.format("%Y-%m-%d").to_string(),
+        now,
+        blocked,
+        due,
+        sessions,
+        quiet,
+        inbox,
+        shopping,
+    })
 }

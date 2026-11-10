@@ -66,15 +66,18 @@ export function useTaskRows(taskId: string | undefined) {
 function useRefresh() {
   const qc = useQueryClient();
   return () => {
-    for (const key of [["databases"], ["database"], ["rows"], ["task-rows"]]) qc.invalidateQueries({ queryKey: key });
+    // Parts databases also feed the Shopping list, spend and task cards.
+    for (const key of [["databases"], ["database"], ["rows"], ["task-rows"], ["shopping"], ["spend"], ["tasks"], ["task"], ["today"]]) {
+      qc.invalidateQueries({ queryKey: key });
+    }
   };
 }
 
 export function useCreateDatabase(projectId: string) {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: (name: string) =>
-      unwrap(api.POST("/projects/{id}/databases", { params: { path: { id: projectId } }, body: { name } })),
+    mutationFn: ({ name, template }: { name: string; template?: "parts" }) =>
+      unwrap(api.POST("/projects/{id}/databases", { params: { path: { id: projectId } }, body: { name, template } })),
     onSuccess: refresh,
   });
 }
