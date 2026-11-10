@@ -560,6 +560,16 @@ pub fn today(t: &crate::today::Today) -> String {
                 writeln!(out, "- **{}** · quiet {} days · {tasks} · id `{}`", p.title, p.quiet_days, p.id);
         }
     }
+    if t.shopping.need_count > 0 {
+        let _ = write!(
+            out,
+            "\n## Shopping list\n\n{} part{} to buy, {:.2} {} in all (get_shopping_list for the list).\n",
+            t.shopping.need_count,
+            if t.shopping.need_count == 1 { "" } else { "s" },
+            t.shopping.to_buy,
+            t.shopping.currency
+        );
+    }
     if !t.inbox.is_empty() {
         let _ = write!(out, "\n## Inbox, not filed yet ({})\n\n", t.inbox.len());
         for n in &t.inbox {
@@ -575,6 +585,82 @@ pub fn today(t: &crate::today::Today) -> String {
         && t.inbox.is_empty()
     {
         out.push_str("\nNothing in progress, blocked, due or waiting in the Inbox.\n");
+    }
+    out
+}
+
+fn part_line(p: &crate::parts::Part, currency: &str) -> String {
+    let mut line = format!("- {} · ×{}", p.item, trim_num(p.qty));
+    if let Some(c) = p.unit_cost {
+        let _ = write!(line, " · {c:.2} each, {:.2} {currency}", p.total);
+    }
+    let _ = write!(line, " · {}", p.project_title);
+    if !p.tasks.is_empty() {
+        let refs: Vec<String> = p.tasks.iter().map(|t| format!("T-{} {}", t.number, t.title)).collect();
+        let _ = write!(line, " · for {}", refs.join(", "));
+    }
+    if let Some(d) = &p.ordered_on
+        && p.stage != "need"
+    {
+        let _ = write!(line, " · ordered {d}");
+    }
+    if let Some(d) = &p.arrived_on {
+        let _ = write!(line, " · arrived {d}");
+    }
+    if let Some(l) = &p.link {
+        let _ = write!(line, " · {l}");
+    }
+    let _ = write!(line, " · row `{}`", p.row_id);
+    line
+}
+
+fn trim_num(n: f64) -> String {
+    if n.fract() == 0.0 { format!("{n:.0}") } else { format!("{n}") }
+}
+
+/// The Shopping list as markdown, grouped by supplier.
+pub fn shopping(list: &crate::parts::ShoppingList) -> String {
+    let c = &list.currency;
+    let mut out = format!(
+        "# Shopping list ({})\n\nTo buy: {:.2} {c} across {} project{}. On the way: {:.2} {c}.\n",
+        list.date,
+        list.to_buy,
+        list.project_count,
+        if list.project_count == 1 { "" } else { "s" },
+        list.on_the_way_total
+    );
+    let groups = |out: &mut String, title: &str, groups: &[crate::parts::SupplierGroup]| {
+        if groups.is_empty() {
+            return;
+        }
+        let _ = write!(out, "\n## {title}\n");
+        for g in groups {
+            let name = if g.supplier.is_empty() { "No supplier" } else { g.supplier.as_str() };
+            let _ = write!(
+                out,
+                "\n### {name} · {} part{} · {:.2} {c}\n\n",
+                g.parts.len(),
+                if g.parts.len() == 1 { "" } else { "s" },
+                g.total
+            );
+            for p in &g.parts {
+                let stage = if p.stage == "shipped" { " · shipped" } else { "" };
+                let _ = writeln!(out, "{}{stage}", part_line(p, c));
+            }
+        }
+    };
+    groups(&mut out, "Need", &list.need);
+    groups(&mut out, "On the way (ordered or shipped)", &list.on_the_way);
+    if !list.arrived.is_empty() {
+        let _ = write!(out, "\n## Arrived this month ({})\n\n", list.arrived.len());
+        for p in &list.arrived {
+            let _ = writeln!(out, "{}", part_line(p, c));
+        }
+    }
+    if list.need.is_empty() && list.on_the_way.is_empty() && list.arrived.is_empty() {
+        out.push_str(
+            "\nNothing to buy. Parts live in a project's Parts database (Data tab → + Database → Parts).\n",
+        );
     }
     out
 }

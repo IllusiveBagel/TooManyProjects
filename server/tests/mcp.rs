@@ -209,6 +209,8 @@ async fn reads_projects_notes_and_briefings() {
         "plan_time",
         "get_today",
         "quick_add",
+        "get_shopping_list",
+        "mark_parts",
     ] {
         assert!(names.contains(&n), "missing {n}: {names:?}");
     }
@@ -815,4 +817,76 @@ async fn today_and_quick_add_tools() {
         dash["activity"].as_array().unwrap().iter().any(|a| a["kind"] == "task.created" && a["via"] == "ai"),
         "{dash}"
     );
+}
+
+#[tokio::test]
+async fn shopping_list_and_mark_parts() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let call = |method: &'static str, path: String, body: Option<Value>| {
+        let app = &app;
+        let me = me.clone();
+        async move {
+            let res = app.call(method, &format!("/api/v1{path}"), Some(&me), body).await;
+            assert!(res.status.is_success(), "{path}: {:?}", res.body);
+            res.body
+        }
+    };
+    let z80 = call("POST", "/projects".into(), Some(json!({"title": "Z80 Computer"}))).await;
+    let z80 = z80["id"].as_str().unwrap().to_string();
+    let task =
+        call("POST", format!("/projects/{z80}/tasks"), Some(json!({"title": "Solder the board"}))).await;
+    let task = task["id"].as_str().unwrap().to_string();
+    let db = call(
+        "POST",
+        format!("/projects/{z80}/databases"),
+        Some(json!({"name": "Parts", "template": "parts"})),
+    )
+    .await;
+    let col = |role: &str| {
+        db["columns"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["role"] == role || (role == "item" && c["is_title"] == true))
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let row = call(
+        "POST",
+        format!("/databases/{}/rows", db["database"]["id"].as_str().unwrap()),
+        Some(json!({
+            "values": {(col("item")): "Z80 CPU", (col("qty")): 2, (col("unit_cost")): 6.4, (col("supplier")): "LCSC"},
+            "relations": {(col("for_task")): [{"kind": "task", "id": task}]}
+        })),
+    )
+    .await;
+    let row = row["id"].as_str().unwrap().to_string();
+
+    let read = make_token(&app, &me, "read").await;
+    let write = make_token(&app, &me, "write").await;
+    let (err, text) = tool(&app, &read, "get_shopping_list", json!({"tz": "UTC"})).await;
+    assert!(!err, "{text}");
+    for want in
+        ["# Shopping list", "### LCSC · 1 part · 12.80 GBP", "Z80 CPU · ×2", "T-1 Solder the board", &row]
+    {
+        assert!(text.contains(want), "missing {want}: {text}");
+    }
+    let (_, today) = tool(&app, &read, "get_today", json!({"tz": "UTC"})).await;
+    assert!(today.contains("1 part to buy, 12.80 GBP"), "{today}");
+
+    let (err, _) = tool(&app, &read, "mark_parts", json!({"rows": [row], "stage": "ordered"})).await;
+    assert!(err);
+    let (err, text) =
+        tool(&app, &write, "mark_parts", json!({"rows": [row], "stage": "Arrived", "date": "2026-11-10"}))
+            .await;
+    assert!(!err, "{text}");
+    assert!(
+        text.contains("Moved 1 part to arrived (2026-11-10)") && text.contains("All parts are in for T-1"),
+        "{text}"
+    );
+    let detail = call("GET", format!("/tasks/{task}"), None).await;
+    assert_eq!(detail["comments"][0]["via"], "ai");
 }

@@ -56,6 +56,8 @@ struct TaskRow {
     comment_count: i64,
     note_count: i64,
     attachment_count: i64,
+    parts_total: i64,
+    parts_waiting: i64,
     category: String,
     status_name: String,
     project_title: String,
@@ -70,6 +72,13 @@ const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.number, t.status_id, t.t
         (SELECT COUNT(*) FROM task_comments tc WHERE tc.task_id = t.id) AS comment_count,
         (SELECT COUNT(*) FROM task_notes tn JOIN notes n ON n.id = tn.note_id WHERE tn.task_id = t.id) AS note_count,
         (SELECT COUNT(*) FROM attachments x WHERE x.task_id = t.id) AS attachment_count,
+        (SELECT COUNT(*) FROM db_relations x JOIN db_columns fc ON fc.id = x.column_id AND fc.role = 'for_task'
+            WHERE x.target_kind = 'task' AND x.target_id = t.id) AS parts_total,
+        (SELECT COUNT(*) FROM db_relations x JOIN db_columns fc ON fc.id = x.column_id AND fc.role = 'for_task'
+            JOIN db_rows r ON r.id = x.row_id
+            JOIN db_columns sc ON sc.database_id = r.database_id AND sc.role = 'status'
+            WHERE x.target_kind = 'task' AND x.target_id = t.id
+              AND COALESCE(json_extract(r.data, '$.\"' || sc.id || '\"'), '') NOT IN ('arrived', 'fitted')) AS parts_waiting,
         s.category, s.name AS status_name, p.title AS project_title, p.color AS project_color
     FROM tasks t
     JOIN statuses s ON s.id = t.status_id
@@ -109,6 +118,10 @@ pub struct Task {
     pub note_count: i64,
     /// Photos and files on it, its comments' included.
     pub attachment_count: i64,
+    /// Parts (rows of Parts databases) for this task.
+    pub parts_total: i64,
+    /// Of those, the ones not arrived or fitted yet.
+    pub parts_waiting: i64,
     /// Open, with a due date before today.
     pub overdue: bool,
     pub project_title: String,
@@ -301,6 +314,8 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
             comment_count: r.comment_count,
             note_count: r.note_count,
             attachment_count: r.attachment_count,
+            parts_total: r.parts_total,
+            parts_waiting: r.parts_waiting,
             status_name: r.status_name,
             project_title: r.project_title,
             project_color: r.project_color,

@@ -9,6 +9,7 @@ import { useDashboard } from "../tasks/queries";
 import { useOpenTask } from "../tasks/TaskDrawer";
 import { useProject } from "./ProjectPage";
 import { ComingUp } from "../calendar/ComingUp";
+import { SpendPanel } from "../parts/SpendPanel";
 
 /** The Overview tab: stat tiles, the weekly chart, where tasks sit, up next, activity. */
 export function ProjectOverview() {
@@ -38,6 +39,7 @@ export function ProjectOverview() {
             </Card>
           </div>
           <ComingUp projectId={detail.project.id} canPlan={canEdit} />
+          <SpendPanel projectId={detail.project.id} className="lg:grid lg:grid-cols-2 lg:items-start" />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[3fr_2fr]">
             <Card title="Up next">
               {dash.data.up_next.length === 0 ? (

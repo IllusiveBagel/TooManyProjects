@@ -154,6 +154,16 @@ pub struct TodayArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct MarkPartsArgs {
+    /// Row ids from get_shopping_list (or query_database on a Parts database).
+    pub rows: Vec<String>,
+    /// need, ordered, shipped, arrived or fitted.
+    pub stage: String,
+    /// The day it happened, YYYY-MM-DD. Default: today.
+    pub date: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct QuickAddArgs {
     /// The line to capture. Becomes the task or note title.
     pub text: String,
@@ -719,13 +729,14 @@ const INSTRUCTIONS: &str = "TooManyProjects holds the user's projects (cards on 
 spawned another), each with a kanban board of tasks, plus a vault of markdown notes. Start with get_today \
 (what is in progress, blocked, due, quiet or waiting in the Inbox), list_projects or search, then \
 get_project_context for a full briefing on one project. Capture a quick idea or link with quick_add. Notes link with [[Note title]] and \
-[[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Tasks keep a log of \
+[[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Parts databases track \
+parts to buy (Need, Ordered, Shipped, Arrived, Fitted); get_shopping_list lists them all by supplier and mark_parts moves them along. Tasks keep a log of \
 comments and can have notes, photos and files attached: read them with get_task, list a project's photos with \
 list_attachments and look at one with get_attachment, and log progress or lessons with \
 add_task_comment. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
 (create_task, quick_add, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, update_note, \
-create_project, spawn_project, update_project, add_column, update_column, add_row, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
+create_project, spawn_project, update_project, add_column, update_column, add_row, mark_parts, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
 
@@ -1043,6 +1054,68 @@ impl Mcp {
                 let today = crate::today::build(&self.state, &user, args.tz.as_deref()).await?;
                 Ok(brief::today(&today))
             }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "The Shopping list as markdown: every part in Need across the user's projects (rows of Parts databases), grouped by supplier with totals, then parts ordered or shipped, then parts that arrived this month. Each part shows its row id for mark_parts. Add parts with add_row on a project's Parts database."
+    )]
+    async fn get_shopping_list(
+        &self,
+        Parameters(args): Parameters<TodayArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            async {
+                let list =
+                    crate::parts::build_shopping_list(&mut *self.conn().await?, &user.id, args.tz.as_deref())
+                        .await?;
+                Ok(brief::shopping(&list))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Move parts along: need, ordered, shipped, arrived or fitted, filling in Ordered on and Arrived on. When the last part a task waits on arrives, the task's log gets a \"Parts arrived\" comment. Needs read-write access."
+    )]
+    async fn mark_parts(
+        &self,
+        Parameters(args): Parameters<MarkPartsArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let mut tx = self.state.db.begin().await?;
+                let date = match &args.date {
+                    Some(d) => d.trim().to_string(),
+                    None => crate::parts::today_for(&mut tx, &user.id).await?,
+                };
+                if chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d").is_err() {
+                    return Err(bad("invalid_date", "A date is YYYY-MM-DD."));
+                }
+                let stage = args.stage.trim().to_lowercase();
+                let out = crate::parts::mark(&mut tx, &user.id, &args.rows, &stage, &date).await?;
+                tx.commit().await?;
+                let mut text = format!(
+                    "Moved {} part{} to {stage} ({date}).",
+                    out.moved,
+                    if out.moved == 1 { "" } else { "s" }
+                );
+                for t in &out.tasks_ready {
+                    text.push_str(&format!(
+                        "\nAll parts are in for T-{} {}; its log says so.",
+                        t.number, t.title
+                    ));
+                }
+                Ok(text)
+            })
             .await,
         )
     }

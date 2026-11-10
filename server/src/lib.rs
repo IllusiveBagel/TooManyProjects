@@ -20,6 +20,7 @@ pub mod mcp;
 pub mod notes;
 pub mod oauth;
 pub mod openapi;
+pub mod parts;
 pub mod position;
 pub mod projects;
 pub mod search;

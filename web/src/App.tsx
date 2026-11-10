@@ -18,6 +18,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { NotesIndex, NotesLayout } from "./pages/NotesPage";
 import { ProjectNotesPage } from "./pages/ProjectNotesPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ShoppingPage } from "./pages/ShoppingPage";
 import { SetupPage } from "./pages/SetupPage";
 import { TodayPage } from "./pages/TodayPage";
 import { ThemeSync } from "./theme/ThemeSync";
@@ -69,6 +70,7 @@ const router = createBrowserRouter([
       { path: "today", element: <TodayPage /> },
       // A share sent without the service worker (it wasn't installed yet): Today handles ?add=1.
       { path: "share", element: <Navigate to="/today?add=1" replace /> },
+      { path: "shopping", element: <ShoppingPage /> },
       { path: "board", element: <GlobalBoardPage /> },
       { path: "calendar", element: <CalendarPage /> },
       {

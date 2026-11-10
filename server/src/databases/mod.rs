@@ -101,6 +101,9 @@ pub struct Column {
     /// The row's name. Every database has exactly one, and it stays text.
     pub is_title: bool,
     pub position: String,
+    /// What a template column is for, such as `status` or `unit_cost` in a
+    /// Parts database. Such a column keeps its type.
+    pub role: Option<String>,
 }
 
 #[derive(FromRow)]
@@ -112,6 +115,7 @@ struct ColumnRow {
     options: String,
     is_title: bool,
     position: String,
+    role: Option<String>,
 }
 
 impl From<ColumnRow> for Column {
@@ -124,11 +128,13 @@ impl From<ColumnRow> for Column {
             options: serde_json::from_str(&r.options).unwrap_or_default(),
             is_title: r.is_title,
             position: r.position,
+            role: r.role,
         }
     }
 }
 
-const COLUMN_SELECT: &str = "SELECT id, database_id, name, kind, options, is_title, position FROM db_columns";
+const COLUMN_SELECT: &str =
+    "SELECT id, database_id, name, kind, options, is_title, position, role FROM db_columns";
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema)]
 pub struct Filter {
@@ -216,12 +222,14 @@ pub struct Database {
     pub name: String,
     pub position: String,
     pub row_count: i64,
+    /// `parts` for a Parts database, which the Shopping list reads.
+    pub template: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
 const DATABASE_SELECT: &str = "SELECT d.id, d.project_id, d.name, d.position,
-    (SELECT COUNT(*) FROM db_rows r WHERE r.database_id = d.id) AS row_count, d.created_at, d.updated_at
+    (SELECT COUNT(*) FROM db_rows r WHERE r.database_id = d.id) AS row_count, d.template, d.created_at, d.updated_at
     FROM databases d";
 
 /// A database with its columns and views.
@@ -310,6 +318,8 @@ pub struct LinkedRows {
 #[derive(Deserialize, ToSchema)]
 pub struct CreateDatabaseRequest {
     pub name: String,
+    /// `parts` starts it with the Parts columns and views.
+    pub template: Option<String>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -410,9 +420,9 @@ pub(crate) fn placeholders(n: usize) -> String {
     vec!["?"; n].join(", ")
 }
 
-struct DbRow {
-    id: String,
-    project_id: String,
+pub(crate) struct DbRow {
+    pub id: String,
+    pub project_id: String,
 }
 
 async fn database_row(conn: &mut SqliteConnection, id: &str) -> AppResult<DbRow> {
@@ -437,7 +447,7 @@ async fn visible_database(
 }
 
 /// The database if you can change it (403 for viewers).
-async fn editable_database(
+pub(crate) async fn editable_database(
     conn: &mut SqliteConnection,
     user_id: &str,
     id: &str,
@@ -590,7 +600,7 @@ async fn check_column(
     Ok(options)
 }
 
-async fn insert_column(
+pub(crate) async fn insert_column(
     conn: &mut SqliteConnection,
     database_id: &str,
     name: &str,
@@ -617,7 +627,7 @@ async fn insert_column(
     column(conn, &id).await
 }
 
-async fn insert_view(
+pub(crate) async fn insert_view(
     conn: &mut SqliteConnection,
     database_id: &str,
     name: &str,
@@ -853,6 +863,18 @@ pub(crate) async fn insert_row(
     let columns = columns_of(&mut *conn, database_id).await?;
     let mut data = Map::new();
     clean_values(&mut *conn, project_id, &columns, &req.values, &mut data).await?;
+    // A new part starts in Need, and gets its dates if it starts further on.
+    let parts = crate::parts::database_roles(&mut *conn, database_id).await?;
+    if let Some(roles) = &parts {
+        if let Some(status) = roles.get("status")
+            && !data.contains_key(status)
+            && columns.iter().any(|c| &c.id == status && c.options.choices.iter().any(|ch| ch.id == "need"))
+        {
+            data.insert(status.clone(), Value::String("need".into()));
+        }
+        let today = crate::parts::today_for(&mut *conn, user_id).await?;
+        crate::parts::fill_dates(roles, "need", &mut data, &today);
+    }
     let pos = match &req.after_id {
         Some(after) => position_after(conn, "db_rows", "database_id", database_id, Some(after), None).await?,
         None => position_last(conn, "db_rows", "database_id", database_id).await?,
@@ -1160,8 +1182,17 @@ async fn create_database(
     let name = clean_name(&req.name, "database", 60)?;
     let mut tx = state.db.begin().await?;
     let project = editable_project(&mut tx, &user.id, &id).await?;
-    let db = insert_database(&mut tx, &id, &name).await?;
-    insert_column(&mut tx, &db, "Name", "text", &ColumnOptions::default(), true).await?;
+    let db = match req.template.as_deref() {
+        None | Some("") => {
+            let db = insert_database(&mut tx, &id, &name).await?;
+            insert_column(&mut tx, &db, "Name", "text", &ColumnOptions::default(), true).await?;
+            db
+        }
+        Some(crate::parts::TEMPLATE) => crate::parts::create_parts_database(&mut tx, &id, &name).await?,
+        Some(_) => {
+            return Err(AppError::BadRequest("invalid_template", "The only template is parts.".into()));
+        }
+    };
     let out = detail(&mut tx, &db, &project).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(out)))
@@ -1298,6 +1329,12 @@ async fn update_column(
     let kind = req.kind.clone().unwrap_or_else(|| current.kind.clone());
     if current.is_title && kind != "text" {
         return Err(AppError::BadRequest("title_column", "The name column stays text.".into()));
+    }
+    if current.role.is_some() && kind != current.kind {
+        return Err(AppError::BadRequest(
+            "template_column",
+            format!("The Shopping list reads {}, so it keeps its type.", current.name),
+        ));
     }
     let mut options = req.options.clone().unwrap_or_else(|| current.options.clone());
     if kind != current.kind && req.options.is_none() && matches!(kind.as_str(), "select" | "multi_select") {
@@ -1659,9 +1696,17 @@ async fn update_row(
     let (db, _) = editable_database(&mut tx, &user.id, &database_id).await?;
     let columns = columns_of(&mut tx, &database_id).await?;
     let mut map: Map<String, Value> = serde_json::from_str(&data).unwrap_or_default();
+    // A Parts database fills in Ordered on and Arrived on as Status moves.
+    let parts = crate::parts::database_roles(&mut tx, &database_id).await?;
+    let old_stage = parts.as_ref().map(|r| crate::parts::stage_of(r, &map)).unwrap_or_default();
     if let Some(values) = &req.values {
         clean_values(&mut tx, &db.project_id, &columns, values, &mut map).await?;
     }
+    if let Some(roles) = &parts {
+        let today = crate::parts::today_for(&mut tx, &user.id).await?;
+        crate::parts::fill_dates(roles, &old_stage, &mut map, &today);
+    }
+    let new_stage = parts.as_ref().map(|r| crate::parts::stage_of(r, &map)).unwrap_or_default();
     if let Some(relations) = &req.relations {
         for (column_id, targets) in relations {
             let column = columns.iter().find(|c| &c.id == column_id).ok_or_else(|| {
@@ -1686,6 +1731,9 @@ async fn update_row(
         .execute(&mut *tx)
         .await?;
     touch(&mut tx, &database_id).await?;
+    if parts.is_some() && crate::parts::arrived(&old_stage, &new_stage) {
+        crate::parts::after_arrival(&mut tx, &user.id, &id).await?;
+    }
     let row = one_row(&mut tx, &user.id, &id).await?;
     tx.commit().await?;
     Ok(Json(row))

@@ -2367,6 +2367,76 @@
         }
       }
     },
+    "/instance-settings": {
+      "get": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "Settings for the whole install.",
+        "operationId": "get_instance_settings",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "Change settings for the whole install. Owner only. Changing the currency\nalso changes the Unit cost column of every Parts database.",
+        "operationId": "update_instance_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInstanceSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/invites": {
       "get": {
         "tags": [
@@ -4237,6 +4307,47 @@
         }
       }
     },
+    "/projects/{id}/spend": {
+      "get": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "What a project has spent on parts and has left to buy, with its family's\ntotal, and its tasks waiting on parts.",
+        "operationId": "project_spend",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSpend"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}/statuses": {
       "get": {
         "tags": [
@@ -4673,6 +4784,112 @@
             }
           },
           "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shopping": {
+      "get": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "Every part to buy across your projects, grouped by supplier, plus what's on\nthe way and what arrived this month.",
+        "operationId": "shopping_list",
+        "parameters": [
+          {
+            "name": "tz",
+            "in": "query",
+            "description": "The viewer's IANA time zone, which says what today and this month are.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/shopping/mark": {
+      "post": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "Move parts to a stage together, such as ticking parts on the Shopping\nlist and pressing Mark ordered.",
+        "operationId": "mark_parts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkPartsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkPartsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -6177,6 +6394,13 @@
           },
           "position": {
             "type": "string"
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What a template column is for, such as `status` or `unit_cost` in a\nParts database. Such a column keeps its type."
           }
         }
       },
@@ -6431,6 +6655,13 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "template": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`parts` starts it with the Parts columns and views."
           }
         }
       },
@@ -6995,6 +7226,13 @@
             "type": "integer",
             "format": "int64"
           },
+          "template": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`parts` for a Parts database, which the Shopping list reads."
+          },
           "updated_at": {
             "type": "string"
           }
@@ -7085,6 +7323,31 @@
           "message": {
             "type": "string",
             "description": "A sentence fit to show a person."
+          }
+        }
+      },
+      "FamilySpend": {
+        "type": "object",
+        "required": [
+          "spent",
+          "to_buy",
+          "projects"
+        ],
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Projects spawned from this one (and from those) that have parts."
+          },
+          "spent": {
+            "type": "number",
+            "format": "double"
+          },
+          "to_buy": {
+            "type": "number",
+            "format": "double"
           }
         }
       },
@@ -7267,6 +7530,19 @@
             "type": "integer",
             "description": "Entries left out: settings folders, databases (CSV), oversized files.",
             "minimum": 0
+          }
+        }
+      },
+      "InstanceSettings": {
+        "type": "object",
+        "description": "Settings for the whole install.",
+        "required": [
+          "currency"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string",
+            "description": "ISO code for every price in Parts databases and the Shopping list."
           }
         }
       },
@@ -7556,6 +7832,59 @@
           },
           "password": {
             "type": "string"
+          }
+        }
+      },
+      "MarkPartsRequest": {
+        "type": "object",
+        "required": [
+          "row_ids",
+          "stage"
+        ],
+        "properties": {
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The day it happened, `YYYY-MM-DD`; today in your time zone when left out."
+          },
+          "row_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Rows of Parts databases."
+          },
+          "stage": {
+            "type": "string",
+            "description": "`need`, `ordered`, `shipped`, `arrived` or `fitted`."
+          },
+          "tz": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "MarkPartsResult": {
+        "type": "object",
+        "required": [
+          "moved",
+          "tasks_ready"
+        ],
+        "properties": {
+          "moved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tasks_ready": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartTask"
+            },
+            "description": "Tasks whose last part just arrived, which got a \"Parts arrived\" comment."
           }
         }
       },
@@ -7852,6 +8181,123 @@
           }
         }
       },
+      "Part": {
+        "type": "object",
+        "description": "One row of a Parts database, read through its template columns.",
+        "required": [
+          "row_id",
+          "database_id",
+          "database_name",
+          "project_id",
+          "project_title",
+          "project_color",
+          "item",
+          "qty",
+          "total",
+          "stage",
+          "tasks",
+          "can_edit"
+        ],
+        "properties": {
+          "arrived_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "can_edit": {
+            "type": "boolean",
+            "description": "False when the project is shared with you to view."
+          },
+          "database_id": {
+            "type": "string"
+          },
+          "database_name": {
+            "type": "string"
+          },
+          "item": {
+            "type": "string"
+          },
+          "link": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ordered_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_color": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
+          },
+          "qty": {
+            "type": "number",
+            "format": "double",
+            "description": "1 when the Qty cell is empty."
+          },
+          "row_id": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "description": "`need`, `ordered`, `shipped`, `arrived` or `fitted`; empty when Status\nis empty or set to a choice someone added."
+          },
+          "supplier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartTask"
+            }
+          },
+          "total": {
+            "type": "number",
+            "format": "double",
+            "description": "Qty times unit cost."
+          },
+          "unit_cost": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "PartTask": {
+        "type": "object",
+        "description": "A task a part is for.",
+        "required": [
+          "id",
+          "number",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "Person": {
         "type": "object",
         "description": "Someone with an account on this install.",
@@ -8077,6 +8523,59 @@
           },
           "title": {
             "type": "string"
+          }
+        }
+      },
+      "ProjectSpend": {
+        "type": "object",
+        "required": [
+          "currency",
+          "part_count",
+          "spent",
+          "to_buy",
+          "need_count",
+          "waiting"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "family": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FamilySpend",
+                "description": "With its spawned projects, when any of them have parts."
+              }
+            ]
+          },
+          "need_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "part_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Parts in any Parts database of the project."
+          },
+          "spent": {
+            "type": "number",
+            "format": "double",
+            "description": "Ordered, shipped, arrived and fitted parts."
+          },
+          "to_buy": {
+            "type": "number",
+            "format": "double",
+            "description": "Parts in Need."
+          },
+          "waiting": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WaitingTask"
+            },
+            "description": "The project's tasks waiting on parts."
           }
         }
       },
@@ -8593,6 +9092,84 @@
           }
         }
       },
+      "ShoppingList": {
+        "type": "object",
+        "required": [
+          "date",
+          "currency",
+          "need",
+          "on_the_way",
+          "arrived",
+          "to_buy",
+          "on_the_way_total",
+          "project_count"
+        ],
+        "properties": {
+          "arrived": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part"
+            },
+            "description": "Parts that arrived this month, newest first."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "Today in the viewer's time zone, `YYYY-MM-DD`, for \"Mark ordered\"."
+          },
+          "need": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplierGroup"
+            },
+            "description": "Parts in Need, by supplier, biggest spend first and no supplier last."
+          },
+          "on_the_way": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplierGroup"
+            },
+            "description": "Ordered and Shipped parts, by supplier."
+          },
+          "on_the_way_total": {
+            "type": "number",
+            "format": "double"
+          },
+          "project_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Projects with parts in Need."
+          },
+          "to_buy": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "ShoppingSummary": {
+        "type": "object",
+        "description": "How much there is to buy, for the Today screen.",
+        "required": [
+          "need_count",
+          "to_buy",
+          "currency"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "need_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "to_buy": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "Sort": {
         "type": "object",
         "required": [
@@ -8641,6 +9218,31 @@
           }
         }
       },
+      "SupplierGroup": {
+        "type": "object",
+        "description": "Parts from one supplier.",
+        "required": [
+          "supplier",
+          "total",
+          "parts"
+        ],
+        "properties": {
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Part"
+            }
+          },
+          "supplier": {
+            "type": "string",
+            "description": "As first written; empty for parts with no supplier."
+          },
+          "total": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "TagCount": {
         "type": "object",
         "required": [
@@ -8676,6 +9278,8 @@
           "comment_count",
           "note_count",
           "attachment_count",
+          "parts_total",
+          "parts_waiting",
           "overdue",
           "project_title",
           "project_color"
@@ -8760,6 +9364,16 @@
           "overdue": {
             "type": "boolean",
             "description": "Open, with a due date before today."
+          },
+          "parts_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Parts (rows of Parts databases) for this task."
+          },
+          "parts_waiting": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Of those, the ones not arrived or fitted yet."
           },
           "position": {
             "type": "string"
@@ -8903,7 +9517,8 @@
           "due",
           "sessions",
           "quiet",
-          "inbox"
+          "inbox",
+          "shopping"
         ],
         "properties": {
           "blocked": {
@@ -8950,6 +9565,10 @@
               "$ref": "#/components/schemas/Occurrence"
             },
             "description": "Today's work sessions: yours and those you're joining."
+          },
+          "shopping": {
+            "$ref": "#/components/schemas/ShoppingSummary",
+            "description": "Parts to buy across your projects, for the Shopping list link."
           }
         }
       },
@@ -9110,6 +9729,17 @@
               "null"
             ],
             "format": "double"
+          }
+        }
+      },
+      "UpdateInstanceSettings": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -9622,6 +10252,49 @@
               "$ref": "#/components/schemas/Sort"
             },
             "description": "First sort first. With none, rows keep their own order."
+          }
+        }
+      },
+      "WaitingTask": {
+        "type": "object",
+        "description": "A task still waiting on parts.",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "parts",
+          "need",
+          "ordered",
+          "shipped"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "need": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Of those, how many sit in each stage that isn't in hand yet."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ordered": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Every part linked to it."
+          },
+          "shipped": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
           }
         }
       },

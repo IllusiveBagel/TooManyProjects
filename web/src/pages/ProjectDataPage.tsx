@@ -15,6 +15,7 @@ import {
   useUpdateView,
 } from "../data/queries";
 import { ViewControls } from "../data/ViewControls";
+import { SpendPanel } from "../parts/SpendPanel";
 import { useProject } from "./ProjectPage";
 
 const field = "border-rule bg-surface min-h-10 w-full rounded-sm px-2 font-mono text-[13px] outline-none focus:border-accent";
@@ -65,7 +66,10 @@ export function ProjectDataPage() {
           </p>
         </div>
       ) : (
-        <DatabasePanel key={current.database.id} detail={current} view={view} canEdit={canEdit} onView={setView} initialRow={params.get("row")} />
+        <div className={current.database.template === "parts" ? "grid grid-cols-1 gap-4 sm:min-h-0 sm:flex-1 xl:grid-cols-[minmax(0,1fr)_340px]" : "contents"}>
+          <DatabasePanel key={current.database.id} detail={current} view={view} canEdit={canEdit} onView={setView} initialRow={params.get("row")} />
+          {current.database.template === "parts" && <SpendPanel projectId={projectId} className="order-first xl:order-none" />}
+        </div>
       )}
     </div>
   );
@@ -90,6 +94,15 @@ function DatabasePanel({
     <section aria-label={detail.database.name} className="border-rule bg-surface-card shadow-card flex flex-col rounded-lg sm:min-h-0 sm:flex-1">
       <div className="border-rule flex flex-wrap items-center gap-2 border-x-0 border-t-0 px-3 py-2.5">
         <h2 className="font-display text-xl font-extrabold tracking-[-0.02em]">{detail.database.name}</h2>
+        {detail.database.template === "parts" && (
+          <Link
+            to="/shopping"
+            title="Its parts in Need show on the Shopping list"
+            className="label-mono border-rule hover:text-accent rounded-sm border-current px-1.5 py-0.5 text-[10px]"
+          >
+            Parts template
+          </Link>
+        )}
         <span className="label-mono text-text-quiet text-[11px]">{detail.database.row_count} rows</span>
         <div className="ml-auto flex items-center gap-1.5">
           <a href={`/api/v1/databases/${detail.database.id}/export`} className="label-mono text-text-quiet hover:text-text px-2 text-[11px]" download>
@@ -146,6 +159,7 @@ function DatabasePanel({
 function NewDatabase({ projectId, onMade, startOpen }: { projectId: string; onMade: (id: string) => void; startOpen: boolean }) {
   const [open, setOpen] = useState(startOpen);
   const [name, setName] = useState("");
+  const [template, setTemplate] = useState<"blank" | "parts">("blank");
   const create = useCreateDatabase(projectId);
   const importCsv = useImportDatabase(projectId);
   const file = useRef<HTMLInputElement>(null);
@@ -158,12 +172,38 @@ function NewDatabase({ projectId, onMade, startOpen }: { projectId: string; onMa
             className="flex flex-col gap-2 p-1.5"
             onSubmit={(e) => {
               e.preventDefault();
-              if (name.trim()) create.mutate(name.trim(), { onSuccess: (d) => (setOpen(false), setName(""), onMade(d.database.id)) });
+              const made = (d: { database: { id: string } }) => (setOpen(false), setName(""), onMade(d.database.id));
+              if (template === "parts") create.mutate({ name: name.trim() || "Parts", template }, { onSuccess: made });
+              else if (name.trim()) create.mutate({ name: name.trim() }, { onSuccess: made });
             }}
           >
-            <input autoFocus className={field} placeholder="Parts list" aria-label="Database name" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
-            <Button type="submit" variant="primary" className="min-h-9 text-sm" disabled={!name.trim() || create.isPending}>Make it</Button>
-            <span className="label-mono text-text-quiet pt-1 text-[10px]">Or from a CSV file</span>
+            <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label="Start from">
+              <button type="button" role="radio" aria-checked={template === "blank"} className={`${tab(template === "blank")} justify-center`} onClick={() => setTemplate("blank")}>
+                Blank
+              </button>
+              <button type="button" role="radio" aria-checked={template === "parts"} className={`${tab(template === "parts")} justify-center`} onClick={() => setTemplate("parts")}>
+                Parts
+              </button>
+            </div>
+            {template === "parts" && (
+              <p className="text-text-quiet text-xs leading-relaxed">
+                Item, Qty, Unit cost, Supplier, Link, Status (Need → Ordered → Shipped → Arrived → Fitted) and For task. Parts in Need
+                show on the Shopping list, and spend shows on the overview.
+              </p>
+            )}
+            <input
+              autoFocus
+              className={field}
+              placeholder={template === "parts" ? "Parts" : "Reading list"}
+              aria-label="Database name"
+              maxLength={60}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Button type="submit" variant="primary" className="min-h-9 text-sm" disabled={(template === "blank" && !name.trim()) || create.isPending}>
+              Make it
+            </Button>
+            {template === "blank" && <span className="label-mono text-text-quiet pt-1 text-[10px]">Or from a CSV file</span>}
             <input
               ref={file}
               type="file"
@@ -177,10 +217,14 @@ function NewDatabase({ projectId, onMade, startOpen }: { projectId: string; onMa
                 e.target.value = "";
               }}
             />
-            <Button type="button" className="min-h-9 text-sm" disabled={importCsv.isPending} onClick={() => file.current?.click()}>
-              {importCsv.isPending ? "Importing…" : "Import CSV…"}
-            </Button>
-            <p className="text-text-quiet text-xs">The first column becomes the name. Column types are guessed from the values.</p>
+            {template === "blank" && (
+              <>
+                <Button type="button" className="min-h-9 text-sm" disabled={importCsv.isPending} onClick={() => file.current?.click()}>
+                  {importCsv.isPending ? "Importing…" : "Import CSV…"}
+                </Button>
+                <p className="text-text-quiet text-xs">The first column becomes the name. Column types are guessed from the values.</p>
+              </>
+            )}
             <ErrorNote error={create.error ?? importCsv.error} />
           </form>
         </Popover>

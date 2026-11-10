@@ -614,6 +614,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instance-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Settings for the whole install. */
+        get: operations["get_instance_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change settings for the whole install. Owner only. Changing the currency
+         *     also changes the Unit cost column of every Parts database.
+         */
+        patch: operations["update_instance_settings"];
+        trace?: never;
+    };
     "/invites": {
         parameters: {
             query?: never;
@@ -1167,6 +1188,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{id}/spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a project has spent on parts and has left to buy, with its family's
+         *     total, and its tasks waiting on parts.
+         */
+        get: operations["project_spend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{id}/statuses": {
         parameters: {
             query?: never;
@@ -1274,6 +1315,46 @@ export interface paths {
         head?: never;
         /** Change a share's role or what it takes in. Only the person who shared. */
         patch: operations["update_share"];
+        trace?: never;
+    };
+    "/shopping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every part to buy across your projects, grouped by supplier, plus what's on
+         *     the way and what arrived this month.
+         */
+        get: operations["shopping_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shopping/mark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move parts to a stage together, such as ticking parts on the Shopping
+         *     list and pressing Mark ordered.
+         */
+        post: operations["mark_parts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/statuses/{id}": {
@@ -1729,6 +1810,11 @@ export interface components {
             name: string;
             options: components["schemas"]["ColumnOptions"];
             position: string;
+            /**
+             * @description What a template column is for, such as `status` or `unit_cost` in a
+             *     Parts database. Such a column keeps its type.
+             */
+            role?: string | null;
         };
         ColumnCount: {
             /** @description `todo`, `in_progress`, `blocked` or `done`. */
@@ -1808,6 +1894,8 @@ export interface components {
         };
         CreateDatabaseRequest: {
             name: string;
+            /** @description `parts` starts it with the Parts columns and views. */
+            template?: string | null;
         };
         CreateEventRequest: {
             /** @description `session` or `busy`. */
@@ -1984,6 +2072,8 @@ export interface components {
             project_id: string;
             /** Format: int64 */
             row_count: number;
+            /** @description `parts` for a Parts database, which the Shopping list reads. */
+            template?: string | null;
             updated_at: string;
         };
         /** @description A database with its columns and views. */
@@ -2010,6 +2100,14 @@ export interface components {
             code: string;
             /** @description A sentence fit to show a person. */
             message: string;
+        };
+        FamilySpend: {
+            /** @description Projects spawned from this one (and from those) that have parts. */
+            projects: string[];
+            /** Format: double */
+            spent: number;
+            /** Format: double */
+            to_buy: number;
         };
         FileInboxRequest: {
             /** @description `task` or `note`. */
@@ -2073,6 +2171,11 @@ export interface components {
             renamed: number;
             /** @description Entries left out: settings folders, databases (CSV), oversized files. */
             skipped: number;
+        };
+        /** @description Settings for the whole install. */
+        InstanceSettings: {
+            /** @description ISO code for every price in Parts databases and the Shopping list. */
+            currency: string;
         };
         Invite: {
             accepted_at?: string | null;
@@ -2151,6 +2254,21 @@ export interface components {
         LoginRequest: {
             email: string;
             password: string;
+        };
+        MarkPartsRequest: {
+            /** @description The day it happened, `YYYY-MM-DD`; today in your time zone when left out. */
+            date?: string | null;
+            /** @description Rows of Parts databases. */
+            row_ids: string[];
+            /** @description `need`, `ordered`, `shipped`, `arrived` or `fitted`. */
+            stage: string;
+            tz?: string | null;
+        };
+        MarkPartsResult: {
+            /** Format: int64 */
+            moved: number;
+            /** @description Tasks whose last part just arrived, which got a "Parts arrived" comment. */
+            tasks_ready: components["schemas"]["PartTask"][];
         };
         /** @description Someone who can see a project, and why. */
         Member: {
@@ -2246,6 +2364,47 @@ export interface components {
             /** @description UTC, RFC 3339. */
             start_at: string;
         };
+        /** @description One row of a Parts database, read through its template columns. */
+        Part: {
+            arrived_on?: string | null;
+            /** @description False when the project is shared with you to view. */
+            can_edit: boolean;
+            database_id: string;
+            database_name: string;
+            item: string;
+            link?: string | null;
+            ordered_on?: string | null;
+            project_color: string;
+            project_id: string;
+            project_title: string;
+            /**
+             * Format: double
+             * @description 1 when the Qty cell is empty.
+             */
+            qty: number;
+            row_id: string;
+            /**
+             * @description `need`, `ordered`, `shipped`, `arrived` or `fitted`; empty when Status
+             *     is empty or set to a choice someone added.
+             */
+            stage: string;
+            supplier?: string | null;
+            tasks: components["schemas"]["PartTask"][];
+            /**
+             * Format: double
+             * @description Qty times unit cost.
+             */
+            total: number;
+            /** Format: double */
+            unit_cost?: number | null;
+        };
+        /** @description A task a part is for. */
+        PartTask: {
+            id: string;
+            /** Format: int64 */
+            number: number;
+            title: string;
+        };
         /** @description Someone with an account on this install. */
         Person: {
             email: string;
@@ -2308,6 +2467,29 @@ export interface components {
             link_id: string;
             status: string;
             title: string;
+        };
+        ProjectSpend: {
+            currency: string;
+            family?: null | components["schemas"]["FamilySpend"];
+            /** Format: int64 */
+            need_count: number;
+            /**
+             * Format: int64
+             * @description Parts in any Parts database of the project.
+             */
+            part_count: number;
+            /**
+             * Format: double
+             * @description Ordered, shipped, arrived and fitted parts.
+             */
+            spent: number;
+            /**
+             * Format: double
+             * @description Parts in Need.
+             */
+            to_buy: number;
+            /** @description The project's tasks waiting on parts. */
+            waiting: components["schemas"]["WaitingTask"][];
         };
         /** @description Numbers shown on a project's card. */
         ProjectStats: {
@@ -2473,6 +2655,34 @@ export interface components {
             /** @description `viewer` or `editor`. */
             role: string;
         };
+        ShoppingList: {
+            /** @description Parts that arrived this month, newest first. */
+            arrived: components["schemas"]["Part"][];
+            currency: string;
+            /** @description Today in the viewer's time zone, `YYYY-MM-DD`, for "Mark ordered". */
+            date: string;
+            /** @description Parts in Need, by supplier, biggest spend first and no supplier last. */
+            need: components["schemas"]["SupplierGroup"][];
+            /** @description Ordered and Shipped parts, by supplier. */
+            on_the_way: components["schemas"]["SupplierGroup"][];
+            /** Format: double */
+            on_the_way_total: number;
+            /**
+             * Format: int64
+             * @description Projects with parts in Need.
+             */
+            project_count: number;
+            /** Format: double */
+            to_buy: number;
+        };
+        /** @description How much there is to buy, for the Today screen. */
+        ShoppingSummary: {
+            currency: string;
+            /** Format: int64 */
+            need_count: number;
+            /** Format: double */
+            to_buy: number;
+        };
         Sort: {
             column_id: string;
             desc?: boolean;
@@ -2485,6 +2695,14 @@ export interface components {
             name: string;
             position: string;
             project_id: string;
+        };
+        /** @description Parts from one supplier. */
+        SupplierGroup: {
+            parts: components["schemas"]["Part"][];
+            /** @description As first written; empty for parts with no supplier. */
+            supplier: string;
+            /** Format: double */
+            total: number;
         };
         TagCount: {
             /** Format: int64 */
@@ -2530,6 +2748,16 @@ export interface components {
             number: number;
             /** @description Open, with a due date before today. */
             overdue: boolean;
+            /**
+             * Format: int64
+             * @description Parts (rows of Parts databases) for this task.
+             */
+            parts_total: number;
+            /**
+             * Format: int64
+             * @description Of those, the ones not arrived or fitted yet.
+             */
+            parts_waiting: number;
             position: string;
             /** @description `low`, `medium`, `high` or `urgent`. */
             priority?: string | null;
@@ -2586,6 +2814,8 @@ export interface components {
             quiet: components["schemas"]["QuietProject"][];
             /** @description Today's work sessions: yours and those you're joining. */
             sessions: components["schemas"]["Occurrence"][];
+            /** @description Parts to buy across your projects, for the Shopping list link. */
+            shopping: components["schemas"]["ShoppingSummary"];
         };
         UpdateAttachmentRequest: {
             /** @description A few words under the photo. Empty clears it. */
@@ -2630,6 +2860,9 @@ export interface components {
             x?: number | null;
             /** Format: double */
             y?: number | null;
+        };
+        UpdateInstanceSettings: {
+            currency?: string | null;
         };
         UpdateLinkRequest: {
             kind?: string | null;
@@ -2766,6 +2999,27 @@ export interface components {
             hidden: string[];
             /** @description First sort first. With none, rows keep their own order. */
             sorts: components["schemas"]["Sort"][];
+        };
+        /** @description A task still waiting on parts. */
+        WaitingTask: {
+            id: string;
+            /**
+             * Format: int64
+             * @description Of those, how many sit in each stage that isn't in hand yet.
+             */
+            need: number;
+            /** Format: int64 */
+            number: number;
+            /** Format: int64 */
+            ordered: number;
+            /**
+             * Format: int64
+             * @description Every part linked to it.
+             */
+            parts: number;
+            /** Format: int64 */
+            shipped: number;
+            title: string;
         };
         WeekCount: {
             /** Format: int64 */
@@ -4384,6 +4638,64 @@ export interface operations {
             };
         };
     };
+    get_instance_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+        };
+    };
+    update_instance_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInstanceSettings"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_invites: {
         parameters: {
             query?: never;
@@ -5660,6 +5972,35 @@ export interface operations {
             };
         };
     };
+    project_spend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSpend"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_statuses: {
         parameters: {
             query?: never;
@@ -5967,6 +6308,83 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    shopping_list: {
+        parameters: {
+            query?: {
+                /** @description The viewer's IANA time zone, which says what today and this month are. */
+                tz?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    mark_parts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkPartsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkPartsResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

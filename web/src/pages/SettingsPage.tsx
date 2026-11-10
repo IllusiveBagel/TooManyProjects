@@ -7,6 +7,7 @@ import { AiAccessPanel } from "./AiAccessPanel";
 import { SharingPanel } from "./SharingPanel";
 import { UpdatesPanel } from "../system/UpdatesPanel";
 import { HttpsPanel } from "../system/HttpsPanel";
+import { useInstanceSettings, useUpdateInstanceSettings } from "../parts/queries";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
@@ -21,10 +22,44 @@ export function SettingsPage() {
       <NotesPanel />
       <AiAccessPanel />
       <HttpsPanel owner={me.role === "owner"} />
+      {me.role === "owner" && <MoneyPanel />}
       {me.role === "owner" && <InvitesPanel />}
       {me.role === "owner" && <UpdatesPanel />}
       <AccountPanel />
     </main>
+  );
+}
+
+const CURRENCIES = ["GBP", "EUR", "USD", "CAD", "AUD", "NZD", "JPY", "CHF", "SEK", "NOK", "DKK", "PLN"];
+
+/** The one currency for prices in Parts databases and the Shopping list. */
+function MoneyPanel() {
+  const settings = useInstanceSettings();
+  const update = useUpdateInstanceSettings();
+  const current = settings.data?.currency;
+  const options = current && !CURRENCIES.includes(current) ? [current, ...CURRENCIES] : CURRENCIES;
+  return (
+    <Panel title="Money">
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="currency" className="label-mono text-text-quiet">Currency</label>
+        <select
+          id="currency"
+          className="border-rule bg-surface text-text min-h-11 max-w-60 rounded-md px-3 font-mono text-[13px] outline-none focus:border-accent"
+          value={current ?? ""}
+          disabled={!current || update.isPending}
+          onChange={(e) => update.mutate(e.target.value)}
+        >
+          {options.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <p className="text-text-quiet text-xs">
+          Used for every Parts database, the Shopping list and spend totals, for everyone on this install. Changing it relabels
+          prices; it doesn't convert them.
+        </p>
+      </div>
+      <ErrorNote error={update.error} />
+    </Panel>
   );
 }
 

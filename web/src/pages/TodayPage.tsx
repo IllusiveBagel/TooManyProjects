@@ -14,6 +14,7 @@ import { dueText, findUrl, longDate, sessionsHeading, shortUrl, type Today } fro
 import { useQuickAddUi } from "../today/QuickAdd";
 import { usePalette } from "../today/Palette";
 import { useToday } from "../today/queries";
+import { money, plural } from "../parts/format";
 
 const SEARCH_ICON = "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4";
 
@@ -135,6 +136,25 @@ function Quiet({ data }: { data: Today }) {
   );
 }
 
+/** A link to the Shopping list, when there's something to buy. */
+function Shopping({ data }: { data: Today }) {
+  const s = data.shopping;
+  if (s.need_count === 0) return null;
+  return (
+    <Link
+      to="/shopping"
+      className="border-rule bg-surface-card shadow-card hover:bg-surface-raised flex min-h-16 items-center gap-3 rounded-lg px-4 py-3"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="label-mono text-text-quiet block text-[13px] tracking-[0.12em]">Shopping list</span>
+        <span className="block truncate text-[17px] font-bold">{plural(s.need_count, "part")} to buy</span>
+      </span>
+      <span className="shrink-0 font-mono text-[18px]">{money(s.to_buy, s.currency)}</span>
+      <span className="text-text-quiet shrink-0" aria-hidden="true">→</span>
+    </Link>
+  );
+}
+
 function Inbox({ data }: { data: Today }) {
   const start = useQuickAddUi((s) => s.start);
   if (data.inbox.length === 0) return null;
@@ -205,6 +225,7 @@ export function TodayPage() {
           </p>
         </div>
       )}
+      {data && empty && <div className="max-w-xl"><Shopping data={data} /></div>}
       {data && !empty && (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
           {/* On a phone, tonight's sessions come first; on a computer they head the right column. */}
@@ -234,6 +255,7 @@ export function TodayPage() {
               </Section>
             )}
             <Quiet data={data} />
+            <Shopping data={data} />
           </div>
         </div>
       )}

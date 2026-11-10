@@ -314,6 +314,7 @@ mod tests {
                 ..Default::default()
             },
             is_title: false,
+            role: None,
             position: "a".into(),
         }
     }
