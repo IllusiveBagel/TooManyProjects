@@ -282,6 +282,25 @@ async fn editable_note(conn: &mut SqliteConnection, user_id: &str, id: &str) -> 
     Ok(row)
 }
 
+/// Whose vault holds a note the person may read, and its path there.
+pub(crate) async fn readable_note_owner(
+    conn: &mut SqliteConnection,
+    user_id: &str,
+    id: &str,
+) -> AppResult<(String, String)> {
+    let row = note_row(conn, user_id, id).await?;
+    Ok((row.user_id, row.path))
+}
+
+/// Whose vault holds a note the person may change.
+pub(crate) async fn editable_note_owner(
+    conn: &mut SqliteConnection,
+    user_id: &str,
+    id: &str,
+) -> AppResult<String> {
+    Ok(editable_note(conn, user_id, id).await?.user_id)
+}
+
 fn clean_tags(tags: &[String]) -> AppResult<Vec<String>> {
     let mut out: Vec<String> = vec![];
     for t in tags {

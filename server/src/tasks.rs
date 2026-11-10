@@ -55,6 +55,7 @@ struct TaskRow {
     checklist_total: i64,
     comment_count: i64,
     note_count: i64,
+    attachment_count: i64,
     category: String,
     project_title: String,
     project_color: String,
@@ -67,6 +68,7 @@ const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.number, t.status_id, t.t
         (SELECT COUNT(*) FROM task_checklist c WHERE c.task_id = t.id) AS checklist_total,
         (SELECT COUNT(*) FROM task_comments tc WHERE tc.task_id = t.id) AS comment_count,
         (SELECT COUNT(*) FROM task_notes tn JOIN notes n ON n.id = tn.note_id WHERE tn.task_id = t.id) AS note_count,
+        (SELECT COUNT(*) FROM attachments x WHERE x.task_id = t.id) AS attachment_count,
         s.category, p.title AS project_title, p.color AS project_color
     FROM tasks t
     JOIN statuses s ON s.id = t.status_id
@@ -102,6 +104,8 @@ pub struct Task {
     pub comment_count: i64,
     /// Notes linked to the task, including any not shared with you.
     pub note_count: i64,
+    /// Photos and files on it, its comments' included.
+    pub attachment_count: i64,
     /// Open, with a due date before today.
     pub overdue: bool,
     pub project_title: String,
@@ -148,6 +152,9 @@ pub struct TaskDetail {
     pub notes: Vec<crate::notes::NoteSummary>,
     /// Linked notes that aren't shared with you.
     pub hidden_notes: i64,
+    /// Photos and files on the task itself, oldest first. Those added with a
+    /// comment are on the comment.
+    pub attachments: Vec<crate::attachments::Attachment>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -290,6 +297,7 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
             checklist_total: r.checklist_total,
             comment_count: r.comment_count,
             note_count: r.note_count,
+            attachment_count: r.attachment_count,
             project_title: r.project_title,
             project_color: r.project_color,
         })
@@ -573,7 +581,12 @@ pub(crate) async fn get_task(
     .await?;
     let comments = crate::comments::task_comments(&mut conn, &user.id, &task).await?;
     let (notes, hidden_notes) = crate::notes::task_notes(&mut conn, &user.id, &id).await?;
-    Ok(Json(TaskDetail { task, checklist, activity, comments, notes, hidden_notes }))
+    let attachments = crate::attachments::for_task(&mut conn, &user.id, &id)
+        .await?
+        .into_iter()
+        .filter(|a| a.comment_id.is_none())
+        .collect();
+    Ok(Json(TaskDetail { task, checklist, activity, comments, notes, hidden_notes, attachments }))
 }
 
 /// Edit a task, or move it between columns.

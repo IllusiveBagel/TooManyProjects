@@ -174,7 +174,7 @@ pub struct View {
     pub id: String,
     pub database_id: String,
     pub name: String,
-    /// `table`, `board` or `calendar`.
+    /// `table`, `board`, `calendar` or `gallery` (cards with each row's first photo).
     pub kind: String,
     pub config: ViewConfig,
     /// Shown on the project's overview.
@@ -279,6 +279,10 @@ pub struct Row {
     pub position: String,
     pub created_at: String,
     pub updated_at: String,
+    /// Photos and files attached to the row.
+    pub file_count: i64,
+    /// Its first photo, for the gallery view.
+    pub cover_id: Option<String>,
 }
 
 #[derive(FromRow)]
@@ -289,6 +293,8 @@ struct RowRecord {
     position: String,
     created_at: String,
     updated_at: String,
+    file_count: i64,
+    cover_id: Option<String>,
 }
 
 /// Rows of one database that link to a task.
@@ -989,12 +995,18 @@ async fn build_rows(
                 position: r.position,
                 created_at: r.created_at,
                 updated_at: r.updated_at,
+                file_count: r.file_count,
+                cover_id: r.cover_id,
             }
         })
         .collect())
 }
 
-const ROW_SELECT: &str = "SELECT id, database_id, data, position, created_at, updated_at FROM db_rows";
+const ROW_SELECT: &str = "SELECT id, database_id, data, position, created_at, updated_at,
+        (SELECT COUNT(*) FROM attachments x WHERE x.row_id = db_rows.id) AS file_count,
+        (SELECT x.id FROM attachments x WHERE x.row_id = db_rows.id AND x.has_thumbs = 1
+            ORDER BY x.created_at, x.id LIMIT 1) AS cover_id
+    FROM db_rows";
 
 async fn one_row(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Row> {
     let rec = sqlx::query_as::<_, RowRecord>(&format!("{ROW_SELECT} WHERE id = ?"))

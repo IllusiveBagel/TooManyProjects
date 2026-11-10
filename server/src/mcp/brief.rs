@@ -340,6 +340,18 @@ pub fn task(d: &TaskDetail, column: &str) -> String {
             c.user_name.as_deref().unwrap_or("Someone"),
             c.body.trim_end()
         );
+        for a in &c.attachments {
+            let _ = writeln!(out, "- {}", attachment_line(a));
+        }
+        if !c.attachments.is_empty() {
+            out.push('\n');
+        }
+    }
+    if !d.attachments.is_empty() {
+        let _ = write!(out, "\n## Photos and files ({})\n\n", d.attachments.len());
+        for a in &d.attachments {
+            let _ = writeln!(out, "- {}", attachment_line(a));
+        }
     }
     if !d.notes.is_empty() || d.hidden_notes > 0 {
         let _ = write!(out, "\n## Linked notes\n\n");
@@ -394,6 +406,56 @@ pub fn calendar(list: &[crate::calendar::Occurrence], range: &str) -> String {
     }
     if busy > 0 {
         out.push_str(&format!("- Busy (only the user sees this): {}\n", hours(busy)));
+    }
+    out
+}
+
+/// One photo or file, on a line: what it is, where it hangs and its id.
+fn attachment_line(a: &crate::attachments::Attachment) -> String {
+    let kind = if a.is_image { "photo" } else { "file" };
+    let mut line = format!("{kind} **{}**", a.name);
+    if let Some(c) = a.caption.as_deref() {
+        line.push_str(&format!(" “{c}”"));
+    }
+    line.push_str(&format!(" · {}", size(a.size)));
+    if let (Some(w), Some(h)) = (a.width, a.height) {
+        line.push_str(&format!(" · {w}×{h}"));
+    }
+    match (&a.task_number, &a.task_title, &a.note_title) {
+        (Some(n), Some(t), _) => line.push_str(&format!(" · on T-{n} {t}")),
+        (_, _, Some(n)) => line.push_str(&format!(" · in note “{n}”")),
+        _ if a.row_id.is_some() => line.push_str(" · on a database row"),
+        _ => {}
+    }
+    if a.comment_id.is_some() {
+        line.push_str(" (with a comment)");
+    }
+    let when = a.taken_at.as_deref().map(|t| format!("taken {}", &t[..10.min(t.len())]));
+    let when = when.unwrap_or_else(|| format!("added {}", day(&a.created_at)));
+    line.push_str(&format!(" · {when}"));
+    if let Some(by) = &a.added_by_name {
+        line.push_str(&format!(" by {by}"));
+    }
+    line.push_str(&format!(" · id `{}`", a.id));
+    line
+}
+
+fn size(bytes: i64) -> String {
+    match bytes {
+        b if b >= 1024 * 1024 => format!("{:.1} MB", b as f64 / (1024.0 * 1024.0)),
+        b if b >= 1024 => format!("{} KB", b / 1024),
+        b => format!("{b} bytes"),
+    }
+}
+
+/// A list of photos and files.
+pub fn attachments(list: &[crate::attachments::Attachment]) -> String {
+    if list.is_empty() {
+        return "No photos or files.".into();
+    }
+    let mut out = String::new();
+    for a in list {
+        let _ = writeln!(out, "- {}", attachment_line(a));
     }
     out
 }

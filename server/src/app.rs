@@ -20,7 +20,7 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
-    auth, board, calendar, canvas, comments,
+    attachments, auth, board, calendar, canvas, comments,
     config::Config,
     dashboard, databases,
     error::AppError,
@@ -71,6 +71,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(board::router())
         .merge(tasks::router())
         .merge(comments::router())
+        .merge(attachments::router())
         .merge(calendar::router())
         .merge(dashboard::router())
         .merge(databases::router())
@@ -131,7 +132,8 @@ pub fn build_router(state: AppState) -> Router {
         .layer(axum::extract::DefaultBodyLimit::max(MAX_BODY_BYTES))
         .fallback(|| async { AppError::NotFound })
         .layer(middleware::from_fn(same_origin))
-        .layer(SetResponseHeaderLayer::overriding(
+        // Files set their own private caching; everything else is never stored.
+        .layer(SetResponseHeaderLayer::if_not_present(
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-store"),
         ));
