@@ -82,9 +82,10 @@ export function ProjectPage() {
         </div>
         {project.summary && <p className="font-reading text-text-quiet mt-1 text-[16px]">{project.summary}</p>}
         <SharedNote project={project} className="mt-2" />
-        <nav aria-label="Project" className="border-rule mt-3 flex gap-5 border-x-0 border-t-0">
+        <nav aria-label="Project" className="border-rule mt-3 flex gap-5 overflow-x-auto border-x-0 border-t-0">
           <NavLink to={`/projects/${id}`} end className={tabClass}>Overview</NavLink>
           <NavLink to={`/projects/${id}/board`} className={tabClass}>Board</NavLink>
+          <NavLink to={`/projects/${id}/photos`} className={tabClass}>Photos</NavLink>
           <NavLink to={`/projects/${id}/notes`} className={tabClass}>Notes</NavLink>
           <NavLink to={`/projects/${id}/data`} className={tabClass}>Data</NavLink>
         </nav>

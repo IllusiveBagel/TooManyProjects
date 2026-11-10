@@ -62,7 +62,7 @@ export function ViewControls({ detail, view }: { detail: DatabaseDetail; view: V
           )}
         </div>
       )}
-      {view.kind !== "table" && (
+      {(view.kind === "board" || view.kind === "calendar") && (
         <div className="relative">
           <button type="button" className={chip} aria-expanded={open === "layout"} onClick={() => toggle("layout")}>
             {view.kind === "board" ? "Lanes" : "Dates"}

@@ -56,6 +56,28 @@ const escapeLabel = (s: string) => s.replace(/([\\[\]])/g, "\\$1");
  */
 export const EMBED_LANG = "tmp-embed";
 
+/** Marks a link to a file in the note's vault: `vault:photo.jpg`. */
+export const VAULT_PREFIX = "vault:";
+
+/** A name with a file extension, other than a note's `.md`. */
+export function isFileName(name: string): boolean {
+  return /\.[a-z0-9]{2,5}$/i.test(name) && !/\.md$/i.test(name);
+}
+
+/** The vault file a `vault:` link or a relative image path names, else null. */
+export function vaultFile(src: string): string | null {
+  if (src.startsWith(VAULT_PREFIX)) return decodeURIComponent(src.slice(VAULT_PREFIX.length));
+  if (/^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith("/") || src.startsWith("#")) return null;
+  try {
+    return decodeURIComponent(src);
+  } catch {
+    return src;
+  }
+}
+
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i;
+export const isImageName = (name: string) => IMAGE_EXT.test(name);
+
 export function wikiToMarkdown(body: string): string {
   let inFence = false;
   return body
@@ -85,9 +107,17 @@ export function wikiToMarkdown(body: string): string {
           const end = line.indexOf("]]", i + 2);
           if (end > 0) {
             const embed = out.endsWith("!");
-            const target = parseWiki(line.slice(i + 2, end));
+            const inner = line.slice(i + 2, end);
+            const file = inner.split("|")[0]!.split("#")[0]!.trim();
+            if (embed && isFileName(file)) {
+              // An Obsidian file embed: an image (or a link to the file) from the vault.
+              out += `[${escapeLabel(file)}](${VAULT_PREFIX}${encodeURIComponent(file)})`;
+              i = end + 2;
+              continue;
+            }
+            const target = parseWiki(inner);
             if (embed) out = out.slice(0, -1);
-            out += target && !embed ? `[${escapeLabel(target.label)}](${wikiHref(target)})` : line.slice(i + 2, end);
+            out += target && !embed ? `[${escapeLabel(target.label)}](${wikiHref(target)})` : inner;
             i = end + 2;
             continue;
           }

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Modal } from "../components/Modal";
 import { Button, ErrorNote } from "../components/ui";
+import { AttachSection } from "../files/Files";
+import { useAttachments } from "../files/queries";
 import { CellEditor, CellValue, type CellChange, type Names } from "./Cell";
 import { KIND_ICON, rowTitle, type DatabaseDetail, type Kind, type Row } from "./format";
 import { useDeleteRow, useRows, useUpdateRow } from "./queries";
@@ -26,6 +28,7 @@ export function RowDialog({
   const remove = useDeleteRow();
   const [editing, setEditing] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const files = useAttachments({ row_id: rowId });
   if (!row) return null;
   const canEdit = detail.can_edit;
   const save = (r: Row, change: CellChange) => update.mutate({ ...change, id: r.id });
@@ -68,6 +71,15 @@ export function RowDialog({
           </div>
         ))}
       </dl>
+      <div className="mt-4">
+        <AttachSection
+          target={{ row_id: row.id }}
+          items={[...(files.data ?? [])].reverse()}
+          name={rowTitle(detail.columns, row)}
+          canEdit={canEdit}
+          projectCanCover={canEdit}
+        />
+      </div>
       <ErrorNote error={update.error ?? remove.error} />
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="label-mono text-text-quiet text-[10px]">

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Status, type Task, type TaskDetail } from "../api/client";
 import type { components } from "../api/schema";
+import { uploadFiles } from "../files/queries";
 import { moveColumn } from "./columns";
 import { applyMove } from "./format";
 
@@ -245,9 +246,18 @@ export function useComments(taskId: string) {
   const qc = useQueryClient();
   const onSuccess = () => refreshLog(qc, taskId);
   const add = useMutation({
-    mutationFn: (body: string) =>
-      unwrap(api.POST("/tasks/{id}/comments", { params: { path: { id: taskId } }, body: { body } })),
+    /** Photos go up first, then the comment claims them. */
+    mutationFn: async ({ body, files = [] }: { body: string; files?: File[] }) => {
+      const uploaded = files.length ? await uploadFiles({ task_id: taskId }, files) : [];
+      return unwrap(
+        api.POST("/tasks/{id}/comments", {
+          params: { path: { id: taskId } },
+          body: { body, attachment_ids: uploaded.map((a) => a.id) },
+        }),
+      );
+    },
     onSuccess,
+    onError: onSuccess,
   });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: string }) =>

@@ -12,6 +12,7 @@ import { ProjectBoardPage } from "./pages/ProjectBoardPage";
 import { ProjectDataPage } from "./pages/ProjectDataPage";
 import { ProjectOverview } from "./pages/ProjectOverview";
 import { ProjectPage } from "./pages/ProjectPage";
+import { ProjectPhotosPage } from "./pages/ProjectPhotosPage";
 import { InvitePage } from "./pages/InvitePage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotesIndex, NotesLayout } from "./pages/NotesPage";
@@ -59,6 +60,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <ProjectOverview /> },
           { path: "board", element: <ProjectBoardPage /> },
+          { path: "photos", element: <ProjectPhotosPage /> },
           { path: "notes", element: <ProjectNotesPage /> },
           { path: "data", element: <ProjectDataPage /> },
           { path: "data/:dbId", element: <ProjectDataPage /> },

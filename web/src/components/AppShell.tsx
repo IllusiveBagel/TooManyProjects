@@ -18,8 +18,8 @@ const TABS = [
   { to: "/board", label: "Board", end: false, icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
   { to: "/calendar", label: "Calendar", end: false, icon: "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5" },
   { to: "/notes", label: "Notes", end: false, icon: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" },
-  { to: "/settings", label: "Settings", end: false, icon: "M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4" },
 ];
+const SETTINGS_ICON = "M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4";
 
 export function AppShell() {
   const me = useMe();
@@ -46,7 +46,7 @@ export function AppShell() {
           <NavLink to="/notes" className={navClass}>Notes</NavLink>
           <NavLink to="/settings" className={navClass}>Settings</NavLink>
         </nav>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <Button
             variant="primary"
             className="min-h-10 px-3 text-sm"
@@ -60,6 +60,18 @@ export function AppShell() {
             <span className="sm:hidden">{inCalendar ? "+ Plan" : "+ New"}</span>
             <span className="hidden sm:inline">{inNotes ? "+ Quick note" : inCalendar ? "+ Plan time" : "+ New project"}</span>
           </Button>
+          {/* Phones keep Settings up here, so the tab bar has room for Today later. */}
+          <NavLink
+            to="/settings"
+            aria-label="Settings"
+            className={({ isActive }) =>
+              `grid size-10 place-items-center rounded-md sm:hidden ${isActive ? "text-text bg-surface-raised" : "text-text-quiet"}`
+            }
+          >
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+              <path d={SETTINGS_ICON} />
+            </svg>
+          </NavLink>
           <span className="label-mono text-text-quiet hidden sm:inline">{me.name}</span>
           <button
             type="button"
