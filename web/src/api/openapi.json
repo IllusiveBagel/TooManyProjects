@@ -2306,6 +2306,67 @@
         }
       }
     },
+    "/inbox/{id}/file": {
+      "post": {
+        "tags": [
+          "capture"
+        ],
+        "summary": "Move something from the Inbox into a project: as a task (the note's text\nbecomes its description, its photos move to the task, and the note goes),\nor as a note filed under the project.",
+        "operationId": "file_inbox",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileInboxRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickAddResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/invites": {
       "get": {
         "tags": [
@@ -2510,6 +2571,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Label"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/link-preview": {
+      "get": {
+        "tags": [
+          "capture"
+        ],
+        "summary": "The title, site name and picture of a web page, for a pasted or shared\nlink. Only public addresses are fetched, and only the first 512 KB.",
+        "operationId": "link_preview",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -4321,6 +4423,105 @@
         }
       }
     },
+    "/quick-add": {
+      "post": {
+        "tags": [
+          "capture"
+        ],
+        "summary": "Capture a line as a task, a note filed under a project, or into the Inbox.",
+        "operationId": "quick_add",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuickAddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuickAddResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Everything that matched, kind by kind, best matches first within each.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "The words to look for. Each word matches the start of a word, so\n`brak` finds `brakes`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Most results of each kind. Default 8, at most 50.",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SearchHit"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/shares": {
       "get": {
         "tags": [
@@ -5163,6 +5364,51 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/today": {
+      "get": {
+        "tags": [
+          "today"
+        ],
+        "summary": "What to touch next, across every project.",
+        "operationId": "today",
+        "parameters": [
+          {
+            "name": "tz",
+            "in": "query",
+            "description": "The viewer's IANA time zone, such as Europe/London, which says when\ntoday starts. Defaults to the zone they last planned time in.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Today"
+                }
+              }
+            }
+          },
+          "400": {
             "description": "",
             "content": {
               "application/json": {
@@ -6842,6 +7088,29 @@
           }
         }
       },
+      "FileInboxRequest": {
+        "type": "object",
+        "required": [
+          "kind",
+          "project_id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "`task` or `note`."
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A new title. Defaults to the note's."
+          }
+        }
+      },
       "Filter": {
         "type": "object",
         "required": [
@@ -7193,6 +7462,38 @@
           },
           "target_id": {
             "type": "string"
+          }
+        }
+      },
+      "LinkPreview": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The page's preview picture, an https address."
+          },
+          "site": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The site's own name, such as Printables."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "description": "Where the page ended up, after redirects."
           }
         }
       },
@@ -7822,6 +8123,130 @@
           }
         }
       },
+      "QuickAddRequest": {
+        "type": "object",
+        "required": [
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "More text, such as what a share sheet sent besides the link."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`task`, `note` or `inbox`. Task and note need `project_id`."
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "The line typed (or shared). Becomes the task or note title."
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A link that came with it, kept in the task's description or note's body."
+          }
+        }
+      },
+      "QuickAddResult": {
+        "type": "object",
+        "required": [
+          "kind",
+          "title"
+        ],
+        "properties": {
+          "column": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The column a task went into."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`task`, `note` or `inbox`."
+          },
+          "note_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The new note (also for the Inbox)."
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "task": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Task",
+                "description": "The new task, when it was a task."
+              }
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "QuietProject": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "color",
+          "quiet_days",
+          "total_tasks",
+          "open_tasks",
+          "last_active_at"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_active_at": {
+            "type": "string",
+            "description": "When anything last happened on it."
+          },
+          "open_tasks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quiet_days": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Days since anything happened on it."
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_tasks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "RelationRef": {
         "type": "object",
         "description": "A relation cell's link, with what's needed to show and open it.",
@@ -7995,6 +8420,92 @@
           }
         }
       },
+      "SearchHit": {
+        "type": "object",
+        "description": "One thing that matched.",
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "done",
+          "updated_at"
+        ],
+        "properties": {
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The column a task is in, a note's folder, or a row's database."
+          },
+          "database_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A row's database."
+          },
+          "done": {
+            "type": "boolean",
+            "description": "A finished task, or a project that is done or archived."
+          },
+          "id": {
+            "type": "string",
+            "description": "The project, task, comment, note or row id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`project`, `task`, `comment`, `note` or `row`."
+          },
+          "project_color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snippet": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The matching words in context, with `[` and `]` around each hit."
+          },
+          "task_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The task a comment is on, or the task itself."
+          },
+          "task_number": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The task's number, shown as T-12."
+          },
+          "title": {
+            "type": "string",
+            "description": "The name to show: a title, or for a comment the words around the match."
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
       "SetupRequest": {
         "type": "object",
         "required": [
@@ -8154,6 +8665,7 @@
           "number",
           "status_id",
           "category",
+          "status_name",
           "title",
           "position",
           "created_at",
@@ -8271,6 +8783,10 @@
           "status_id": {
             "type": "string"
           },
+          "status_name": {
+            "type": "string",
+            "description": "The column's name, such as Doing."
+          },
           "title": {
             "type": "string"
           },
@@ -8375,6 +8891,65 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "Today": {
+        "type": "object",
+        "required": [
+          "date",
+          "now",
+          "blocked",
+          "due",
+          "sessions",
+          "quiet",
+          "inbox"
+        ],
+        "properties": {
+          "blocked": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            }
+          },
+          "date": {
+            "type": "string",
+            "description": "Today in the viewer's time zone, `YYYY-MM-DD`."
+          },
+          "due": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "description": "Open tasks due in the next 7 days, and late ones, soonest first."
+          },
+          "inbox": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteSummary"
+            },
+            "description": "Quick captures not filed under a project yet, newest first."
+          },
+          "now": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "description": "In progress, yours or nobody's."
+          },
+          "quiet": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuietProject"
+            },
+            "description": "Your active projects with no activity for 14 days, quietest first."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Occurrence"
+            },
+            "description": "Today's work sessions: yours and those you're joining."
           }
         }
       },
@@ -9109,6 +9684,18 @@
     {
       "name": "databases",
       "description": "Project databases: columns, rows, views, import and export"
+    },
+    {
+      "name": "today",
+      "description": "The Today screen: in progress, blocked, due, sessions, gone quiet and the Inbox"
+    },
+    {
+      "name": "search",
+      "description": "One search over projects, tasks, comments, notes and database rows"
+    },
+    {
+      "name": "capture",
+      "description": "Quick add, filing the Inbox, and link previews"
     },
     {
       "name": "calendar",

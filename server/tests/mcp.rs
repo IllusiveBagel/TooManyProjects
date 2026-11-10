@@ -207,6 +207,8 @@ async fn reads_projects_notes_and_briefings() {
         "link_note_to_task",
         "get_calendar",
         "plan_time",
+        "get_today",
+        "quick_add",
     ] {
         assert!(names.contains(&n), "missing {n}: {names:?}");
     }
@@ -764,4 +766,53 @@ async fn columns_projects_notes_and_done_tasks_can_be_changed() {
     for k in ["status.created", "status.moved", "status.recategorised"] {
         assert!(kinds.contains(&k), "{kinds:?}");
     }
+}
+
+#[tokio::test]
+async fn today_and_quick_add_tools() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (car, _) = seed(&app, &me).await;
+    let read = make_token(&app, &me, "read").await;
+    let write = make_token(&app, &me, "write").await;
+
+    let (err, text) = tool(&app, &read, "get_today", json!({"tz": "UTC"})).await;
+    assert!(!err, "{text}");
+    assert!(
+        text.starts_with("# Today, ")
+            && text.contains("## Late or due")
+            && text.contains("T-1 Rebuild carburettor"),
+        "{text}"
+    );
+
+    let (err, text) = tool(&app, &read, "quick_add", json!({"text": "Nope"})).await;
+    assert!(err && text.contains("read-only"), "{text}");
+
+    let (err, text) = tool(
+        &app,
+        &write,
+        "quick_add",
+        json!({"text": "Order gaskets", "project": "Car restoration", "link": "https://example.com/gaskets"}),
+    )
+    .await;
+    assert!(
+        !err && text.contains("Added to Car restoration (To do)") && text.contains("Order gaskets"),
+        "{text}"
+    );
+    let (err, text) = tool(&app, &write, "quick_add", json!({"text": "Try resin printing"})).await;
+    assert!(!err && text.contains("to the Inbox"), "{text}");
+    let (err, text) =
+        tool(&app, &write, "quick_add", json!({"text": "x", "project": car, "as": "inbox"})).await;
+    assert!(err, "{text}");
+    let (_, today) = tool(&app, &read, "get_today", json!({})).await;
+    assert!(today.contains("## Inbox, not filed yet (1)") && today.contains("Try resin printing"), "{today}");
+
+    let tasks = app.call("GET", &format!("/api/v1/projects/{car}/tasks"), Some(&me), None).await.body;
+    let added = tasks.as_array().unwrap().iter().find(|t| t["title"] == "Order gaskets").unwrap();
+    assert_eq!(added["description"], "https://example.com/gaskets");
+    let dash = app.call("GET", &format!("/api/v1/projects/{car}/dashboard"), Some(&me), None).await.body;
+    assert!(
+        dash["activity"].as_array().unwrap().iter().any(|a| a["kind"] == "task.created" && a["via"] == "ai"),
+        "{dash}"
+    );
 }

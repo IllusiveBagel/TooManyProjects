@@ -1,0 +1,30 @@
+{
+  "name": "too many projects",
+  "short_name": "Projects",
+  "description": "Every project on one canvas, with boards, notes and a calendar.",
+  "id": "/",
+  "start_url": "/today",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121110",
+  "theme_color": "#121110",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [{ "name": "files", "accept": ["image/*"] }]
+    }
+  },
+  "shortcuts": [
+    { "name": "Quick add", "url": "/today?add=1", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

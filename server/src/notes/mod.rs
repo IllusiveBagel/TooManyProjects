@@ -329,6 +329,17 @@ fn clean_title(title: &str) -> AppResult<String> {
     Ok(markdown::file_stem(t))
 }
 
+/// A title that fits a note: cut to 120 characters, with an ellipsis when cut.
+pub(crate) fn safe_title(title: &str) -> String {
+    let t = title.trim();
+    if t.chars().count() <= 120 {
+        return t.to_string();
+    }
+    let mut out: String = t.chars().take(119).collect::<String>().trim_end().to_string();
+    out.push('…');
+    out
+}
+
 fn check_body(body: &str) -> AppResult<()> {
     if body.len() as u64 > vault::MAX_NOTE_BYTES {
         return Err(AppError::BadRequest("note_too_large", "Notes can be up to 2 MB.".into()));
@@ -507,7 +518,7 @@ pub(crate) async fn list_notes(
 
 /// Each word as a quoted prefix term, so punctuation can't break the query
 /// and `brak` finds `brakes`.
-fn fts_query(q: &str) -> String {
+pub(crate) fn fts_query(q: &str) -> String {
     q.split_whitespace()
         .map(|w| w.replace('"', ""))
         .filter(|w| !w.is_empty())

@@ -459,3 +459,122 @@ pub fn attachments(list: &[crate::attachments::Attachment]) -> String {
     }
     out
 }
+
+/// Search results, kind by kind, with ids for follow-up calls.
+pub fn search(q: &str, hits: &[crate::search::SearchHit]) -> String {
+    let mut out = format!("Results for “{q}”:\n");
+    let groups: [(&str, &[&str]); 5] = [
+        ("Projects", &["project"]),
+        ("Tasks", &["task"]),
+        ("Comments in task logs", &["comment"]),
+        ("Notes", &["note"]),
+        ("Database rows", &["row"]),
+    ];
+    for (title, kinds) in groups {
+        let list: Vec<_> = hits.iter().filter(|h| kinds.contains(&h.kind.as_str())).collect();
+        let _ = write!(out, "\n## {title} ({})\n\n", list.len());
+        for h in list {
+            let project = h.project_title.as_deref().unwrap_or("");
+            let line = match h.kind.as_str() {
+                "project" => {
+                    let mut l =
+                        format!("- **{}** ({}) · id `{}`", h.title, h.context.as_deref().unwrap_or(""), h.id);
+                    if let Some(s) = &h.snippet {
+                        let _ = write!(l, " · {s}");
+                    }
+                    l
+                }
+                "task" => format!(
+                    "- T-{} {} · {project} · {} · id `{}`",
+                    h.task_number.unwrap_or(0),
+                    h.title,
+                    h.context.as_deref().unwrap_or(""),
+                    h.id
+                ),
+                "comment" => format!(
+                    "- On T-{} {} · {project} · {} · task id `{}`\n  {}",
+                    h.task_number.unwrap_or(0),
+                    h.title,
+                    day(&h.updated_at),
+                    h.task_id.as_deref().unwrap_or(""),
+                    h.snippet.as_deref().unwrap_or("")
+                ),
+                "note" => {
+                    let mut l =
+                        format!("- **{}** · id `{}` · {}", h.title, h.id, h.context.as_deref().unwrap_or(""));
+                    if let Some(s) = h.snippet.as_deref().filter(|s| !s.is_empty()) {
+                        let _ = write!(l, "\n  {s}");
+                    }
+                    l
+                }
+                _ => format!(
+                    "- **{}** · {project} · database {} · row id `{}`",
+                    h.title,
+                    h.context.as_deref().unwrap_or(""),
+                    h.id
+                ),
+            };
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// The Today screen as markdown.
+pub fn today(t: &crate::today::Today) -> String {
+    let mut out = format!("# Today, {}\n", t.date);
+    let tasks = |out: &mut String, title: &str, list: &[Task]| {
+        if list.is_empty() {
+            return;
+        }
+        let _ = write!(out, "\n## {title} ({})\n\n", list.len());
+        for task in list.iter().take(40) {
+            let _ = writeln!(out, "{} · {} · id `{}`", task_line(task), task.project_title, task.id);
+        }
+    };
+    tasks(&mut out, "In progress", &t.now);
+    tasks(&mut out, "Blocked", &t.blocked);
+    tasks(&mut out, &format!("Late or due in the next {} days", crate::today::DUE_DAYS), &t.due);
+    if !t.sessions.is_empty() {
+        let _ = write!(out, "\n## Today's sessions ({})\n\n", t.sessions.len());
+        for o in &t.sessions {
+            out.push_str(&crate::calendar::line(o));
+            out.push('\n');
+        }
+    }
+    if !t.quiet.is_empty() {
+        let _ = write!(
+            out,
+            "\n## Gone quiet: active, nothing for {}+ days ({})\n\n",
+            crate::today::QUIET_DAYS,
+            t.quiet.len()
+        );
+        for p in &t.quiet {
+            let tasks = if p.total_tasks == 0 {
+                "no tasks yet".to_string()
+            } else {
+                format!("{} open", p.open_tasks)
+            };
+            let _ =
+                writeln!(out, "- **{}** · quiet {} days · {tasks} · id `{}`", p.title, p.quiet_days, p.id);
+        }
+    }
+    if !t.inbox.is_empty() {
+        let _ = write!(out, "\n## Inbox, not filed yet ({})\n\n", t.inbox.len());
+        for n in &t.inbox {
+            out.push_str(&note_line(n));
+            out.push('\n');
+        }
+    }
+    if t.now.is_empty()
+        && t.blocked.is_empty()
+        && t.due.is_empty()
+        && t.sessions.is_empty()
+        && t.quiet.is_empty()
+        && t.inbox.is_empty()
+    {
+        out.push_str("\nNothing in progress, blocked, due or waiting in the Inbox.\n");
+    }
+    out
+}

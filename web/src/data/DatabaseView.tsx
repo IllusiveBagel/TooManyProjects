@@ -17,6 +17,7 @@ export function DatabaseView({
   q,
   compact,
   limit,
+  initialRow,
 }: {
   detail: DatabaseDetail;
   view: View | null;
@@ -24,11 +25,13 @@ export function DatabaseView({
   compact?: boolean;
   /** Show at most this many rows (embeds). */
   limit?: number;
+  /** A row to open at once, such as one picked in search. */
+  initialRow?: string | null;
 }) {
   const rows = useRows(detail.database.id, view?.id, q);
   const members = useMembers(detail.database.project_id).data ?? [];
   const names: Names = useMemo(() => Object.fromEntries(members.map((m) => [m.user_id, m.name])), [members]);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(initialRow ?? null);
 
   // A new row added under an "is" filter starts with that value, so it stays in view.
   const newRowValues = useMemo(() => {

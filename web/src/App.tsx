@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "react-router";
+import { useEffect, type ReactNode } from "react";
+import { createBrowserRouter, Navigate, RouterProvider, useLocation, useNavigate } from "react-router";
 import { MeContext, useAuthStatus } from "./auth/queries";
 import { AppShell } from "./components/AppShell";
 import { AuthLayout } from "./components/AuthLayout";
@@ -19,6 +19,7 @@ import { NotesIndex, NotesLayout } from "./pages/NotesPage";
 import { ProjectNotesPage } from "./pages/ProjectNotesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
+import { TodayPage } from "./pages/TodayPage";
 import { ThemeSync } from "./theme/ThemeSync";
 
 /** Sends people to setup, login or the app, depending on who they are. */
@@ -42,6 +43,19 @@ function Gate({ need, children }: { need: "setup" | "guest" | "user"; children: 
   return <MeContext.Provider value={user ?? null}>{children}</MeContext.Provider>;
 }
 
+/** Phones open on Today; after that, the Canvas tab is the canvas. */
+// Opened straight at some other page (a link, a reload): leave it be.
+let launched = window.location.pathname !== "/";
+function Home() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (launched) return;
+    launched = true;
+    if (window.matchMedia("(max-width: 639px)").matches) navigate("/today", { replace: true });
+  }, []);
+  return <CanvasPage />;
+}
+
 const router = createBrowserRouter([
   { path: "/setup", element: <Gate need="setup"><SetupPage /></Gate> },
   { path: "/login", element: <Gate need="guest"><LoginPage /></Gate> },
@@ -51,7 +65,10 @@ const router = createBrowserRouter([
   {
     element: <Gate need="user"><AppShell /></Gate>,
     children: [
-      { index: true, element: <CanvasPage /> },
+      { index: true, element: <Home /> },
+      { path: "today", element: <TodayPage /> },
+      // A share sent without the service worker (it wasn't installed yet): Today handles ?add=1.
+      { path: "share", element: <Navigate to="/today?add=1" replace /> },
       { path: "board", element: <GlobalBoardPage /> },
       { path: "calendar", element: <CalendarPage /> },
       {

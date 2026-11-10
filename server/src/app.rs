@@ -20,7 +20,7 @@ use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
-    attachments, auth, board, calendar, canvas, comments,
+    attachments, auth, board, calendar, canvas, capture, comments,
     config::Config,
     dashboard, databases,
     error::AppError,
@@ -28,9 +28,9 @@ use crate::{
     limits::LoginLimiter,
     links, mcp, notes, oauth,
     openapi::ApiDoc,
-    projects, sharing, tasks,
+    projects, search, sharing, tasks,
     themes::{self, ThemeStore},
-    tokens,
+    today, tokens,
     updates::{self, UpdateChecker},
 };
 
@@ -74,6 +74,9 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(attachments::router())
         .merge(calendar::router())
         .merge(dashboard::router())
+        .merge(today::router())
+        .merge(search::router())
+        .merge(capture::router())
         .merge(databases::router())
         .merge(notes::router())
         .merge(sharing::router())

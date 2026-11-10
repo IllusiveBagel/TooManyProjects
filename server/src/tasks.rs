@@ -57,6 +57,7 @@ struct TaskRow {
     note_count: i64,
     attachment_count: i64,
     category: String,
+    status_name: String,
     project_title: String,
     project_color: String,
 }
@@ -69,7 +70,7 @@ const TASK_SELECT: &str = "SELECT t.id, t.project_id, t.number, t.status_id, t.t
         (SELECT COUNT(*) FROM task_comments tc WHERE tc.task_id = t.id) AS comment_count,
         (SELECT COUNT(*) FROM task_notes tn JOIN notes n ON n.id = tn.note_id WHERE tn.task_id = t.id) AS note_count,
         (SELECT COUNT(*) FROM attachments x WHERE x.task_id = t.id) AS attachment_count,
-        s.category, p.title AS project_title, p.color AS project_color
+        s.category, s.name AS status_name, p.title AS project_title, p.color AS project_color
     FROM tasks t
     JOIN statuses s ON s.id = t.status_id
     JOIN projects p ON p.id = t.project_id
@@ -84,6 +85,8 @@ pub struct Task {
     pub status_id: String,
     /// The column's category: `todo`, `in_progress`, `blocked` or `done`.
     pub category: String,
+    /// The column's name, such as Doing.
+    pub status_name: String,
     pub title: String,
     /// Markdown.
     pub description: Option<String>,
@@ -298,6 +301,7 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
             comment_count: r.comment_count,
             note_count: r.note_count,
             attachment_count: r.attachment_count,
+            status_name: r.status_name,
             project_title: r.project_title,
             project_color: r.project_color,
         })
@@ -330,6 +334,29 @@ pub async fn project_tasks(conn: &mut SqliteConnection, project_id: &str) -> App
         "{TASK_SELECT} WHERE t.project_id = ? ORDER BY s.position, t.position"
     ))
     .bind(project_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    attach_labels(conn, rows).await
+}
+
+/// Open tasks for the Today screen: in progress, blocked, or due by `until`
+/// (a YYYY-MM-DD date), on projects that aren't archived. Only tasks assigned
+/// to `user_id`, or nobody's tasks on their own projects, so a friend's
+/// shared board doesn't fill someone's day.
+pub async fn today_tasks(conn: &mut SqliteConnection, user_id: &str, until: &str) -> AppResult<Vec<Task>> {
+    let rows = sqlx::query_as::<_, TaskRow>(&format!(
+        "{TASK_SELECT}
+         WHERE EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ?1)
+           AND p.status <> 'archived' AND s.category <> 'done'
+           AND (t.assignee_id = ?1 OR (t.assignee_id IS NULL AND p.owner_id = ?1))
+           AND (s.category IN ('in_progress', 'blocked') OR (t.due_date IS NOT NULL AND t.due_date <= ?2))
+         ORDER BY CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date,
+            CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
+            t.updated_at DESC
+         LIMIT 300"
+    ))
+    .bind(user_id)
+    .bind(until)
     .fetch_all(&mut *conn)
     .await?;
     attach_labels(conn, rows).await
