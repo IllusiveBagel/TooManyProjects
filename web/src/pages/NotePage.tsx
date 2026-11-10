@@ -10,6 +10,12 @@ import { NoteTasks } from "../notes/NoteTasks";
 import { useCreateNote, useDeleteNote, useNote, useNotes, useUpdateNote } from "../notes/queries";
 import { projectColor } from "../theme/resolve";
 import { NoteCard } from "./NotesPage";
+import { uploadFiles } from "../files/queries";
+import { CAMERA_ICON, CLIP_ICON, Icon, PickButton } from "../files/Files";
+import type { Attachment } from "../files/format";
+
+/** Obsidian embeds for files just added to the note's vault, one per line. */
+const embedsFor = (added: Attachment[]) => added.map((a) => `![[${a.name}]]`).join("\n");
 
 type SaveState = "saved" | "pending" | "saving" | "error";
 
@@ -73,6 +79,23 @@ function NoteView({ detail }: { detail: NoteDetail }) {
   };
   const flushRef = useRef(flush);
   flushRef.current = flush;
+  // The editor owns its text, so adding photos from the toolbar remounts it.
+  const [editorKey, setEditorKey] = useState(0);
+  const [adding, setAdding] = useState<unknown>(null);
+  const [uploading, setUploading] = useState(false);
+  const addFiles = async (files: File[]) => {
+    setUploading(true);
+    setAdding(null);
+    try {
+      const text = embedsFor(await uploadFiles({ note_id: note.id }, files));
+      onChange(`${body.replace(/\s+$/, "")}${body.trim() ? "\n\n" : ""}${text}\n`);
+      setEditorKey((k) => k + 1);
+    } catch (e) {
+      setAdding(e);
+    } finally {
+      setUploading(false);
+    }
+  };
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (pending.current !== null) e.preventDefault();
@@ -127,6 +150,18 @@ function NoteView({ detail }: { detail: NoteDetail }) {
           )}
           <span className="ml-auto flex gap-2">
             {canEdit && (
+              <PickButton camera onFiles={addFiles} disabled={uploading} label="Add a photo" className="label-mono min-h-9 px-3 text-[11px]">
+                <Icon d={CAMERA_ICON} className="size-4" />
+                <span className="max-sm:hidden">{uploading ? "Uploading…" : "Photo"}</span>
+              </PickButton>
+            )}
+            {canEdit && (
+              <PickButton onFiles={addFiles} disabled={uploading} label="Attach a file" className="label-mono min-h-9 px-3 text-[11px]">
+                <Icon d={CLIP_ICON} className="size-4" />
+                <span className="max-sm:hidden">Attach</span>
+              </PickButton>
+            )}
+            {canEdit && (
               <Button
                 className="label-mono min-h-9 px-3 text-[11px]"
                 aria-pressed={editing}
@@ -161,15 +196,23 @@ function NoteView({ detail }: { detail: NoteDetail }) {
         </div>
 
         <TitleInput detail={detail} readOnly={!canEdit} onRename={(title) => update.mutate({ title })} />
-        <ErrorNote error={update.error ?? remove.error ?? create.error} />
+        <ErrorNote error={update.error ?? remove.error ?? create.error ?? adding} />
 
         <MetaRow detail={detail} readOnly={!canEdit} onChange={(change) => update.mutate(change)} />
 
         {editing ? (
-          <MarkdownEditor value={body} onChange={onChange} targets={targets} autoFocus label={`${note.title}, markdown`} />
+          <MarkdownEditor
+            key={editorKey}
+            value={body}
+            onChange={onChange}
+            targets={targets}
+            autoFocus
+            label={`${note.title}, markdown`}
+            onFiles={async (files) => embedsFor(await uploadFiles({ note_id: note.id }, files))}
+          />
         ) : body.trim() ? (
           <div onDoubleClick={() => canEdit && setEditing(true)}>
-            <NoteMarkdown body={body} links={linksOut} onCreate={createLinked} projectIds={note.projects.map((p) => p.id)} />
+            <NoteMarkdown body={body} links={linksOut} onCreate={createLinked} projectIds={note.projects.map((p) => p.id)} noteId={note.id} />
           </div>
         ) : canEdit ? (
           <button type="button" onClick={() => setEditing(true)} className="text-text-quiet font-reading cursor-pointer self-start text-[19px] italic">

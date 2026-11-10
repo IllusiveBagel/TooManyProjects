@@ -11,6 +11,428 @@
     }
   ],
   "paths": {
+    "/attachments": {
+      "get": {
+        "tags": [
+          "attachments"
+        ],
+        "summary": "Files, newest first (by when the photo was taken, else when it was added).",
+        "operationId": "list_attachments",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "description": "A project's files: its own, its tasks', comments', rows' and those of\nnotes linked to it.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "include_children",
+            "in": "query",
+            "description": "With `project_id`: projects spawned from it too, all the way down.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "description": "One task's files, its comments' included.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "row_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "note_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "images_only",
+            "in": "query",
+            "description": "Images only.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Attachment"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "attachments"
+        ],
+        "summary": "Add photos or files. The body is `multipart/form-data` with one or more\nparts named `file`. Each may be up to the server's limit (25 MB unless\n`TMP_MAX_UPLOAD_MB` says otherwise).",
+        "operationId": "upload",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "comment_id",
+            "in": "query",
+            "description": "A comment of yours in a task's log.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "row_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "note_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Attachment"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/attachments/{id}": {
+      "delete": {
+        "tags": [
+          "attachments"
+        ],
+        "summary": "Remove a photo or file for good.",
+        "operationId": "delete_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "attachments"
+        ],
+        "summary": "Caption a photo or file.",
+        "operationId": "update_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAttachmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attachment"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/attachments/{id}/file": {
+      "get": {
+        "tags": [
+          "attachments"
+        ],
+        "summary": "The file itself, or a preview of an image.",
+        "operationId": "get_file",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "`400` or `1600` for an image's preview (a JPEG); left out, the original.",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "description": "Offer it as a download instead of showing it.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/accept-invite": {
       "post": {
         "tags": [
@@ -2774,6 +3196,82 @@
         }
       }
     },
+    "/notes/{id}/file": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "A file a note embeds, such as `![[photo.jpg]]`, found the way Obsidian\nfinds it: beside the note, from the vault's top, in `attachments/`, then\nanywhere in the vault by name.",
+        "operationId": "note_file",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "What the note embeds, as written: `photo.jpg`, `attachments/photo.jpg`\nor a path relative to the note.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oauth/approve": {
       "post": {
         "tags": [
@@ -3176,6 +3674,70 @@
             }
           },
           "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/cover": {
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Choose the photo on the project's canvas card.",
+        "operationId": "set_cover",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -4889,6 +5451,148 @@
           }
         }
       },
+      "Attachment": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "mime",
+          "size",
+          "is_image",
+          "via",
+          "created_at",
+          "can_edit"
+        ],
+        "properties": {
+          "added_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "added_by_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "can_edit": {
+            "type": "boolean",
+            "description": "You may caption or remove it."
+          },
+          "caption": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when it was added with a comment in the task's log."
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_image": {
+            "type": "boolean",
+            "description": "An image with previews: ask for `?size=400` or `?size=1600`."
+          },
+          "mime": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The file's name. For a note's file, its name in the vault, as used in\nan `![[embed]]`."
+          },
+          "note_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Missing only for a note's file."
+          },
+          "project_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bytes."
+          },
+          "taken_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When the photo was taken, from the camera (local time, no zone)."
+          },
+          "task_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "task_number": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Shown as T-12."
+          },
+          "task_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "via": {
+            "type": "string",
+            "description": "`web` or `ai`."
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "AuthStatus": {
         "type": "object",
         "required": [
@@ -5306,9 +6010,17 @@
           "via",
           "created_at",
           "can_edit",
-          "can_delete"
+          "can_delete",
+          "attachments"
         ],
         "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "description": "Photos and files added with it."
+          },
           "body": {
             "type": "string",
             "description": "Markdown."
@@ -5357,13 +6069,17 @@
       },
       "CommentRequest": {
         "type": "object",
-        "required": [
-          "body"
-        ],
         "properties": {
+          "attachment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Files you just uploaded to the task, to show with this comment\ninstead. Only read when adding a comment."
+          },
           "body": {
             "type": "string",
-            "description": "Markdown, up to 20,000 characters."
+            "description": "Markdown, up to 20,000 characters. May be empty when adding photos."
           }
         }
       },
@@ -5428,6 +6144,18 @@
           "scope": {
             "type": "string",
             "description": "`read` or `write`."
+          }
+        }
+      },
+      "CoverRequest": {
+        "type": "object",
+        "properties": {
+          "attachment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A photo on this project, or `null` for no cover."
           }
         }
       },
@@ -6903,6 +7631,13 @@
             "type": "string",
             "description": "A theme slot (`slot-1` to `slot-8`) or a one-off `#rrggbb`."
           },
+          "cover_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The photo shown on its canvas card."
+          },
           "created_at": {
             "type": "string"
           },
@@ -7174,14 +7909,27 @@
           "relations",
           "position",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "file_count"
         ],
         "properties": {
+          "cover_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Its first photo, for the gallery view."
+          },
           "created_at": {
             "type": "string"
           },
           "database_id": {
             "type": "string"
+          },
+          "file_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Photos and files attached to the row."
           },
           "id": {
             "type": "string"
@@ -7415,6 +8163,7 @@
           "checklist_total",
           "comment_count",
           "note_count",
+          "attachment_count",
           "overdue",
           "project_title",
           "project_color"
@@ -7432,6 +8181,11 @@
               "string",
               "null"
             ]
+          },
+          "attachment_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Photos and files on it, its comments' included."
           },
           "category": {
             "type": "string",
@@ -7533,7 +8287,8 @@
           "activity",
           "comments",
           "notes",
-          "hidden_notes"
+          "hidden_notes",
+          "attachments"
         ],
         "properties": {
           "activity": {
@@ -7541,6 +8296,13 @@
             "items": {
               "$ref": "#/components/schemas/ActivityItem"
             }
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "description": "Photos and files on the task itself, oldest first. Those added with a\ncomment are on the comment."
           },
           "checklist": {
             "type": "array",
@@ -7613,6 +8375,18 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "UpdateAttachmentRequest": {
+        "type": "object",
+        "properties": {
+          "caption": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A few words under the photo. Empty clears it."
           }
         }
       },
@@ -8083,6 +8857,23 @@
           }
         }
       },
+      "UploadForm": {
+        "type": "object",
+        "description": "One file to upload.",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "description": "One or more files, each in a part named `file`."
+          }
+        }
+      },
       "User": {
         "type": "object",
         "required": [
@@ -8200,7 +8991,7 @@
           },
           "kind": {
             "type": "string",
-            "description": "`table`, `board` or `calendar`."
+            "description": "`table`, `board`, `calendar` or `gallery` (cards with each row's first photo)."
           },
           "name": {
             "type": "string"

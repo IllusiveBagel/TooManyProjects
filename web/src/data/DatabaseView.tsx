@@ -3,6 +3,7 @@ import { ErrorNote } from "../components/ui";
 import { useMembers } from "../sharing/queries";
 import { BoardView } from "./BoardView";
 import { CalendarView } from "./CalendarView";
+import { GalleryView } from "./GalleryView";
 import type { Names } from "./Cell";
 import type { DatabaseDetail, View } from "./format";
 import { useRows } from "./queries";
@@ -57,7 +58,15 @@ export function DatabaseView({
   const kind = view?.kind ?? "table";
   return (
     <>
-      {kind === "board" ? <BoardView {...props} /> : kind === "calendar" ? <CalendarView {...props} /> : <TableView {...props} />}
+      {kind === "board" ? (
+        <BoardView {...props} />
+      ) : kind === "calendar" ? (
+        <CalendarView {...props} />
+      ) : kind === "gallery" ? (
+        <GalleryView {...props} />
+      ) : (
+        <TableView {...props} />
+      )}
       {limit && rows.data.length > limit && (
         <p className="label-mono text-text-quiet px-3 py-2 text-[10.5px]">{rows.data.length - limit} more not shown</p>
       )}

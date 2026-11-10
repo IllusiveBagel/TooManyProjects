@@ -69,6 +69,8 @@ pub struct Project {
     /// What you can do with it: `owner`, `editor` or `viewer`.
     pub role: String,
     pub owner_name: String,
+    /// The photo shown on its canvas card.
+    pub cover_id: Option<String>,
     #[sqlx(flatten)]
     pub stats: ProjectStats,
 }
@@ -76,7 +78,7 @@ pub struct Project {
 pub(crate) const PROJECT_SELECT: &str = "SELECT p.id, p.owner_id, p.title, p.summary, p.description,
         p.status, p.color, p.icon, p.started_at, p.target_date, p.archived_at, p.created_at, p.updated_at,
         s.total_tasks, s.done_tasks, s.open_tasks, s.in_progress_tasks, s.overdue_tasks, s.child_count,
-        s.last_active_at, a.role, o.name AS owner_name
+        s.last_active_at, a.role, o.name AS owner_name, p.cover_id
     FROM projects p JOIN project_stats s ON s.project_id = p.id
         JOIN project_access a ON a.project_id = p.id
         JOIN users o ON o.id = p.owner_id";
@@ -562,5 +564,6 @@ async fn delete_project(
     sqlx::query("DELETE FROM tasks WHERE project_id = ?").bind(&id).execute(&mut *tx).await?;
     sqlx::query("DELETE FROM projects WHERE id = ?").bind(&id).execute(&mut *tx).await?;
     tx.commit().await?;
+    crate::attachments::empty_trash(&state.db, &state.config.data_dir).await;
     Ok(StatusCode::NO_CONTENT)
 }

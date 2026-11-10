@@ -1,6 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { CSSProperties } from "react";
 import type { Project } from "../api/client";
+import { fileUrl } from "../files/format";
 import { initials } from "../sharing/format";
 import { projectColor } from "../theme/resolve";
 import { dueLabel, lastActive, progress, STATUS_LABEL, STATUS_TONE } from "./format";
@@ -38,6 +39,15 @@ export function ProjectNode({ data, selected }: NodeProps<ProjectNodeType>) {
         {project.role !== "owner" && <SharedBadge project={project} />}
       </div>
       <span className="font-display text-[22px] leading-[1.05] font-extrabold tracking-[-0.02em] break-words">{project.title}</span>
+      {project.cover_id && (
+        <img
+          src={fileUrl({ id: project.cover_id }, 400)}
+          alt=""
+          loading="lazy"
+          draggable={false}
+          className="bg-surface-raised pointer-events-none aspect-[16/9] w-full rounded-md object-cover"
+        />
+      )}
       <div
         className="gauge"
         role="progressbar"

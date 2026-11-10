@@ -116,7 +116,10 @@ export function MarkdownEditor({
   placeholder = "Write in markdown. [[ links a note, [[@ links a project.",
   autoFocus,
   label,
+  onFiles,
 }: {
+  /** Files pasted or dropped in: upload them and return the text to insert, such as `![[photo.jpg]]`. */
+  onFiles?: (files: File[]) => Promise<string>;
   value: string;
   onChange: (text: string) => void;
   targets: LinkTargets;
@@ -127,8 +130,10 @@ export function MarkdownEditor({
   const host = useRef<HTMLDivElement>(null);
   const changeRef = useRef(onChange);
   const targetsRef = useRef(targets);
+  const filesRef = useRef(onFiles);
   changeRef.current = onChange;
   targetsRef.current = targets;
+  filesRef.current = onFiles;
 
   useEffect(() => {
     const view = new EditorView({
@@ -149,12 +154,44 @@ export function MarkdownEditor({
           cmPlaceholder(placeholder),
           EditorView.contentAttributes.of({ "aria-label": label, "aria-multiline": "true" }),
           theme,
+          EditorView.domEventHandlers({
+            paste(e, view) {
+              const files = Array.from(e.clipboardData?.files ?? []);
+              if (!files.length || !filesRef.current) return false;
+              e.preventDefault();
+              const at = view.state.selection.main;
+              void insertFiles(view, files, at.from, at.to);
+              return true;
+            },
+            drop(e, view) {
+              const files = Array.from(e.dataTransfer?.files ?? []);
+              if (!files.length || !filesRef.current) return false;
+              e.preventDefault();
+              const pos = view.posAtCoords({ x: e.clientX, y: e.clientY }) ?? view.state.selection.main.head;
+              void insertFiles(view, files, pos, pos);
+              return true;
+            },
+          }),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) changeRef.current(u.state.doc.toString());
           }),
         ],
       }),
     });
+    /** Holds the place with a marker while the files upload, then swaps in their embeds. */
+    async function insertFiles(view: EditorView, files: File[], from: number, to: number) {
+      const marker = `<!-- uploading ${files.length === 1 ? files[0]!.name : `${files.length} files`}… -->`;
+      view.dispatch({ changes: { from, to, insert: marker }, selection: { anchor: from + marker.length } });
+      let text = "";
+      try {
+        text = await filesRef.current!(files);
+      } catch (err) {
+        text = "";
+        alert(err instanceof Error ? err.message : "Upload failed.");
+      }
+      const at = view.state.doc.toString().indexOf(marker);
+      if (at >= 0) view.dispatch({ changes: { from: at, to: at + marker.length, insert: text }, selection: { anchor: at + text.length } });
+    }
     if (autoFocus) {
       view.focus();
       view.dispatch({ selection: { anchor: view.state.doc.length } });

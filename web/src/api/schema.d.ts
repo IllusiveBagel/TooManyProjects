@@ -4,6 +4,63 @@
  */
 
 export interface paths {
+    "/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Files, newest first (by when the photo was taken, else when it was added). */
+        get: operations["list_attachments"];
+        put?: never;
+        /**
+         * Add photos or files. The body is `multipart/form-data` with one or more
+         *     parts named `file`. Each may be up to the server's limit (25 MB unless
+         *     `TMP_MAX_UPLOAD_MB` says otherwise).
+         */
+        post: operations["upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attachments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a photo or file for good. */
+        delete: operations["delete_attachment"];
+        options?: never;
+        head?: never;
+        /** Caption a photo or file. */
+        patch: operations["update_attachment"];
+        trace?: never;
+    };
+    "/attachments/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The file itself, or a preview of an image. */
+        get: operations["get_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/accept-invite": {
         parameters: {
             query?: never;
@@ -801,6 +858,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notes/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A file a note embeds, such as `![[photo.jpg]]`, found the way Obsidian
+         *     finds it: beside the note, from the vault's top, in `attachments/`, then
+         *     anywhere in the vault by name.
+         */
+        get: operations["note_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/oauth/approve": {
         parameters: {
             query?: never;
@@ -921,6 +999,23 @@ export interface paths {
         head?: never;
         /** Edit a project. Archive it by setting `status` to `archived`. */
         patch: operations["update_project"];
+        trace?: never;
+    };
+    "/projects/{id}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose the photo on the project's canvas card. */
+        put: operations["set_cover"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/projects/{id}/dashboard": {
@@ -1396,6 +1491,51 @@ export interface components {
             /** @description Where to send the browser next: back to the app. */
             redirect_to: string;
         };
+        Attachment: {
+            added_by?: string | null;
+            added_by_name?: string | null;
+            /** @description You may caption or remove it. */
+            can_edit: boolean;
+            caption?: string | null;
+            /** @description Set when it was added with a comment in the task's log. */
+            comment_id?: string | null;
+            created_at: string;
+            /** Format: int64 */
+            height?: number | null;
+            id: string;
+            /** @description An image with previews: ask for `?size=400` or `?size=1600`. */
+            is_image: boolean;
+            mime: string;
+            /**
+             * @description The file's name. For a note's file, its name in the vault, as used in
+             *     an `![[embed]]`.
+             */
+            name: string;
+            note_id?: string | null;
+            note_title?: string | null;
+            /** @description Missing only for a note's file. */
+            project_id?: string | null;
+            project_title?: string | null;
+            row_id?: string | null;
+            /**
+             * Format: int64
+             * @description Bytes.
+             */
+            size: number;
+            /** @description When the photo was taken, from the camera (local time, no zone). */
+            taken_at?: string | null;
+            task_id?: string | null;
+            /**
+             * Format: int64
+             * @description Shown as T-12.
+             */
+            task_number?: number | null;
+            task_title?: string | null;
+            /** @description `web` or `ai`. */
+            via: string;
+            /** Format: int64 */
+            width?: number | null;
+        };
         AuthStatus: {
             /** @description True until the owner account exists. The web app shows setup instead of login. */
             needs_setup: boolean;
@@ -1518,6 +1658,8 @@ export interface components {
             target_database_id?: string | null;
         };
         Comment: {
+            /** @description Photos and files added with it. */
+            attachments: components["schemas"]["Attachment"][];
             /** @description Markdown. */
             body: string;
             /** @description You wrote it, or you own the project. */
@@ -1535,8 +1677,13 @@ export interface components {
             via: string;
         };
         CommentRequest: {
-            /** @description Markdown, up to 20,000 characters. */
-            body: string;
+            /**
+             * @description Files you just uploaded to the task, to show with this comment
+             *     instead. Only read when adding a comment.
+             */
+            attachment_ids?: string[];
+            /** @description Markdown, up to 20,000 characters. May be empty when adding photos. */
+            body?: string;
         };
         ConnectRequest: {
             /** @description The name the app gave itself, such as "Claude". */
@@ -1557,6 +1704,10 @@ export interface components {
             redirect_host: string;
             /** @description `read` or `write`. */
             scope: string;
+        };
+        CoverRequest: {
+            /** @description A photo on this project, or `null` for no cover. */
+            attachment_id?: string | null;
         };
         CreateColumnRequest: {
             kind: string;
@@ -2008,6 +2159,8 @@ export interface components {
             archived_at?: string | null;
             /** @description A theme slot (`slot-1` to `slot-8`) or a one-off `#rrggbb`. */
             color: string;
+            /** @description The photo shown on its canvas card. */
+            cover_id?: string | null;
             created_at: string;
             /** @description Markdown. */
             description?: string | null;
@@ -2090,8 +2243,15 @@ export interface components {
             version: string;
         };
         Row: {
+            /** @description Its first photo, for the gallery view. */
+            cover_id?: string | null;
             created_at: string;
             database_id: string;
+            /**
+             * Format: int64
+             * @description Photos and files attached to the row.
+             */
+            file_count: number;
             id: string;
             position: string;
             /** @description Relation column id to its links, in order. */
@@ -2161,6 +2321,11 @@ export interface components {
             /** @description Who is doing it, someone the project is shared with. */
             assignee_id?: string | null;
             assignee_name?: string | null;
+            /**
+             * Format: int64
+             * @description Photos and files on it, its comments' included.
+             */
+            attachment_count: number;
             /** @description The column's category: `todo`, `in_progress`, `blocked` or `done`. */
             category: string;
             /** Format: int64 */
@@ -2203,6 +2368,11 @@ export interface components {
         };
         TaskDetail: {
             activity: components["schemas"]["ActivityItem"][];
+            /**
+             * @description Photos and files on the task itself, oldest first. Those added with a
+             *     comment are on the comment.
+             */
+            attachments: components["schemas"]["Attachment"][];
             checklist: components["schemas"]["ChecklistItem"][];
             /** @description The task's log, oldest first. */
             comments: components["schemas"]["Comment"][];
@@ -2225,6 +2395,10 @@ export interface components {
             id: string;
             modes: components["schemas"]["ThemeModeSummary"][];
             name: string;
+        };
+        UpdateAttachmentRequest: {
+            /** @description A few words under the photo. Empty clears it. */
+            caption?: string | null;
         };
         UpdateColumnRequest: {
             after_id?: string | null;
@@ -2348,6 +2522,11 @@ export interface components {
             name?: string | null;
             pinned?: boolean | null;
         };
+        /** @description One file to upload. */
+        UploadForm: {
+            /** @description One or more files, each in a part named `file`. */
+            file: string[];
+        };
         User: {
             avatar?: string | null;
             created_at: string;
@@ -2378,7 +2557,7 @@ export interface components {
             config: components["schemas"]["ViewConfig"];
             database_id: string;
             id: string;
-            /** @description `table`, `board` or `calendar`. */
+            /** @description `table`, `board`, `calendar` or `gallery` (cards with each row's first photo). */
             kind: string;
             name: string;
             /** @description Shown on the project's overview. */
@@ -2412,6 +2591,235 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_attachments: {
+        parameters: {
+            query?: {
+                /**
+                 * @description A project's files: its own, its tasks', comments', rows' and those of
+                 *     notes linked to it.
+                 */
+                project_id?: string | null;
+                /** @description With `project_id`: projects spawned from it too, all the way down. */
+                include_children?: boolean;
+                /** @description One task's files, its comments' included. */
+                task_id?: string | null;
+                row_id?: string | null;
+                note_id?: string | null;
+                /** @description Images only. */
+                images_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"][];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    upload: {
+        parameters: {
+            query?: {
+                project_id?: string | null;
+                task_id?: string | null;
+                /** @description A comment of yours in a task's log. */
+                comment_id?: string | null;
+                row_id?: string | null;
+                note_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["UploadForm"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"][];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_attachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_attachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAttachmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_file: {
+        parameters: {
+            query?: {
+                /** @description `400` or `1600` for an image's preview (a JPEG); left out, the original. */
+                size?: number | null;
+                /** @description Offer it as a download instead of showing it. */
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": number[];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     accept_invite: {
         parameters: {
             query?: never;
@@ -4366,6 +4774,43 @@ export interface operations {
             };
         };
     };
+    note_file: {
+        parameters: {
+            query: {
+                /**
+                 * @description What the note embeds, as written: `photo.jpg`, `attachments/photo.jpg`
+                 *     or a path relative to the note.
+                 */
+                name: string;
+                size?: number | null;
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": number[];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     approve: {
         parameters: {
             query?: never;
@@ -4642,6 +5087,53 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_cover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

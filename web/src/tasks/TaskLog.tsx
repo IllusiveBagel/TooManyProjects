@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useNavigate } from "react-router";
 import remarkGfm from "remark-gfm";
@@ -6,6 +6,7 @@ import type { Comment, Task, TaskDetail } from "../api/client";
 import { lastActive } from "../canvas/format";
 import { Button, ErrorNote, ViaBadge } from "../components/ui";
 import { Popover } from "../data/Cell";
+import { CAMERA_ICON, DropArea, FileGrid, Icon, PickButton } from "../files/Files";
 import { ago } from "../notes/format";
 import { useCreateNote, useNotes } from "../notes/queries";
 import { projectColor } from "../theme/resolve";
@@ -175,8 +176,11 @@ export function TaskLog({ detail, canEdit }: { detail: TaskDetail; canEdit: bool
   const { task, comments } = detail;
   const log = useComments(task.id);
   const [draft, setDraft] = useState("");
+  const [photos, setPhotos] = useState<File[]>([]);
+  const ready = (draft.trim() || photos.length > 0) && !log.add.isPending;
   const submit = () => {
-    if (draft.trim()) log.add.mutate(draft.trim(), { onSuccess: () => setDraft("") });
+    if (!ready) return;
+    log.add.mutate({ body: draft.trim(), files: photos }, { onSuccess: () => (setDraft(""), setPhotos([])) });
   };
   if (!canEdit && comments.length === 0) return null;
 
@@ -188,42 +192,82 @@ export function TaskLog({ detail, canEdit }: { detail: TaskDetail; canEdit: bool
       {comments.length > 0 && (
         <ol className="border-rule flex flex-col gap-4 border-y-0 border-r-0 pl-3.5">
           {comments.map((c) => (
-            <CommentItem key={c.id} comment={c} onSave={(body) => log.update.mutateAsync({ id: c.id, body })} onDelete={() => log.remove.mutate(c.id)} />
+            <CommentItem key={c.id} comment={c} canEdit={canEdit} onSave={(body) => log.update.mutateAsync({ id: c.id, body })} onDelete={() => log.remove.mutate(c.id)} />
           ))}
         </ol>
       )}
       {canEdit && (
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <textarea
-            className={`${boxClass} font-reading min-h-20 text-[15px] leading-relaxed`}
-            value={draft}
-            maxLength={20000}
-            placeholder={comments.length ? "What did you do or find out?" : "Log what you did, tried or learnt…"}
-            aria-label="New comment"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                submit();
-              }
+        <DropArea onFiles={(f) => setPhotos((p) => [...p, ...f])} hint="Drop to add to this log entry">
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
             }}
-          />
-          <div className="flex items-center gap-3">
-            <span className="label-mono text-text-quiet hidden text-[10px] sm:inline">Markdown · Ctrl Enter</span>
-            <Button type="submit" variant="primary" className="ml-auto min-h-10 px-3 text-sm" disabled={!draft.trim() || log.add.isPending}>
-              Add to log
-            </Button>
-          </div>
-        </form>
+          >
+            <div className="relative">
+              <textarea
+                className={`${boxClass} font-reading min-h-20 pr-12 text-[15px] leading-relaxed`}
+                value={draft}
+                maxLength={20000}
+                placeholder={comments.length ? "What did you do or find out?" : "Log what you did, tried or learnt…"}
+                aria-label="New comment"
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+              />
+              <PickButton
+                camera
+                label="Add a photo to this entry"
+                onFiles={(f) => setPhotos((p) => [...p, ...f])}
+                className="text-text-quiet hover:text-text absolute top-1 right-1 min-h-10 border-0 px-2.5"
+              >
+                <Icon d={CAMERA_ICON} className="size-5" />
+              </PickButton>
+            </div>
+            {photos.length > 0 && <Staged files={photos} onRemove={(i) => setPhotos((p) => p.filter((_, j) => j !== i))} />}
+            <div className="flex items-center gap-3">
+              <span className="label-mono text-text-quiet hidden text-[10px] sm:inline">Markdown · Ctrl Enter · paste photos</span>
+              <Button type="submit" variant="primary" className="ml-auto min-h-10 px-3 text-sm" disabled={!ready}>
+                {log.add.isPending && photos.length ? "Uploading…" : "Add to log"}
+              </Button>
+            </div>
+          </form>
+        </DropArea>
       )}
       <ErrorNote error={log.add.error ?? log.update.error ?? log.remove.error} />
     </section>
+  );
+}
+
+/** Photos waiting to go up with a comment, shown from the device. */
+function Staged({ files, onRemove }: { files: File[]; onRemove: (index: number) => void }) {
+  const urls = useMemo(() => files.map((f) => (f.type.startsWith("image/") ? URL.createObjectURL(f) : null)), [files]);
+  useEffect(() => () => urls.forEach((u) => u && URL.revokeObjectURL(u)), [urls]);
+  return (
+    <ul className="flex flex-wrap gap-2" aria-label="Photos to add">
+      {files.map((f, i) => (
+        <li key={i} className="border-rule bg-surface-raised relative size-20 overflow-hidden rounded-md">
+          {urls[i] ? (
+            <img src={urls[i]!} alt="" className="size-full object-cover" />
+          ) : (
+            <span className="label-mono text-text-quiet block p-1.5 text-[10px] break-all">{f.name}</span>
+          )}
+          <button
+            type="button"
+            onClick={() => onRemove(i)}
+            aria-label={`Don't add ${f.name}`}
+            className="absolute top-0.5 right-0.5 grid size-7 cursor-pointer place-items-center rounded-full bg-[rgba(0,0,0,0.65)] text-[#fff]"
+          >
+            ×
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -237,10 +281,12 @@ function ExternalLink({ href, children }: { href?: string; children?: ReactNode 
 
 function CommentItem({
   comment: c,
+  canEdit,
   onSave,
   onDelete,
 }: {
   comment: Comment;
+  canEdit: boolean;
   onSave: (body: string) => Promise<unknown>;
   onDelete: () => void;
 }) {
@@ -302,10 +348,17 @@ function CommentItem({
           </div>
         </form>
       ) : (
-        <div className="note-prose comment-prose">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>
-            {c.body}
-          </ReactMarkdown>
+        c.body && (
+          <div className="note-prose comment-prose">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ExternalLink }}>
+              {c.body}
+            </ReactMarkdown>
+          </div>
+        )
+      )}
+      {c.attachments.length > 0 && (
+        <div className="max-w-[280px]">
+          <FileGrid items={c.attachments} columns={2} projectCanCover={canEdit} />
         </div>
       )}
     </li>

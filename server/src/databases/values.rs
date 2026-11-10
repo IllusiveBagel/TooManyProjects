@@ -25,7 +25,7 @@ pub const KINDS: &[&str] = &[
     "person",
     "relation",
 ];
-pub const VIEW_KINDS: &[&str] = &["table", "board", "calendar"];
+pub const VIEW_KINDS: &[&str] = &["table", "board", "calendar", "gallery"];
 pub const RELATION_TARGETS: &[&str] = &["task", "note", "project", "row"];
 pub const FILTER_OPS: &[&str] = &["is", "is_not", "contains", "empty", "not_empty", "gt", "lt"];
 

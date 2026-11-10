@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ago, folderTree, openWikiQuery, parseTags, parseWiki, readWikiHref, snippetParts, wikiToMarkdown } from "./format";
+import { ago, folderTree, openWikiQuery, parseTags, parseWiki, readWikiHref, snippetParts, vaultFile, wikiToMarkdown } from "./format";
 
 describe("parseWiki", () => {
   it("reads titles, aliases, headings and projects", () => {
@@ -16,7 +16,7 @@ describe("wikiToMarkdown", () => {
   it("turns wiki links into markdown links outside code", () => {
     const body = "See [[Brakes|the [brakes]]] and [[@Car]].\n`[[not]]`\n```\n[[fenced]]\n```\n![[photo.png]]";
     expect(wikiToMarkdown(body)).toBe(
-      "See [the \\[brakes](wiki:Brakes)] and [@Car](project:Car).\n`[[not]]`\n```\n[[fenced]]\n```\nphoto.png",
+      "See [the \\[brakes](wiki:Brakes)] and [@Car](project:Car).\n`[[not]]`\n```\n[[fenced]]\n```\n![photo.png](vault:photo.png)",
     );
   });
 
@@ -80,7 +80,11 @@ describe("database embeds", () => {
   it("turns a whole-line embed into a block the renderer shows as a view", () => {
     expect(wikiToMarkdown("Parts:\n![[Parts list#To order]]\nDone")).toBe("Parts:\n\n```tmp-embed\nParts list#To order\n```\n\nDone");
     // Files and inline embeds are left alone.
-    expect(wikiToMarkdown("![[photo.jpg]]")).toBe("photo.jpg");
+    expect(wikiToMarkdown("![[photo.jpg]]")).toBe("![photo.jpg](vault:photo.jpg)");
+    expect(wikiToMarkdown("![[my photo.jpg|300]]")).toBe("![my photo.jpg](vault:my%20photo.jpg)");
+    expect(vaultFile("vault:my%20photo.jpg")).toBe("my photo.jpg");
+    expect(vaultFile("Car/photo.png")).toBe("Car/photo.png");
+    expect(vaultFile("https://x.com/a.png")).toBeNull();
     expect(wikiToMarkdown("see ![[Parts list]] here")).toBe("see Parts list here");
   });
 });

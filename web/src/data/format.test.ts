@@ -15,6 +15,7 @@ const col = (id: string, kind: string, extra: Partial<Column> = {}): Column => (
 const row = (values: Record<string, unknown>, relations: Row["relations"] = {}): Row => ({
   id: "r",
   database_id: "d",
+  file_count: 0,
   values,
   relations,
   position: "a",

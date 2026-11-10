@@ -208,7 +208,7 @@ function NewView({ detail, onMade }: { detail: DatabaseDetail; onMade: (v: View)
             }}
           >
             <input autoFocus className={field} placeholder="To order" aria-label="View name" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-2 gap-1">
               {Object.entries(VIEW_LABEL).map(([k, label]) => (
                 <button key={k} type="button" aria-pressed={kind === k} className={`${tab(kind === k)} justify-center`} onClick={() => setKind(k)}>
                   {label}
@@ -217,6 +217,9 @@ function NewView({ detail, onMade }: { detail: DatabaseDetail; onMade: (v: View)
             </div>
             {kind === "board" && !detail.columns.some((c) => c.kind === "select") && (
               <p className="text-text-quiet text-xs">A board groups rows by a select column. Add one first.</p>
+            )}
+            {kind === "gallery" && (
+              <p className="text-text-quiet text-xs">Cards led by each row’s first photo. Add photos from a row.</p>
             )}
             {kind === "calendar" && !detail.columns.some((c) => c.kind === "date") && (
               <p className="text-text-quiet text-xs">A calendar places rows by a date column. Add one first.</p>

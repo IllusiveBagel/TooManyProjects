@@ -61,7 +61,7 @@ export const TARGET_LABEL: Record<string, string> = {
   row: "Rows of a database",
 };
 
-export const VIEW_LABEL: Record<string, string> = { table: "Table", board: "Board", calendar: "Calendar" };
+export const VIEW_LABEL: Record<string, string> = { table: "Table", board: "Board", calendar: "Calendar", gallery: "Gallery" };
 
 export const OPS: { op: string; label: string; needsValue: boolean }[] = [
   { op: "is", label: "is", needsValue: true },

@@ -26,6 +26,8 @@ pub struct Config {
     pub tls_key: Option<PathBuf>,
     /// More names or addresses for the app's own certificate (`TMP_TLS_HOSTS`, comma separated).
     pub tls_hosts: Vec<String>,
+    /// Largest photo or file one can attach (`TMP_MAX_UPLOAD_MB`, default 25).
+    pub max_upload_bytes: usize,
 }
 
 impl Config {
@@ -76,7 +78,14 @@ impl Config {
             .filter(|h| !h.is_empty())
             .map(String::from)
             .collect();
+        let max_upload_bytes = env::var("TMP_MAX_UPLOAD_MB")
+            .ok()
+            .and_then(|v| v.trim().parse::<usize>().ok())
+            .filter(|mb| *mb > 0)
+            .unwrap_or(25)
+            .saturating_mul(1024 * 1024);
         Ok(Self {
+            max_upload_bytes,
             data_dir,
             bind,
             static_dir,
@@ -108,6 +117,7 @@ impl Config {
             tls_cert: None,
             tls_key: None,
             tls_hosts: vec![],
+            max_upload_bytes: 25 * 1024 * 1024,
         }
     }
 }

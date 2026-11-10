@@ -1,6 +1,7 @@
 //! TooManyProjects server: the JSON API under `/api`, plus the built web app.
 
 pub mod app;
+pub mod attachments;
 pub mod auth;
 pub mod board;
 pub mod calendar;

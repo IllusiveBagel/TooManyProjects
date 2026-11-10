@@ -105,6 +105,9 @@ project with see its sessions and can say they'll join.
 
 And the rest:
 
+- **📷 Photos and files.** Snap progress from your phone onto a task or a log
+  entry, drop in PDFs, STLs and receipts, and read each project's **Photos**
+  tab as a build log, week by week. Files stay on your own disk.
 - **🤝 Sharing.** Invite-only accounts. Share one project (and what it
   spawns) or everything, as *Can edit* or *View only*, and assign tasks to
   each other.
@@ -161,6 +164,7 @@ in a clone of this repo.
 | `TMP_COOKIE_SECURE` | from `TMP_PUBLIC_URL` | Force secure cookies on (`true`) or off (`false`). |
 | `TMP_SESSION_DAYS` | `30` | How long a sign-in lasts. |
 | `TMP_DATA_DIR` | `/data` in Docker | Where the database, themes and notes live. |
+| `TMP_MAX_UPLOAD_MB` | `25` | Largest photo or file you can attach. |
 | `TMP_BIND` | `0.0.0.0:8080` | Address and port to listen on. |
 | `TMP_HTTPS` | `0.0.0.0:8443` | Where the app serves HTTPS with its own certificate, for Claude Code on your network (see [HTTPS on your home network](docs/guide.md#https-on-your-home-network)). `off` turns it off. |
 | `TMP_TLS_HOSTS` | unset | Extra names or IPs the app's certificate covers, comma separated, such as `192.168.1.50,nas.local`. More can be added in Settings → HTTPS. |
@@ -196,7 +200,7 @@ list of tools, resources and prompts.
 
 ## Documentation
 
-- **[User guide](docs/guide.md):** boards, calendar, notes, sharing, databases, AI access
+- **[User guide](docs/guide.md):** boards, calendar, notes, photos and files, sharing, databases, AI access
   and theming, in detail.
 - **[Development](docs/development.md):** running it locally, the checks CI
   runs, the code layout, and how releases are made.

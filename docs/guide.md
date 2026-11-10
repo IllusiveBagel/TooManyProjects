@@ -147,6 +147,43 @@ time.
   Nothing is overwritten: a clashing name gets a number. Export downloads the
   whole vault as a zip.
 
+## Photos and files
+
+- **Attach anything** to a task, a comment in a task's log, a database row or
+  a note: drop or paste files onto it, or use **Photo** and **Attach**. On a
+  phone, **Take photo** opens the camera, and the camera button in the log box
+  adds photos to that log entry. Several can go in at once.
+- **Photos** show as thumbnails; click one for the full view, where you can add
+  a caption, download the original, jump to its task, delete it, or **Use as
+  cover on the canvas** so it shows on the project's card. Other files show as
+  a name, type and size; PDFs open in the browser and everything else
+  downloads.
+- **Photos tab:** every project has one. It reads as a build log: newest
+  first, grouped by week (by when the photo was taken, from the camera's
+  data, else when it was added), each tile saying which task it came from.
+  Filter by task, include the projects spawned from it, or hide other files.
+  Photos from notes linked to the project show too. On a phone, the big camera
+  button adds photos straight to the project.
+- **Notes:** paste or drop an image into the editor, or use **Photo** /
+  **Attach** above the note. The file goes into your vault's `attachments/`
+  folder and an Obsidian embed (`![[photo.jpg]]`) is added, so Obsidian sees
+  it too. Embeds and relative image links from an imported vault show in the
+  app as well.
+- **Databases** get a **Gallery** view: cards led by each row's first photo.
+  Add photos from a row's dialog.
+- **Limits:** 25 MB per file unless `TMP_MAX_UPLOAD_MB` says otherwise. Any
+  file type is kept; JPEG, PNG, WebP and GIF get 400 px and 1600 px previews
+  (turned upright, with the camera's location and other EXIF data left out).
+  The original is kept untouched.
+- **Where they live:** on the data volume, next to the database and vaults:
+  `/data/files/<account id>/<year-month>/`, previews in `/data/files/thumbs/`,
+  and note attachments in the vault. Back up `/data` and you have everything.
+- **Who sees them:** whoever can see the task, row, project or note they are
+  on. Editors can add, caption and delete; viewers can look. Files are only
+  served to people signed in, never from a public link.
+- **Removing** a task, comment or row keeps its photos on the project (or the
+  task); deleting a project removes its files from disk.
+
 ## Sharing
 
 Everyone on a server has their own canvas, projects and vault. Share with
@@ -246,7 +283,9 @@ if you let it, add to them.
 - **Tools:** `list_projects` (with the canvas groups each project sits in, and
   a `group` filter), `get_project_context` (a full briefing, with the
   family on request), `search` (projects, tasks and their comments, and notes), `list_notes`,
-  `get_note`, `get_task` (a task with its log, linked notes and history),
+  `get_note`, `get_task` (a task with its log, linked notes, photos and history),
+  `list_attachments` (a project's or task's photos and files) and
+  `get_attachment` (shows Claude the photo itself, or a small text file),
   `query_database` (a saved view or a search as a markdown table, with
   totals), and with read-write access `create_task`, `update_task` (move,
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
@@ -393,6 +432,8 @@ projects.example.com {
 
 Any other reverse proxy (nginx, Traefik, Nginx Proxy Manager) works too, as
 long as it passes on the `Host` header and sets `X-Forwarded-Proto: https`.
+nginx limits request bodies to 1 MB by default, which stops photo uploads: set
+`client_max_body_size 30m;` (or more, to match `TMP_MAX_UPLOAD_MB`).
 
 ### Check it works
 

@@ -55,6 +55,11 @@ export function TaskCard({
         {task.comment_count > 0 && (
           <span title={`${task.comment_count} comment${task.comment_count === 1 ? "" : "s"} in the log`}>✎ {task.comment_count}</span>
         )}
+        {task.attachment_count > 0 && (
+          <span title={`${task.attachment_count} photo${task.attachment_count === 1 ? "" : "s"} or file${task.attachment_count === 1 ? "" : "s"}`}>
+            ▣ {task.attachment_count}
+          </span>
+        )}
         {task.note_count > 0 && (
           <span title={`${task.note_count} linked note${task.note_count === 1 ? "" : "s"}`}>¶ {task.note_count}</span>
         )}

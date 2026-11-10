@@ -18,6 +18,7 @@ import {
   useTaskDetail,
   useUpdateTask,
 } from "./queries";
+import { AttachSection } from "../files/Files";
 import { TaskLog, TaskNotes } from "./TaskLog";
 
 const inputClass = "border-rule bg-surface text-text w-full rounded-md px-3 py-2.5 outline-none focus:border-accent";
@@ -79,8 +80,8 @@ export function TaskDrawer() {
 
 function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) {
   const { task, checklist } = detail;
-  // Comments have their own log, so the history leaves them out.
-  const activity = detail.activity.filter((a) => a.kind !== "task.commented");
+  // Comments and photos show above, so the history leaves them out.
+  const activity = detail.activity.filter((a) => a.kind !== "task.commented" && a.kind !== "attachment.added");
   const statuses = useStatuses(task.project_id).data ?? [];
   const labels = useLabels(task.project_id).data ?? [];
   const update = useUpdateTask();
@@ -114,6 +115,14 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
               <>
                 {" · "}
                 <JumpTo id="task-log">Log {detail.comments.length}</JumpTo>
+              </>
+            )}
+            {task.attachment_count > 0 && (
+              <>
+                {" · "}
+                <JumpTo id="task-files">
+                  {task.attachment_count} file{task.attachment_count === 1 ? "" : "s"}
+                </JumpTo>
               </>
             )}
             {detail.notes.length + detail.hidden_notes > 0 && (
@@ -151,6 +160,14 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
 
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 pt-3 pb-6">
         {!canEdit && <p className="label-mono text-text-quiet text-[11px]">View only: this project is shared with you to look at.</p>}
+        <AttachSection
+          id="task-files"
+          target={{ task_id: task.id }}
+          items={detail.attachments}
+          name={task.title}
+          canEdit={canEdit}
+          projectCanCover={canEdit}
+        />
         {/* A viewer sees every field, read-only. */}
         <fieldset disabled={!canEdit} className="flex min-w-0 flex-col gap-5">
           <div className="grid grid-cols-2 gap-3">

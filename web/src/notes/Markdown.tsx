@@ -3,7 +3,8 @@ import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markd
 import { Link } from "react-router";
 import remarkGfm from "remark-gfm";
 import { NoteEmbed } from "../data/NoteEmbed";
-import { EMBED_LANG, readWikiHref, wikiToMarkdown, type NoteLink } from "./format";
+import { noteFileUrl } from "../files/format";
+import { EMBED_LANG, isImageName, readWikiHref, vaultFile, VAULT_PREFIX, wikiToMarkdown, type NoteLink } from "./format";
 
 /**
  * A note's markdown, rendered. Wiki links go to the note or project they
@@ -15,8 +16,11 @@ export function NoteMarkdown({
   links,
   onCreate,
   projectIds = [],
+  noteId,
 }: {
   body: string;
+  /** Lets `![[photo.jpg]]` and relative images load from the note's vault. */
+  noteId?: string;
   links: NoteLink[];
   onCreate: (title: string) => void;
   /** The note's projects, so an embed finds their database first. */
@@ -67,12 +71,28 @@ export function NoteMarkdown({
         }
         return <pre>{children}</pre>;
       },
+      img({ src = "", alt }) {
+        const name = typeof src === "string" ? vaultFile(src) : null;
+        if (!name || !noteId) return <img src={typeof src === "string" ? src : undefined} alt={alt ?? ""} />;
+        if (!isImageName(name)) {
+          return (
+            <a href={noteFileUrl(noteId, name)} target="_blank" rel="noreferrer" className="border-rule label-mono inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-[12px] no-underline">
+              ▤ {name.split("/").pop()}
+            </a>
+          );
+        }
+        return (
+          <a href={noteFileUrl(noteId, name)} target="_blank" rel="noreferrer" className="block">
+            <img src={noteFileUrl(noteId, name, 1600)} alt={alt ?? name} loading="lazy" className="max-h-[70vh] rounded-md" />
+          </a>
+        );
+      },
       input(props) {
         // GFM task list boxes: shown, not editable here.
         return <input {...props} disabled className="accent-accent mr-2 size-4 translate-y-0.5" />;
       },
     }),
-    [links, onCreate, projectIds.join(",")],
+    [links, onCreate, projectIds.join(","), noteId],
   );
 
   return (
@@ -80,7 +100,7 @@ export function NoteMarkdown({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={components}
-        urlTransform={(url) => (readWikiHref(url) ? url : defaultUrlTransform(url))}
+        urlTransform={(url) => (readWikiHref(url) || url.startsWith(VAULT_PREFIX) ? url : defaultUrlTransform(url))}
       >
         {source}
       </ReactMarkdown>

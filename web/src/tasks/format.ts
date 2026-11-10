@@ -113,6 +113,10 @@ export function activityText(a: Pick<ActivityItem, "kind" | "payload">): string 
       return `deleted ${quote(p)}`;
     case "task.commented":
       return `commented on ${quote(p)}`;
+    case "attachment.added":
+      return p.image ? `added a photo, ${p.name}` : `attached ${p.name}`;
+    case "attachment.removed":
+      return `removed ${p.name}`;
     case "task.note_linked":
       return `linked a note to ${quote(p)}`;
     case "status.deleted":

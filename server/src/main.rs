@@ -50,6 +50,8 @@ async fn main() -> anyhow::Result<()> {
         logins: Default::default(),
         tls,
     };
+    // Files left behind by deletes the last run didn't finish.
+    toomanyprojects::attachments::empty_trash(&state.db, &state.config.data_dir).await;
     // Pick up notes edited outside the app (another editor, a synced folder).
     // Polling, because file watching is unreliable on Docker volumes.
     let scan_state = state.clone();

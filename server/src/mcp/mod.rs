@@ -272,6 +272,26 @@ pub struct UpdateTaskArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct AttachmentsArgs {
+    /// A project's photos and files: id or title. Give this or `task`.
+    pub project: Option<String>,
+    /// One task's photos and files: id, or `T-12` together with `project`.
+    pub task: Option<String>,
+    /// With a project: projects spawned from it too.
+    #[serde(default)]
+    pub include_children: bool,
+    /// Photos only.
+    #[serde(default)]
+    pub images_only: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct AttachmentArgs {
+    /// Attachment id, from list_attachments or get_task.
+    pub id: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct TaskArgs {
     /// Task id, or `T-12` together with `project`.
     pub task: String,
@@ -397,6 +417,10 @@ pub struct PlanTimeArgs {
 
 // ---------------------------------------------------------------------------
 // Helpers
+
+fn text_reply(s: String) -> CallToolResult {
+    text(s)
+}
 
 fn text(s: impl Into<String>) -> CallToolResult {
     CallToolResult::success(vec![ContentBlock::text(s)])
@@ -673,7 +697,8 @@ const INSTRUCTIONS: &str = "TooManyProjects holds the user's projects (cards on 
 spawned another), each with a kanban board of tasks, plus a vault of markdown notes. Start with list_projects \
 or search, then get_project_context for a full briefing on one project. Notes link with [[Note title]] and \
 [[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Tasks keep a log of \
-comments and can have notes linked to them: read both with get_task, and log progress or lessons with \
+comments and can have notes, photos and files attached: read them with get_task, list a project's photos with \
+list_attachments and look at one with get_attachment, and log progress or lessons with \
 add_task_comment. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
 (create_task, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, update_note, \
@@ -1267,6 +1292,74 @@ impl Mcp {
             }
             .await,
         )
+    }
+
+    #[tool(
+        description = "List the photos and files on a project (its tasks, comments, database rows and linked notes included) or on one task, newest first, with ids, captions, sizes and where each is attached. Look at one with get_attachment."
+    )]
+    async fn list_attachments(
+        &self,
+        Parameters(args): Parameters<AttachmentsArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            async {
+                let mut conn = self.conn().await?;
+                let mut q = crate::attachments::ListQuery {
+                    include_children: args.include_children,
+                    images_only: args.images_only,
+                    ..Default::default()
+                };
+                if let Some(task) = &args.task {
+                    q.task_id = Some(find_task(&mut conn, &user, task, args.project.as_deref()).await?);
+                } else if let Some(project) = &args.project {
+                    q.project_id = Some(find_project(&mut conn, &user, project).await?.id);
+                } else {
+                    return Err(AppError::BadRequest("invalid_query", "Name a project or a task.".into()));
+                }
+                let list = crate::attachments::list(&mut conn, &user.id, &q).await?;
+                Ok(brief::attachments(&list))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Look at one photo or file. A photo comes back as an image (up to 1600 px) so you can see it; a small text file (CSV, markdown, code) comes back as text; anything else is described."
+    )]
+    async fn get_attachment(
+        &self,
+        Parameters(args): Parameters<AttachmentArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        let a = {
+            let mut conn = self.conn().await.map_err(|e| McpError::internal_error(e.to_string(), None))?;
+            match crate::attachments::visible_attachment(&mut conn, &user.id, &args.id).await {
+                Ok(a) => a,
+                Err(e) => return Ok(failed(e)),
+            }
+        };
+        let about = brief::attachments(std::slice::from_ref(&a));
+        let data_dir = &self.state.config.data_dir;
+        if a.is_image
+            && let Some(bytes) = crate::attachments::preview_bytes(data_dir, &a.id).await
+        {
+            use base64::Engine;
+            let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+            return Ok(CallToolResult::success(vec![
+                ContentBlock::text(about),
+                ContentBlock::image(data, "image/jpeg"),
+            ]));
+        }
+        if a.size <= 200 * 1024
+            && let Ok(bytes) = crate::attachments::original_bytes(&self.state, &a.id).await
+            && let Ok(text) = String::from_utf8(bytes)
+        {
+            return Ok(text_reply(format!("{about}\n```\n{text}\n```")));
+        }
+        Ok(text_reply(format!("{about}\nThis file can't be shown here; the person can open it in the app.")))
     }
 
     #[tool(

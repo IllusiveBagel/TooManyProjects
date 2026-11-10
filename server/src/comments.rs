@@ -47,6 +47,8 @@ pub struct Comment {
     pub can_edit: bool,
     /// You wrote it, or you own the project.
     pub can_delete: bool,
+    /// Photos and files added with it.
+    pub attachments: Vec<crate::attachments::Attachment>,
 }
 
 #[derive(FromRow)]
@@ -67,8 +69,13 @@ const COMMENT_SELECT: &str = "SELECT c.id, c.task_id, c.user_id, u.name AS user_
 
 #[derive(Deserialize, ToSchema)]
 pub struct CommentRequest {
-    /// Markdown, up to 20,000 characters.
+    /// Markdown, up to 20,000 characters. May be empty when adding photos.
+    #[serde(default)]
     pub body: String,
+    /// Files you just uploaded to the task, to show with this comment
+    /// instead. Only read when adding a comment.
+    #[serde(default)]
+    pub attachment_ids: Vec<String>,
 }
 
 async fn role(conn: &mut SqliteConnection, user_id: &str, project_id: &str) -> AppResult<String> {
@@ -93,6 +100,7 @@ fn finish(row: CommentRow, viewer: &str, role: &str) -> Comment {
         via: row.via,
         created_at: row.created_at,
         edited_at: row.edited_at,
+        attachments: vec![],
     }
 }
 
@@ -109,12 +117,23 @@ pub async fn task_comments(
     .bind(&task.id)
     .fetch_all(&mut *conn)
     .await?;
-    Ok(rows.into_iter().map(|r| finish(r, viewer, &role)).collect())
+    let mut files = crate::attachments::for_task(conn, viewer, &task.id).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let mut c = finish(r, viewer, &role);
+            let (mine, rest): (Vec<_>, Vec<_>) =
+                files.drain(..).partition(|a| a.comment_id.as_deref() == Some(c.id.as_str()));
+            c.attachments = mine;
+            files = rest;
+            c
+        })
+        .collect())
 }
 
-fn clean_body(body: &str) -> AppResult<String> {
+fn clean_body(body: &str, may_be_empty: bool) -> AppResult<String> {
     let b = body.trim();
-    if b.is_empty() || b.chars().count() > MAX_COMMENT {
+    if (b.is_empty() && !may_be_empty) || b.chars().count() > MAX_COMMENT {
         return Err(AppError::BadRequest(
             "invalid_comment",
             format!("Comments are 1 to {MAX_COMMENT} characters."),
@@ -133,7 +152,13 @@ async fn visible_comment(conn: &mut SqliteConnection, viewer: &str, id: &str) ->
         .ok_or(AppError::NotFound)?;
     let task = visible_task(conn, viewer, &row.task_id).await?;
     let role = role(conn, viewer, &task.project_id).await?;
-    Ok((finish(row, viewer, &role), task))
+    let mut comment = finish(row, viewer, &role);
+    comment.attachments = crate::attachments::for_task(conn, viewer, &task.id)
+        .await?
+        .into_iter()
+        .filter(|a| a.comment_id.as_deref() == Some(id))
+        .collect();
+    Ok((comment, task))
 }
 
 /// Add a comment to a task's log.
@@ -147,7 +172,7 @@ pub(crate) async fn add_comment(
     Path(id): Path<String>,
     Json(req): Json<CommentRequest>,
 ) -> AppResult<(StatusCode, Json<Comment>)> {
-    let body = clean_body(&req.body)?;
+    let body = clean_body(&req.body, !req.attachment_ids.is_empty())?;
     let mut tx = state.db.begin().await?;
     let task = editable_task(&mut tx, &user.id, &id).await?;
     let comment_id = time::new_id();
@@ -163,6 +188,15 @@ pub(crate) async fn add_comment(
     .bind(&now)
     .execute(&mut *tx)
     .await?;
+    let claimed =
+        crate::attachments::claim_for_comment(&mut tx, &user.id, &id, &comment_id, &req.attachment_ids)
+            .await?;
+    if body.is_empty() && claimed == 0 {
+        return Err(AppError::BadRequest(
+            "invalid_comment",
+            format!("Comments are 1 to {MAX_COMMENT} characters."),
+        ));
+    }
     sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?")
         .bind(&now)
         .bind(&task.project_id)
@@ -193,9 +227,10 @@ pub(crate) async fn update_comment(
     Path(id): Path<String>,
     Json(req): Json<CommentRequest>,
 ) -> AppResult<Json<Comment>> {
-    let body = clean_body(&req.body)?;
     let mut tx = state.db.begin().await?;
     let (current, _) = visible_comment(&mut tx, &user.id, &id).await?;
+    // A photo comment may have no words.
+    let body = clean_body(&req.body, !current.attachments.is_empty())?;
     if !current.can_edit {
         return Err(AppError::Forbidden("You can only edit your own comments.".into()));
     }
