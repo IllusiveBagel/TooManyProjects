@@ -593,6 +593,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inbox/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move something from the Inbox into a project: as a task (the note's text
+         *     becomes its description, its photos move to the task, and the note goes),
+         *     or as a note filed under the project.
+         */
+        post: operations["file_inbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/invites": {
         parameters: {
             query?: never;
@@ -661,6 +682,26 @@ export interface paths {
         head?: never;
         /** Rename or recolour a label. */
         patch: operations["update_label"];
+        trace?: never;
+    };
+    "/link-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The title, site name and picture of a web page, for a pasted or shared
+         *     link. Only public addresses are fetched, and only the first 512 KB.
+         */
+        get: operations["link_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/links": {
@@ -1162,6 +1203,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/quick-add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Capture a line as a task, a note filed under a project, or into the Inbox. */
+        post: operations["quick_add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everything that matched, kind by kind, best matches first within each. */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shares": {
         parameters: {
             query?: never;
@@ -1395,6 +1470,23 @@ export interface paths {
         };
         /** One theme's full token file. See `themes/theme.schema.json` for its shape. */
         get: operations["get_theme"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What to touch next, across every project. */
+        get: operations["today"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1919,6 +2011,13 @@ export interface components {
             /** @description A sentence fit to show a person. */
             message: string;
         };
+        FileInboxRequest: {
+            /** @description `task` or `note`. */
+            kind: string;
+            project_id: string;
+            /** @description A new title. Defaults to the note's. */
+            title?: string | null;
+        };
         Filter: {
             column_id: string;
             /** @description `is`, `is_not`, `contains`, `empty`, `not_empty`, `gt` or `lt`. */
@@ -2023,6 +2122,15 @@ export interface components {
             label?: string | null;
             source_id: string;
             target_id: string;
+        };
+        LinkPreview: {
+            /** @description The page's preview picture, an https address. */
+            image?: string | null;
+            /** @description The site's own name, such as Printables. */
+            site?: string | null;
+            title?: string | null;
+            /** @description Where the page ended up, after redirects. */
+            url: string;
         };
         /** @description Rows of one database that link to a task. */
         LinkedRows: {
@@ -2218,6 +2326,44 @@ export interface components {
             /** Format: int64 */
             total_tasks: number;
         };
+        QuickAddRequest: {
+            /** @description More text, such as what a share sheet sent besides the link. */
+            body?: string | null;
+            /** @description `task`, `note` or `inbox`. Task and note need `project_id`. */
+            kind: string;
+            project_id?: string | null;
+            /** @description The line typed (or shared). Becomes the task or note title. */
+            text: string;
+            /** @description A link that came with it, kept in the task's description or note's body. */
+            url?: string | null;
+        };
+        QuickAddResult: {
+            /** @description The column a task went into. */
+            column?: string | null;
+            /** @description `task`, `note` or `inbox`. */
+            kind: string;
+            /** @description The new note (also for the Inbox). */
+            note_id?: string | null;
+            project_id?: string | null;
+            task?: null | components["schemas"]["Task"];
+            title: string;
+        };
+        QuietProject: {
+            color: string;
+            id: string;
+            /** @description When anything last happened on it. */
+            last_active_at: string;
+            /** Format: int64 */
+            open_tasks: number;
+            /**
+             * Format: int64
+             * @description Days since anything happened on it.
+             */
+            quiet_days: number;
+            title: string;
+            /** Format: int64 */
+            total_tasks: number;
+        };
         /** @description A relation cell's link, with what's needed to show and open it. */
         RelationRef: {
             /** @description Rows: their database. */
@@ -2273,6 +2419,34 @@ export interface components {
         ScanResult: {
             /** @description Files read again because they were new or had changed. */
             indexed: number;
+        };
+        /** @description One thing that matched. */
+        SearchHit: {
+            /** @description The column a task is in, a note's folder, or a row's database. */
+            context?: string | null;
+            /** @description A row's database. */
+            database_id?: string | null;
+            /** @description A finished task, or a project that is done or archived. */
+            done: boolean;
+            /** @description The project, task, comment, note or row id. */
+            id: string;
+            /** @description `project`, `task`, `comment`, `note` or `row`. */
+            kind: string;
+            project_color?: string | null;
+            project_id?: string | null;
+            project_title?: string | null;
+            /** @description The matching words in context, with `[` and `]` around each hit. */
+            snippet?: string | null;
+            /** @description The task a comment is on, or the task itself. */
+            task_id?: string | null;
+            /**
+             * Format: int64
+             * @description The task's number, shown as T-12.
+             */
+            task_number?: number | null;
+            /** @description The name to show: a title, or for a comment the words around the match. */
+            title: string;
+            updated_at: string;
         };
         SetupRequest: {
             email: string;
@@ -2363,6 +2537,8 @@ export interface components {
             project_id: string;
             project_title: string;
             status_id: string;
+            /** @description The column's name, such as Doing. */
+            status_name: string;
             title: string;
             updated_at: string;
         };
@@ -2395,6 +2571,21 @@ export interface components {
             id: string;
             modes: components["schemas"]["ThemeModeSummary"][];
             name: string;
+        };
+        Today: {
+            blocked: components["schemas"]["Task"][];
+            /** @description Today in the viewer's time zone, `YYYY-MM-DD`. */
+            date: string;
+            /** @description Open tasks due in the next 7 days, and late ones, soonest first. */
+            due: components["schemas"]["Task"][];
+            /** @description Quick captures not filed under a project yet, newest first. */
+            inbox: components["schemas"]["NoteSummary"][];
+            /** @description In progress, yours or nobody's. */
+            now: components["schemas"]["Task"][];
+            /** @description Your active projects with no activity for 14 days, quietest first. */
+            quiet: components["schemas"]["QuietProject"][];
+            /** @description Today's work sessions: yours and those you're joining. */
+            sessions: components["schemas"]["Occurrence"][];
         };
         UpdateAttachmentRequest: {
             /** @description A few words under the photo. Empty clears it. */
@@ -4152,6 +4343,47 @@ export interface operations {
             };
         };
     };
+    file_inbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileInboxRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickAddResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_invites: {
         parameters: {
             query?: never;
@@ -4307,6 +4539,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Label"];
+                };
+            };
+        };
+    };
+    link_preview: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkPreview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };
@@ -5523,6 +5784,72 @@ export interface operations {
             };
         };
     };
+    quick_add: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickAddRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuickAddResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                /**
+                 * @description The words to look for. Each word matches the start of a word, so
+                 *     `brak` finds `brakes`.
+                 */
+                q: string;
+                /** @description Most results of each kind. Default 8, at most 50. */
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchHit"][];
+                };
+            };
+        };
+    };
     list_shares: {
         parameters: {
             query?: never;
@@ -6108,6 +6435,39 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    today: {
+        parameters: {
+            query?: {
+                /**
+                 * @description The viewer's IANA time zone, such as Europe/London, which says when
+                 *     today starts. Defaults to the zone they last planned time in.
+                 */
+                tz?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Today"];
+                };
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

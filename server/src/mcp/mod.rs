@@ -141,10 +141,32 @@ pub struct ProjectArgs {
 
 #[derive(Deserialize, JsonSchema)]
 pub struct SearchArgs {
-    /// Words to look for in projects, tasks and notes.
+    /// Words to look for in projects, tasks, comments, notes and database rows.
     pub query: String,
     /// Most results per kind. Default 10, at most 50.
     pub limit: Option<i64>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct TodayArgs {
+    /// IANA time zone that says when today starts, such as Europe/London. Default: the zone the user last planned in.
+    pub tz: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct QuickAddArgs {
+    /// The line to capture. Becomes the task or note title.
+    pub text: String,
+    /// Project id or exact title. Leave out to put it in the Inbox.
+    pub project: Option<String>,
+    /// "task" (default with a project), "note", or "inbox" (default without one).
+    #[serde(rename = "as")]
+    #[schemars(rename = "as")]
+    pub r#as: Option<String>,
+    /// A web link to keep with it.
+    pub link: Option<String>,
+    /// More text: the task's description or the note's body.
+    pub details: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -694,14 +716,15 @@ async fn descendants(conn: &mut SqliteConnection, user: &User, root: &str) -> Ap
 }
 
 const INSTRUCTIONS: &str = "TooManyProjects holds the user's projects (cards on a canvas, linked when one project \
-spawned another), each with a kanban board of tasks, plus a vault of markdown notes. Start with list_projects \
-or search, then get_project_context for a full briefing on one project. Notes link with [[Note title]] and \
+spawned another), each with a kanban board of tasks, plus a vault of markdown notes. Start with get_today \
+(what is in progress, blocked, due, quiet or waiting in the Inbox), list_projects or search, then \
+get_project_context for a full briefing on one project. Capture a quick idea or link with quick_add. Notes link with [[Note title]] and \
 [[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Tasks keep a log of \
 comments and can have notes, photos and files attached: read them with get_task, list a project's photos with \
 list_attachments and look at one with get_attachment, and log progress or lessons with \
 add_task_comment. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
-(create_task, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, update_note, \
+(create_task, quick_add, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, update_note, \
 create_project, spawn_project, update_project, add_column, update_column, add_row, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
@@ -985,7 +1008,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Search projects (title, summary, description), tasks (title, description, comments) and notes (full text) for some words."
+        description = "Search everything the user can see for some words: projects (title, summary, description), tasks (title, description), comments in task logs, notes (full text) and database rows. Words match the start of words, so `brak` finds `brakes`."
     )]
     async fn search(
         &self,
@@ -999,65 +1022,83 @@ impl Mcp {
                 if q.is_empty() {
                     return Err(bad("empty_query", "Give some words to search for."));
                 }
-                let limit = args.limit.unwrap_or(10).clamp(1, 50);
-                let like = format!("%{}%", q.replace(['%', '_'], ""));
-                let mut conn = self.conn().await?;
-                let found_projects: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
-                    "SELECT p.id, p.title, p.status, p.summary FROM projects p
-                     JOIN project_access a ON a.project_id = p.id AND a.user_id = ?1
-                     WHERE p.title LIKE ?2 OR p.summary LIKE ?2 OR p.description LIKE ?2
-                     ORDER BY p.updated_at DESC LIMIT ?3",
-                )
-                .bind(&user.id)
-                .bind(&like)
-                .bind(limit)
-                .fetch_all(&mut *conn)
-                .await?;
-                let found_tasks: Vec<(String, i64, String, String, String)> = sqlx::query_as(
-                    "SELECT t.id, t.number, t.title, p.title, s.name FROM tasks t
-                     JOIN projects p ON p.id = t.project_id JOIN statuses s ON s.id = t.status_id
-                     JOIN project_access a ON a.project_id = p.id AND a.user_id = ?1
-                     WHERE (t.title LIKE ?2 OR t.description LIKE ?2
-                        OR EXISTS (SELECT 1 FROM task_comments c WHERE c.task_id = t.id AND c.body LIKE ?2))
-                     ORDER BY s.category = 'done', t.updated_at DESC LIMIT ?3",
-                )
-                .bind(&user.id)
-                .bind(&like)
-                .bind(limit)
-                .fetch_all(&mut *conn)
-                .await?;
-                let Json(found_notes) = notes::list_notes(
-                    State(self.state.clone()),
-                    CurrentUser(user.clone()),
-                    Query(notes::ListNotesQuery {
-                        q: Some(q.to_string()),
-                        tag: None,
-                        project_id: None,
-                        folder: None,
-                        shared: None,
-                        limit: Some(limit),
-                    }),
-                )
-                .await?;
-                let mut out = format!("Results for “{q}”:\n\n## Projects ({})\n\n", found_projects.len());
-                for (id, title, status, summary) in &found_projects {
-                    out.push_str(&format!("- **{title}** ({status}) · id `{id}`"));
-                    if let Some(s) = summary.as_deref().filter(|s| !s.is_empty()) {
-                        out.push_str(&format!(" · {s}"));
-                    }
-                    out.push('\n');
-                }
-                out.push_str(&format!("\n## Tasks ({})\n\n", found_tasks.len()));
-                for (id, number, title, project, column) in &found_tasks {
-                    out.push_str(&format!("- T-{number} {title} · {project} · {column} · id `{id}`\n"));
-                }
-                out.push_str(&format!("\n## Notes ({})\n\n", found_notes.len()));
-                for n in &found_notes {
-                    out.push_str(&brief::note_line(n));
-                    out.push('\n');
-                }
-                Ok(out)
+                let hits = crate::search::run(&self.state, &user, q, args.limit.unwrap_or(10)).await?;
+                Ok(brief::search(q, &hits))
             }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "The user's Today view as markdown: tasks in progress and blocked (theirs, or nobody's on their own projects), tasks late or due in the next 7 days, today's work sessions, active projects with no activity for 14 days, and unfiled Inbox captures. A good first call for \"what should I work on?\"."
+    )]
+    async fn get_today(
+        &self,
+        Parameters(args): Parameters<TodayArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            async {
+                let today = crate::today::build(&self.state, &user, args.tz.as_deref()).await?;
+                Ok(brief::today(&today))
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Capture one line, like the app's Quick add: as a task in a project's first To do column, as a note filed under a project, or into the Inbox (no project) to file later. A link is kept with it. Needs read-write access."
+    )]
+    async fn quick_add(
+        &self,
+        Parameters(args): Parameters<QuickAddArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let project = match args.project.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+                    Some(p) => Some(find_project(&mut *self.conn().await?, &user, p).await?),
+                    None => None,
+                };
+                let kind = match (args.r#as.as_deref().map(str::trim), &project) {
+                    (Some(k), _) if !k.is_empty() => k.to_ascii_lowercase(),
+                    (_, Some(_)) => "task".to_string(),
+                    (_, None) => "inbox".to_string(),
+                };
+                if kind == "inbox" && project.is_some() {
+                    return Err(bad(
+                        "invalid_kind",
+                        "The Inbox has no project. Leave `project` out, or add it as a task or note.",
+                    ));
+                }
+                let added = crate::capture::add(
+                    &self.state,
+                    &user,
+                    crate::capture::QuickAddRequest {
+                        text: args.text.clone(),
+                        kind,
+                        project_id: project.as_ref().map(|p| p.id.clone()),
+                        url: args.link.clone(),
+                        body: args.details.clone(),
+                    },
+                )
+                .await?;
+                Ok(match (added.kind.as_str(), &added.task, &project) {
+                    ("task", Some(t), Some(p)) => format!(
+                        "Added to {} ({}):\n{}",
+                        p.title,
+                        added.column.as_deref().unwrap_or("first column"),
+                        brief::task_line(t)
+                    ),
+                    ("note", _, Some(p)) => format!("Added note \"{}\" under {}.", added.title, p.title),
+                    _ => format!("Added \"{}\" to the Inbox.", added.title),
+                })
+            })
             .await,
         )
     }

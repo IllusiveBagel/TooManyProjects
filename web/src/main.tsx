@@ -17,3 +17,12 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// The installed app's service worker receives shares from the phone (see public/sw.js).
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* Needs HTTPS (or localhost); without it the app still works, just not as a share target. */
+    });
+  });
+}

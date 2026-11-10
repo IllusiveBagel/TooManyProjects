@@ -4,6 +4,7 @@ How each part of **too many projects** works. For installing it, see the
 [README](../README.md#quick-start); for working on the code, see
 [development.md](development.md).
 
+- [Today, search and quick add](#today-search-and-quick-add)
 - [Canvas groups](#canvas-groups)
 - [Boards](#boards)
 - [Calendar](#calendar)
@@ -14,6 +15,60 @@ How each part of **too many projects** works. For installing it, see the
 - [Put it online with HTTPS](#put-it-online-with-https)
 - [Theming](#theming)
 - [Updating](#updating)
+
+## Today, search and quick add
+
+**Today** (`/today`, the first tab on a phone, and where the phone app opens)
+answers "what should I touch next?" across every project:
+
+- **Now**: tasks in a column that counts as in progress. **Blocked**: tasks in
+  a blocked column. Both list tasks assigned to you, plus unassigned ones on
+  your own projects, so a friend's shared board doesn't fill your day.
+- **Due in the next 7 days**, with late ones first and marked.
+- **Tonight / Today**: your work sessions from the calendar (busy time isn't shown).
+- **Gone quiet**: your *active* projects with no activity for 14 days.
+  **Pause** sets the project to paused, so it stops showing here.
+- **Inbox**: captures not yet filed under a project. **File it** turns one
+  into a task (its link goes in the description and its photos move to the
+  task) or files it as a note under a project.
+
+Tick a task to move it to its board's first Done column; click it to open it.
+
+**Search** (Ctrl+K, Cmd+K on a Mac, or the magnifier in the top bar) looks
+through projects, tasks, comments in task logs, notes and database rows as you
+type. Words match the start of words, so `carb` finds *carburettor*. Arrow keys
+move, Enter opens, and Tab steps through the filters (tasks, notes, data,
+projects). With nothing typed it shows what you opened recently. It also runs
+actions: **New task in …** (Alt+Enter, into the project on screen or the one
+you last used), **Quick add**, **New note**, **Plan time**, **New project**,
+go to any screen or a project's board, notes, data or photos, and switch
+between dark and light.
+
+**Quick add** (Alt+A anywhere, **+ Quick add** on Today, **+ Add** on a
+phone's Today) takes one line, as a **Task** (into the project's first To do
+column), a **Note** filed under the project, or into the **Inbox** to sort
+later. It remembers the last project you picked. Paste a link and it fetches
+the page's title (the server fetches public addresses only, never ones on
+your own network). **Photo** adds pictures, from the camera on a phone.
+
+### Sharing to it from a phone
+
+Install the app on your phone: open it in Chrome and choose **Add to Home
+screen** / **Install app** (it needs HTTPS, see below). On Android it then
+appears in the share sheet: share a Printables link or a photo to **Projects**
+and Quick add opens with it filled in.
+
+iPhones don't let web apps receive shares, so use a Shortcut instead:
+
+1. In the Shortcuts app, make a new shortcut and turn on **Show in Share
+   Sheet** (accepting URLs and text).
+2. Add **URL** with
+   `https://your-server/today?add=1&url=` followed by the **Shortcut Input**
+   variable (use **URL Encode** on it first).
+3. Add **Open URLs**.
+
+Sharing a page to that shortcut opens Quick add in Safari with the link filled
+in. (Photos can't travel this way; use **Photo** in Quick add instead.)
 
 ## Canvas groups
 
@@ -282,12 +337,14 @@ if you let it, add to them.
   there and anything using it stops at once.
 - **Tools:** `list_projects` (with the canvas groups each project sits in, and
   a `group` filter), `get_project_context` (a full briefing, with the
-  family on request), `search` (projects, tasks and their comments, and notes), `list_notes`,
+  family on request), `get_today` (the Today screen as text), `search` (projects, tasks, comments,
+  notes and database rows), `list_notes`,
   `get_note`, `get_task` (a task with its log, linked notes, photos and history),
   `list_attachments` (a project's or task's photos and files) and
   `get_attachment` (shows Claude the photo itself, or a small text file),
   `query_database` (a saved view or a search as a markdown table, with
-  totals), and with read-write access `create_task`, `update_task` (move,
+  totals), and with read-write access `quick_add` (a line into a project or
+  the Inbox), `create_task`, `update_task` (move,
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
   `link_note_to_task`, `add_note` (optionally linked to a task), `append_to_note`,
   `add_row` (values by column name), `spawn_project`, `create_project`,

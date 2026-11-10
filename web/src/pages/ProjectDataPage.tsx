@@ -65,7 +65,7 @@ export function ProjectDataPage() {
           </p>
         </div>
       ) : (
-        <DatabasePanel key={current.database.id} detail={current} view={view} canEdit={canEdit} onView={setView} />
+        <DatabasePanel key={current.database.id} detail={current} view={view} canEdit={canEdit} onView={setView} initialRow={params.get("row")} />
       )}
     </div>
   );
@@ -76,11 +76,13 @@ function DatabasePanel({
   view,
   canEdit,
   onView,
+  initialRow,
 }: {
   detail: DatabaseDetail;
   view: View | null;
   canEdit: boolean;
   onView: (v: View) => void;
+  initialRow?: string | null;
 }) {
   const [q, setQ] = useState("");
   const updateView = useUpdateView();
@@ -134,7 +136,7 @@ function DatabasePanel({
         </div>
       </div>
       <div className="flex flex-col sm:min-h-0 sm:flex-1 sm:overflow-y-auto">
-        <DatabaseView detail={detail} view={view} q={q} />
+        <DatabaseView detail={detail} view={view} q={q} initialRow={initialRow} />
       </div>
       <ErrorNote error={updateView.error} />
     </section>

@@ -73,7 +73,7 @@ export function useDashboard(projectId: string) {
 
 /** Everything a task change can touch: lists, the task, dashboards, card stats. */
 function refreshTasks(qc: QueryClient) {
-  for (const key of [["tasks"], ["task"], ["dashboard"], ["canvas"], ["project"]]) {
+  for (const key of [["tasks"], ["task"], ["dashboard"], ["canvas"], ["project"], ["today"], ["search"]]) {
     qc.invalidateQueries({ queryKey: key });
   }
 }

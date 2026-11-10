@@ -1,9 +1,13 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { useEffect } from "react";
+import { NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useLogout, useMe } from "../auth/queries";
 import { useCanvas } from "../canvas/queries";
 import { useCanvasUi } from "../canvas/store";
 import { QuickNoteDialog, useQuickNote, useQuickNoteShortcut } from "../notes/QuickNote";
 import { UpdateBanner } from "../system/UpdateBanner";
+import { Palette, usePalette, usePaletteShortcut } from "../today/Palette";
+import { QuickAddDialog, QuickAddToast, useQuickAddShortcut, useQuickAddUi } from "../today/QuickAdd";
+import { sharedFromParams, takeShared } from "../today/share";
 import { Button, Wordmark } from "./ui";
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -14,12 +18,41 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
   `label-mono flex min-h-14 flex-1 flex-col items-center justify-center gap-1 border-t-2 text-[11px] ${isActive ? "text-text border-accent" : "text-text-quiet border-transparent"}`;
 
 const TABS = [
+  { to: "/today", label: "Today", end: false, icon: "M4 4h16v16H4zM8 12l3 3 5-6" },
   { to: "/", label: "Canvas", end: true, icon: "M4 4h6v6H4zM14 14h6v6h-6zM10 7h4v10" },
   { to: "/board", label: "Board", end: false, icon: "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" },
   { to: "/calendar", label: "Calendar", end: false, icon: "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5" },
   { to: "/notes", label: "Notes", end: false, icon: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7" },
 ];
 const SETTINGS_ICON = "M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M6 15v4";
+const SEARCH_ICON = "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4";
+
+/**
+ * Opens Quick add with whatever a phone shared: from the service worker
+ * (`?shared=1`) or from a link such as an iPhone Shortcut's (`?add=1&url=…`).
+ */
+function useShareReceiver() {
+  const [params, setParams] = useSearchParams();
+  const start = useQuickAddUi((s) => s.start);
+  useEffect(() => {
+    const clear = () =>
+      setParams(
+        (p) => {
+          const next = new URLSearchParams(p);
+          for (const k of ["shared", "add", "text", "url", "title"]) next.delete(k);
+          return next;
+        },
+        { replace: true },
+      );
+    if (params.has("shared")) {
+      void takeShared().then((s) => start(s ?? {}));
+      clear();
+    } else if (params.has("add")) {
+      start(sharedFromParams(params) ?? {});
+      clear();
+    }
+  }, [params]);
+}
 
 export function AppShell() {
   const me = useMe();
@@ -30,37 +63,42 @@ export function AppShell() {
   const count = useCanvas(false).data?.projects.length;
   const startQuickNote = useQuickNote((s) => s.start);
   useQuickNoteShortcut();
+  useQuickAddShortcut();
+  usePaletteShortcut();
+  useShareReceiver();
+  const openPalette = usePalette((s) => s.show);
+  const startAdd = useQuickAddUi((s) => s.start);
+  const inToday = pathname.startsWith("/today");
   // In Notes, the top bar's New button makes a note; everywhere else, a project.
   const inNotes = pathname.startsWith("/notes");
   const inCalendar = pathname.startsWith("/calendar");
   return (
     <div className="flex h-dvh flex-col">
       <header className="border-rule bg-surface flex items-center gap-x-6 border-x-0 border-t-0 px-4 py-2.5 sm:px-5">
-        <NavLink to="/" aria-label="Canvas">
+        <NavLink to="/" aria-label="Canvas" className="shrink-0">
           <Wordmark count={count} />
         </NavLink>
         <nav className="hidden gap-5 sm:flex" aria-label="Main">
+          <NavLink to="/today" className={navClass}>Today</NavLink>
           <NavLink to="/" end className={navClass}>Canvas</NavLink>
           <NavLink to="/board" className={navClass}>Board</NavLink>
           <NavLink to="/calendar" className={navClass}>Calendar</NavLink>
           <NavLink to="/notes" className={navClass}>Notes</NavLink>
           <NavLink to="/settings" className={navClass}>Settings</NavLink>
         </nav>
-        <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <Button
-            variant="primary"
-            className="min-h-10 px-3 text-sm"
-            onClick={() => {
-              if (inNotes) return startQuickNote();
-              if (inCalendar) return navigate("/calendar?plan=new");
-              navigate("/");
-              startNewProject();
-            }}
+        <div className="ml-auto flex items-center gap-1 sm:gap-3">
+          <button
+            type="button"
+            onClick={openPalette}
+            aria-label="Search (Ctrl K)"
+            title="Search (Ctrl K)"
+            className="text-text-quiet hover:text-text grid size-10 cursor-pointer place-items-center rounded-md"
           >
-            <span className="sm:hidden">{inCalendar ? "+ Plan" : "+ New"}</span>
-            <span className="hidden sm:inline">{inNotes ? "+ Quick note" : inCalendar ? "+ Plan time" : "+ New project"}</span>
-          </Button>
-          {/* Phones keep Settings up here, so the tab bar has room for Today later. */}
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+              <path d={SEARCH_ICON} />
+            </svg>
+          </button>
+          {/* Phones keep Settings up here; Today has the tab. */}
           <NavLink
             to="/settings"
             aria-label="Settings"
@@ -72,6 +110,20 @@ export function AppShell() {
               <path d={SETTINGS_ICON} />
             </svg>
           </NavLink>
+          <Button
+            variant="primary"
+            className="min-h-10 px-3 text-sm whitespace-nowrap"
+            onClick={() => {
+              if (inToday && window.matchMedia("(max-width: 639px)").matches) return startAdd();
+              if (inNotes) return startQuickNote();
+              if (inCalendar) return navigate("/calendar?plan=new");
+              navigate("/");
+              startNewProject();
+            }}
+          >
+            <span className="sm:hidden">{inCalendar ? "+ Plan" : inToday ? "+ Add" : "+ New"}</span>
+            <span className="hidden sm:inline">{inNotes ? "+ Quick note" : inCalendar ? "+ Plan time" : "+ New project"}</span>
+          </Button>
           <span className="label-mono text-text-quiet hidden sm:inline">{me.name}</span>
           <button
             type="button"
@@ -87,6 +139,9 @@ export function AppShell() {
         <Outlet />
       </div>
       <QuickNoteDialog />
+      <QuickAddDialog />
+      <QuickAddToast />
+      <Palette />
       <nav
         aria-label="Main"
         className="border-rule bg-surface flex border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)] sm:hidden"
