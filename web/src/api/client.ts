@@ -49,3 +49,4 @@ export type ChecklistItem = components["schemas"]["ChecklistItem"];
 export type ActivityItem = components["schemas"]["ActivityItem"];
 export type Comment = components["schemas"]["Comment"];
 export type Dashboard = components["schemas"]["Dashboard"];
+export type ProjectTemplate = components["schemas"]["ProjectTemplate"];

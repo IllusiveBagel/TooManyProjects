@@ -28,7 +28,7 @@ use crate::{
     limits::LoginLimiter,
     links, mcp, notes, oauth,
     openapi::ApiDoc,
-    parts, projects, search, sharing, tasks,
+    parts, projects, search, sharing, tasks, templates,
     themes::{self, ThemeStore},
     today, tokens,
     updates::{self, UpdateChecker},
@@ -70,6 +70,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(canvas::router())
         .merge(board::router())
         .merge(tasks::router())
+        .merge(templates::router())
         .merge(comments::router())
         .merge(attachments::router())
         .merge(calendar::router())

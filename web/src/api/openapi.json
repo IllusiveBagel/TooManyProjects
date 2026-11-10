@@ -3868,6 +3868,67 @@
         }
       }
     },
+    "/projects/{id}/apply-template": {
+      "post": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Give a project with an empty board a template's columns, labels, starter\ntasks, databases and notes. A board that has tasks can't switch.",
+        "operationId": "apply_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The board has tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}/cover": {
       "put": {
         "tags": [
@@ -5528,6 +5589,182 @@
         }
       }
     },
+    "/templates": {
+      "get": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Templates you can start a project from: the built-ins, yours, and the ones\nshared with you.",
+        "operationId": "list_templates",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Save a project as a template, or copy one (built-ins can't be edited, but\na copy can).",
+        "operationId": "create_template",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/templates/{id}": {
+      "delete": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Delete one of your templates. Projects made from it keep everything.",
+        "operationId": "delete_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "templates"
+        ],
+        "summary": "Rename or share one of your templates.",
+        "operationId": "update_template",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectTemplate"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/themes": {
       "get": {
         "tags": [
@@ -5849,6 +6086,17 @@
           "scope": {
             "type": "string",
             "description": "`read` or `write`."
+          }
+        }
+      },
+      "ApplyTemplateRequest": {
+        "type": "object",
+        "required": [
+          "template_id"
+        ],
+        "properties": {
+          "template_id": {
+            "type": "string"
           }
         }
       },
@@ -6930,6 +7178,13 @@
               "null"
             ]
           },
+          "template_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Start from this template (see `GET /templates`): its columns, labels,\nstarter tasks, databases and notes. Blank when left out."
+          },
           "title": {
             "type": "string"
           }
@@ -7077,6 +7332,55 @@
           },
           "title": {
             "type": "string"
+          }
+        }
+      },
+      "CreateTemplateRequest": {
+        "type": "object",
+        "description": "Save a project as a template, or copy another template.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "columns": {
+            "type": "boolean",
+            "description": "From a project: its board columns. Default true."
+          },
+          "databases": {
+            "type": "boolean",
+            "description": "From a project: its databases' columns and views, without rows. Default true."
+          },
+          "from_template_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Or copy this template (a built-in or one you can see)."
+          },
+          "labels": {
+            "type": "boolean",
+            "description": "From a project: its labels. Default true."
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "boolean",
+            "description": "From a project: its notes' headings, as skeletons. Default false."
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Save this project's set-up."
+          },
+          "shared": {
+            "type": "boolean"
+          },
+          "tasks": {
+            "type": "boolean",
+            "description": "From a project: its open tasks, as starter tasks. Default true."
           }
         }
       },
@@ -8622,6 +8926,95 @@
           }
         }
       },
+      "ProjectTemplate": {
+        "type": "object",
+        "description": "A template as the picker shows it.",
+        "required": [
+          "id",
+          "name",
+          "blurb",
+          "builtin",
+          "mine",
+          "shared",
+          "columns",
+          "label_names",
+          "task_count",
+          "database_names",
+          "note_titles"
+        ],
+        "properties": {
+          "blurb": {
+            "type": "string",
+            "description": "One line on what else it brings."
+          },
+          "builtin": {
+            "type": "boolean"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateColumn"
+            }
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "database_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "`builtin-pcb` and so on for the built-ins."
+          },
+          "label_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "You saved it, so you can rename, share or delete it."
+          },
+          "name": {
+            "type": "string"
+          },
+          "note_titles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "owner_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who saved it, when that isn't you."
+          },
+          "shared": {
+            "type": "boolean",
+            "description": "Shown to the people its owner shares everything with."
+          },
+          "source_title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The project it was saved from."
+          },
+          "task_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "QuickAddRequest": {
         "type": "object",
         "required": [
@@ -9464,6 +9857,29 @@
           }
         }
       },
+      "TemplateColumn": {
+        "type": "object",
+        "description": "A board column a template brings.",
+        "required": [
+          "name",
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "`todo`, `in_progress`, `blocked` or `done`."
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "ThemeModeSummary": {
         "type": "object",
         "required": [
@@ -10023,6 +10439,23 @@
           }
         }
       },
+      "UpdateTemplateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shared": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
       "UpdateViewRequest": {
         "type": "object",
         "properties": {
@@ -10353,6 +10786,10 @@
     {
       "name": "notes",
       "description": "Markdown notes in your vault, search, backlinks, import and export"
+    },
+    {
+      "name": "templates",
+      "description": "Project templates: start from one, save a project as one"
     },
     {
       "name": "databases",
