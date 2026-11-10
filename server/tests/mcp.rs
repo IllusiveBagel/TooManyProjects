@@ -890,3 +890,142 @@ async fn shopping_list_and_mark_parts() {
     let detail = call("GET", format!("/tasks/{task}"), None).await;
     assert_eq!(detail["comments"][0]["via"], "ai");
 }
+
+#[tokio::test]
+async fn attach_file_finish_dates_and_the_weekly_review() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (car, _) = seed(&app, &me).await;
+    let token = make_token(&app, &me, "write").await;
+    let read = make_token(&app, &me, "read").await;
+    initialize(&app, &token).await;
+
+    // A file Claude made, on a task, as text.
+    let (err, text) = tool(
+        &app,
+        &token,
+        "attach_file",
+        json!({"project": "Car restoration", "task": "T-1", "name": "jets.csv",
+               "text": "jet,size\nmain,130\nidle,55\n", "caption": "Jet sizes"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert!(text.contains("Attached to the task") && text.contains("jets.csv"), "{text}");
+    let (_, list) = tool(&app, &token, "list_attachments", json!({"project": "Car restoration"})).await;
+    assert!(list.contains("jets.csv") && list.contains("Jet sizes"), "{list}");
+    let id = list.split("`").nth(1).unwrap().to_string();
+    let (_, shown) = tool(&app, &token, "get_attachment", json!({"id": id})).await;
+    assert!(shown.contains("main,130"), "{shown}");
+
+    // Binary as base64 (a 1x1 PNG), on the project and on a note.
+    let png =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let (err, text) =
+        tool(&app, &token, "attach_file", json!({"project": car, "name": "dot.png", "base64": png})).await;
+    assert!(!err && text.contains("Attached to the project"), "{text}");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "attach_file",
+        json!({"note": "Brake fluid", "name": "bleed-order.md", "text": "1. Rear right\n"}),
+    )
+    .await;
+    assert!(!err && text.contains("Attached to the note"), "{text}");
+
+    // Mistakes are explained; read-only connections can't attach.
+    let (err, text) = tool(
+        &app,
+        &token,
+        "attach_file",
+        json!({"project": car, "name": "x.txt", "text": "a", "base64": "YQ=="}),
+    )
+    .await;
+    assert!(err && text.contains("one of the two"), "{text}");
+    let (err, text) =
+        tool(&app, &token, "attach_file", json!({"project": car, "name": "x.bin", "base64": "not base64!"}))
+            .await;
+    assert!(err && text.contains("isn't valid base64"), "{text}");
+    let (err, text) = tool(&app, &token, "attach_file", json!({"name": "x.txt", "text": "a"})).await;
+    assert!(err && text.contains("Attach to one thing"), "{text}");
+    let (err, text) =
+        tool(&app, &read, "attach_file", json!({"project": car, "name": "x.txt", "text": "a"})).await;
+    assert!(err && text.contains("read-only"), "{text}");
+
+    // The history shows the file as added via AI.
+    let dash = app.call("GET", &format!("/api/v1/projects/{car}/dashboard"), Some(&me), None).await.body;
+    let added =
+        dash["activity"].as_array().unwrap().iter().find(|a| a["kind"] == "attachment.added").unwrap();
+    assert_eq!(added["via"], "ai", "{added}");
+
+    // Finish a task on the day it was really done, then correct the date.
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_task",
+        json!({"project": "Car restoration", "task": "T-1", "completed_on": "2026-11-02"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let tasks = app.call("GET", &format!("/api/v1/projects/{car}/tasks"), Some(&me), None).await.body;
+    let carb = tasks.as_array().unwrap().iter().find(|t| t["number"] == 1).unwrap();
+    assert_eq!(carb["category"], "done");
+    assert_eq!(carb["completed_at"], "2026-11-02T12:00:00Z");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_task",
+        json!({"project": "Car restoration", "task": "T-1", "completed_on": "2026-11-01"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let tasks = app.call("GET", &format!("/api/v1/projects/{car}/tasks"), Some(&me), None).await.body;
+    let carb = tasks.as_array().unwrap().iter().find(|t| t["number"] == 1).unwrap();
+    assert_eq!(carb["completed_at"], "2026-11-01T12:00:00Z");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_task",
+        json!({"project": "Car restoration", "task": "T-1", "completed_on": "2999-01-01"}),
+    )
+    .await;
+    assert!(err && text.contains("future"), "{text}");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_task",
+        json!({"project": "Car restoration", "task": "T-1", "column": "Doing", "completed_on": "2026-11-01"}),
+    )
+    .await;
+    assert!(err && text.contains("doesn't count as done"), "{text}");
+
+    // Weekly review: a task in progress with nothing logged for a fortnight is stuck,
+    // one due in a few days is listed as coming up.
+    for (title, column) in [("Sand the wings", "Doing"), ("Order seals", "Doing")] {
+        let (err, text) =
+            tool(&app, &token, "create_task", json!({"project": car, "title": title, "column": column}))
+                .await;
+        assert!(!err, "{text}");
+    }
+    let soon = (chrono::Utc::now().date_naive() + chrono::Duration::days(3)).to_string();
+    let (err, text) =
+        tool(&app, &token, "update_task", json!({"project": car, "task": "T-3", "due_date": soon})).await;
+    assert!(!err, "{text}");
+    let old = (chrono::Utc::now() - chrono::Duration::days(14)).format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    sqlx::query("UPDATE tasks SET updated_at = ? WHERE title = 'Sand the wings'")
+        .bind(&old)
+        .execute(&app.state.db)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE activity SET created_at = ? WHERE task_id = (SELECT id FROM tasks WHERE title = 'Sand the wings')")
+        .bind(&old)
+        .execute(&app.state.db)
+        .await
+        .unwrap();
+    let (err, review) = tool(&app, &read, "weekly_review", json!({})).await;
+    assert!(!err, "{review}");
+    let stuck = review.split("## Stuck").nth(1).unwrap().split("\n## ").next().unwrap();
+    assert!(stuck.contains("Sand the wings") && !stuck.contains("Order seals"), "{review}");
+    let due = review.split("## Due in the next 7 days").nth(1).unwrap().split("\n## ").next().unwrap();
+    assert!(due.contains("Order seals"), "{review}");
+    assert!(review.contains("suggest updates for me to approve"), "{review}");
+}

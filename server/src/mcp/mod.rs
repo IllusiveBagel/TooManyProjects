@@ -300,6 +300,8 @@ pub struct UpdateTaskArgs {
     pub column: Option<String>,
     /// true moves it to the first done column; false back to the first to-do column.
     pub done: Option<bool>,
+    /// YYYY-MM-DD the task was actually finished, when that wasn't today. Implies `done`.
+    pub completed_on: Option<String>,
     /// Markdown. Replaces the description.
     pub description: Option<String>,
     /// low, medium, high or urgent.
@@ -320,6 +322,24 @@ pub struct AttachmentsArgs {
     /// Photos only.
     #[serde(default)]
     pub images_only: bool,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct AttachFileArgs {
+    /// Attach to this project (id or title), or give `task` or `note` instead.
+    pub project: Option<String>,
+    /// Attach to this task: id, or `T-12` together with `project`.
+    pub task: Option<String>,
+    /// Attach to this note: id or exact title.
+    pub note: Option<String>,
+    /// File name with its extension, such as wiring.csv or cut-list.md.
+    pub name: String,
+    /// The file's contents as text (CSV, markdown, code, SVG). Give this or `base64`.
+    pub text: Option<String>,
+    /// The file's contents base64-encoded, for anything that isn't text (an image, a PDF).
+    pub base64: Option<String>,
+    /// A few words shown under it.
+    pub caption: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -508,6 +528,40 @@ fn writer(ctx: &RequestContext<RoleServer>) -> Result<Result<TokenCaller, CallTo
 
 fn bad(code: &'static str, msg: impl Into<String>) -> AppError {
     AppError::BadRequest(code, msg.into())
+}
+
+/// What the weekly review prompt (and tool) asks of the assistant.
+const WEEKLY_ASK: &str = "Using the summary above, give me a weekly review: what got done, which projects moved and \
+     which stalled, what's overdue, due soon, blocked or stuck, which projects got no time in the calendar, and a \
+     short, realistic focus list for next week that fits the time planned. Then suggest updates for me to approve, \
+     as a numbered list: tasks to move, close or split, due dates to change, and project summaries or statuses \
+     that look out of date. Don't change anything until I say which ones to make.";
+
+/// The type to record for a file sent as text, from its extension.
+fn text_mime(name: &str) -> &'static str {
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "csv" => "text/csv",
+        "md" | "markdown" => "text/markdown",
+        "svg" => "image/svg+xml",
+        "json" => "application/json",
+        "html" | "htm" => "text/html",
+        _ => "text/plain",
+    }
+}
+
+/// A `completed_on` date: none, or a day that isn't in the future.
+fn parse_day(v: Option<&str>) -> AppResult<Option<chrono::NaiveDate>> {
+    let Some(d) = v.map(str::trim).filter(|d| !d.is_empty()) else {
+        return Ok(None);
+    };
+    let day = chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+        .map_err(|_| bad("invalid_date", "completed_on is a date like 2026-11-09."))?;
+    // A day's grace, so a date in the person's time zone ahead of UTC still counts as today.
+    if day > chrono::Utc::now().date_naive() + chrono::Duration::days(1) {
+        return Err(bad("invalid_date", "completed_on can't be in the future."));
+    }
+    Ok(Some(day))
 }
 
 /// A project by id, or by exact title (any case) among those the person can
@@ -741,10 +795,10 @@ get_project_context for a full briefing on one project. Capture a quick idea or 
 [[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Parts databases track \
 parts to buy (Need, Ordered, Shipped, Arrived, Fitted); get_shopping_list lists them all by supplier and mark_parts moves them along. Tasks keep a log of \
 comments and can have notes, photos and files attached: read them with get_task, list a project's photos with \
-list_attachments and look at one with get_attachment, and log progress or lessons with \
-add_task_comment. A calendar holds work sessions on projects (which people a project is shared with can \
+list_attachments and look at one with get_attachment, attach a file you made with attach_file, and log progress or lessons with \
+add_task_comment. For a weekly review, call weekly_review and suggest changes before making any. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
-(create_task, quick_add, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, update_note, \
+(create_task, quick_add, update_task, add_task_comment, attach_file, link_note_to_task, add_note, append_to_note, update_note, \
 create_project, spawn_project, update_project, add_column, update_column, add_row, mark_parts, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
@@ -798,6 +852,17 @@ impl Mcp {
             line.push_str(&format!(" Databases: {}.", dbs.join(", ")));
         }
         Ok(line)
+    }
+
+    /// Records when a finished task was really done (noon UTC on that day).
+    async fn set_completed(&self, task_id: &str, day: chrono::NaiveDate) -> AppResult<String> {
+        let at = crate::time::format(day.and_hms_opt(12, 0, 0).expect("noon exists").and_utc());
+        sqlx::query("UPDATE tasks SET completed_at = ? WHERE id = ?")
+            .bind(&at)
+            .bind(task_id)
+            .execute(&self.state.db)
+            .await?;
+        Ok(at)
     }
 
     async fn conn(&self) -> AppResult<sqlx::pool::PoolConnection<sqlx::Sqlite>> {
@@ -889,7 +954,7 @@ impl Mcp {
         Ok(brief::note(&detail))
     }
 
-    async fn weekly_review(&self, user: &User) -> AppResult<String> {
+    async fn weekly_summary(&self, user: &User) -> AppResult<String> {
         let Json(projects) = projects::list_projects(
             State(self.state.clone()),
             CurrentUser(user.clone()),
@@ -914,12 +979,44 @@ impl Mcp {
             }
             s
         };
-        out.push_str(&section("Finished this week", all.iter().filter(|t| t.category == "done").collect()));
-        out.push_str(&section("Overdue", all.iter().filter(|t| t.overdue).collect()));
-        out.push_str(&section("In progress", all.iter().filter(|t| t.category == "in_progress").collect()));
-        out.push_str(&section("Blocked", all.iter().filter(|t| t.category == "blocked").collect()));
         let now = chrono::Utc::now();
         let mut conn = self.conn().await?;
+        let week_ago = crate::time::format(now - chrono::Duration::days(7));
+        // Tasks with anything in their history (a move, an edit, a comment, a photo) this week.
+        let moved: std::collections::HashSet<String> = sqlx::query_scalar(
+            "SELECT DISTINCT task_id FROM activity WHERE task_id IS NOT NULL AND created_at >= ?",
+        )
+        .bind(&week_ago)
+        .fetch_all(&mut *conn)
+        .await?
+        .into_iter()
+        .collect();
+        let stalled =
+            |t: &Task| t.category == "in_progress" && t.updated_at < week_ago && !moved.contains(&t.id);
+        let tz =
+            calendar::parse_tz(&calendar::usual_tz(&mut conn, &user.id).await?).unwrap_or(chrono_tz::UTC);
+        let today = now.with_timezone(&tz).date_naive();
+        let (from, to) = (today.to_string(), (today + chrono::Duration::days(7)).to_string());
+        let mut due: Vec<&Task> = all
+            .iter()
+            .filter(|t| {
+                t.category != "done"
+                    && t.due_date.as_deref().is_some_and(|d| d >= from.as_str() && d <= to.as_str())
+            })
+            .collect();
+        due.sort_by(|a, b| a.due_date.cmp(&b.due_date));
+        out.push_str(&section("Finished this week", all.iter().filter(|t| t.category == "done").collect()));
+        out.push_str(&section("Overdue", all.iter().filter(|t| t.overdue).collect()));
+        out.push_str(&section("Due in the next 7 days", due));
+        out.push_str(&section("Blocked", all.iter().filter(|t| t.category == "blocked").collect()));
+        out.push_str(&section(
+            "Stuck: in progress, nothing logged for 7 days",
+            all.iter().filter(|t| stalled(t)).collect(),
+        ));
+        out.push_str(&section(
+            "In progress and moving",
+            all.iter().filter(|t| t.category == "in_progress" && !stalled(t)).collect(),
+        ));
         let past = calendar::occurrences_between(
             &mut conn,
             &user.id,
@@ -1276,13 +1373,7 @@ impl Mcp {
                 let mut conn = self.conn().await?;
                 let project = find_project(&mut conn, &user, &args.project).await?;
                 let statuses = board::statuses_for(&mut conn, &project.id).await?;
-                let completed_on = match args.completed_on.as_deref().map(str::trim) {
-                    None | Some("") => None,
-                    Some(d) => Some(
-                        chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
-                            .map_err(|_| bad("invalid_date", "completed_on is a date like 2026-11-09."))?,
-                    ),
-                };
+                let completed_on = parse_day(args.completed_on.as_deref())?;
                 let done = args.done.unwrap_or(false) || completed_on.is_some();
                 let status_id = match (&args.column, done) {
                     (None, false) => None,
@@ -1324,13 +1415,7 @@ impl Mcp {
                 )
                 .await?;
                 if let Some(day) = completed_on {
-                    let at = crate::time::format(day.and_hms_opt(12, 0, 0).expect("noon exists").and_utc());
-                    sqlx::query("UPDATE tasks SET completed_at = ? WHERE id = ?")
-                        .bind(&at)
-                        .bind(&task.id)
-                        .execute(&self.state.db)
-                        .await?;
-                    task.completed_at = Some(at);
+                    task.completed_at = Some(self.set_completed(&task.id, day).await?);
                 }
                 Ok(format!("Added to {}:\n{}", project.title, brief::task_line(&task)))
             })
@@ -1375,7 +1460,12 @@ impl Mcp {
                 if let Some(d) = &args.due_date {
                     body.insert("due_date".into(), json!(d));
                 }
-                let column = match (&args.column, args.done) {
+                let completed_on = parse_day(args.completed_on.as_deref())?;
+                if completed_on.is_some() && args.done == Some(false) {
+                    return Err(bad("pick_one", "completed_on marks the task done, so leave done out or set it to true."));
+                }
+                let done = if completed_on.is_some() { Some(true) } else { args.done };
+                let column = match (&args.column, done) {
                     (Some(c), _) => Some(pick_column(&statuses, c)?),
                     (None, Some(true)) => Some(ColumnChoice::Category("done")),
                     (None, Some(false)) => Some(ColumnChoice::Category("todo")),
@@ -1390,21 +1480,63 @@ impl Mcp {
                     }
                     None => {}
                 }
-                if body.is_empty() {
+                if completed_on.is_some() {
+                    let lands_in = match body.get("status_id").and_then(|v| v.as_str()) {
+                        Some(id) => statuses.iter().find(|s| s.id == id).map(|s| s.category.as_str()),
+                        None => Some("done"),
+                    };
+                    if lands_in != Some("done") {
+                        return Err(bad(
+                            "not_a_done_column",
+                            "That column doesn't count as done, so the task can't be marked finished there.",
+                        ));
+                    }
+                    if !statuses.iter().any(|s| s.category == "done") {
+                        return Err(bad(
+                            "no_done_column",
+                            "This board has no column that counts as done. Add one with add_column, or set one's counts_as to done with update_column.",
+                        ));
+                    }
+                    // Already in a done column: only the date changes.
+                    if current.task.category == "done" && body.get("status_id").is_none() {
+                        body.remove("category");
+                    }
+                }
+                if body.is_empty() && completed_on.is_none() {
                     return Err(bad(
                         "nothing_to_change",
-                        "Say what to change: title, column, done, description, priority or due_date.",
+                        "Say what to change: title, column, done, completed_on, description, priority or due_date.",
                     ));
                 }
-                let req = serde_json::from_value(serde_json::Value::Object(body))
-                    .map_err(|e| bad("invalid_task", e.to_string()))?;
-                let Json(task) = tasks::update_task(
-                    State(self.state.clone()),
-                    CurrentUser(user.clone()),
-                    Path(task_id),
-                    Json(req),
-                )
-                .await?;
+                let mut task = if body.is_empty() {
+                    // Only the finish date changes, on a task that is already done.
+                    let mut conn = self.conn().await?;
+                    let task = tasks::editable_task(&mut conn, &user.id, &task_id).await?;
+                    tasks::log_task(
+                        &mut conn,
+                        &task.project_id,
+                        &task.id,
+                        &user.id,
+                        "task.updated",
+                        json!({ "title": task.title, "fields": ["finish date"] }),
+                    )
+                    .await?;
+                    task
+                } else {
+                    let req = serde_json::from_value(serde_json::Value::Object(body))
+                        .map_err(|e| bad("invalid_task", e.to_string()))?;
+                    let Json(task) = tasks::update_task(
+                        State(self.state.clone()),
+                        CurrentUser(user.clone()),
+                        Path(task_id),
+                        Json(req),
+                    )
+                    .await?;
+                    task
+                };
+                if let Some(day) = completed_on {
+                    task.completed_at = Some(self.set_completed(&task.id, day).await?);
+                }
                 let column =
                     statuses.iter().find(|s| s.id == task.status_id).map(|s| s.name.as_str()).unwrap_or("?");
                 Ok(format!("Updated in {} ({column}):\n{}", task.project_title, brief::task_line(&task)))
@@ -1507,6 +1639,114 @@ impl Mcp {
             return Ok(text_reply(format!("{about}\n```\n{text}\n```")));
         }
         Ok(text_reply(format!("{about}\nThis file can't be shown here; the person can open it in the app.")))
+    }
+
+    #[tool(
+        description = "The week across every project, for a weekly review: what finished in the last 7 days, what's overdue, due in the next 7 days, blocked, or stuck (in progress with nothing logged for 7 days), and the time planned in the calendar last week and next. Suggest changes from it, and make them only once the person agrees."
+    )]
+    async fn weekly_review(&self, ctx: RequestContext<RoleServer>) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            self.weekly_summary(&user)
+                .await
+                .map(|s| format!("{s}\n## What to do with this\n\n{WEEKLY_ASK}\n")),
+        )
+    }
+
+    #[tool(
+        description = "Attach a file you made (a CSV, a cut list, a wiring table, an SVG, an image) to a project, a task or a note, so it shows with that project's photos and files. Send text as `text`, anything else as `base64`. Needs read-write access."
+    )]
+    async fn attach_file(
+        &self,
+        Parameters(args): Parameters<AttachFileArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                use base64::Engine;
+                use sha2::{Digest, Sha256};
+                let bytes = match (&args.text, &args.base64) {
+                    (Some(t), None) => t.clone().into_bytes(),
+                    (None, Some(b)) => {
+                        let b: String = b.chars().filter(|c| !c.is_whitespace()).collect();
+                        let b = b.split_once(";base64,").map(|(_, d)| d.to_string()).unwrap_or(b);
+                        base64::engine::general_purpose::STANDARD
+                            .decode(b)
+                            .map_err(|_| bad("invalid_base64", "base64 isn't valid base64."))?
+                    }
+                    _ => return Err(bad("pick_one", "Send the file as text or as base64, one of the two.")),
+                };
+                if bytes.is_empty() {
+                    return Err(bad("no_file", "The file is empty."));
+                }
+                let max = self.state.config.max_upload_bytes;
+                if bytes.len() > max {
+                    return Err(bad("too_large", format!("Files can be up to {} MB.", max / (1024 * 1024))));
+                }
+                if args.name.trim().is_empty() {
+                    return Err(bad("invalid_name", "Give the file a name, such as parts.csv."));
+                }
+                let name = crate::attachments::clean_name(&args.name);
+                let mut conn = self.conn().await?;
+                let mut target = crate::attachments::Target::default();
+                let what = match (&args.task, &args.note, &args.project) {
+                    (Some(task), None, _) => {
+                        target.task_id =
+                            Some(find_task(&mut conn, &user, task, args.project.as_deref()).await?);
+                        "the task"
+                    }
+                    (None, Some(note), None) => {
+                        target.note_id = Some(find_note(&mut conn, &user, note).await?);
+                        "the note"
+                    }
+                    (None, None, Some(project)) => {
+                        target.project_id = Some(find_project(&mut conn, &user, project).await?.id);
+                        "the project"
+                    }
+                    _ => {
+                        return Err(bad(
+                            "invalid_target",
+                            "Attach to one thing: a project, a task (with its project for T-12), or a note.",
+                        ));
+                    }
+                };
+                let place = crate::attachments::resolve(&mut conn, &user.id, &target).await?;
+                drop(conn);
+                let mime = if args.text.is_some() { Some(text_mime(&name)) } else { None };
+                let incoming = crate::attachments::Incoming::create(&self.state).await?;
+                incoming.write_all(&bytes).await?;
+                let sha256 = hex::encode(Sha256::digest(&bytes));
+                let mut a = crate::attachments::store(
+                    &self.state,
+                    &user.id,
+                    &place,
+                    incoming,
+                    &name,
+                    mime,
+                    bytes.len(),
+                    &sha256,
+                )
+                .await?;
+                if let Some(caption) = args.caption.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+                    let req = serde_json::from_value(json!({ "caption": caption }))
+                        .map_err(|e| bad("invalid_caption", e.to_string()))?;
+                    let Json(captioned) = crate::attachments::update_attachment(
+                        State(self.state.clone()),
+                        CurrentUser(user.clone()),
+                        Path(a.id.clone()),
+                        Json(req),
+                    )
+                    .await?;
+                    a = captioned;
+                }
+                Ok(format!("Attached to {what}:\n{}", brief::attachments(std::slice::from_ref(&a))))
+            })
+            .await,
+        )
     }
 
     #[tool(
@@ -2268,12 +2508,7 @@ impl ServerHandler for Mcp {
                      should do next. Point out tasks that look stale or duplicated.",
                 )
             }
-            "weekly_review" => (
-                "Weekly review",
-                self.weekly_review(&user).await.map_err(fail)?,
-                "Using the summary above, give me a weekly review: what got done, which projects moved and \
-                 which stalled, what's overdue or blocked, and a short, realistic focus list for next week that fits the time planned in the calendar, and which projects got no time.",
-            ),
+            "weekly_review" => ("Weekly review", self.weekly_summary(&user).await.map_err(fail)?, WEEKLY_ASK),
             other => return Err(McpError::invalid_params(format!("No prompt called {other}"), None)),
         };
         Ok(GetPromptResult::new(vec![
