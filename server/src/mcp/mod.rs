@@ -180,6 +180,76 @@ pub struct CreateTaskArgs {
     pub priority: Option<String>,
     /// YYYY-MM-DD.
     pub due_date: Option<String>,
+    /// true logs a task that is already finished: it goes in the first column that counts as done.
+    pub done: Option<bool>,
+    /// YYYY-MM-DD the finished task was done, for work logged after the fact. Default: now. Implies `done`.
+    pub completed_on: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct AddColumnArgs {
+    /// Project id, or its exact title.
+    pub project: String,
+    /// Up to 40 characters.
+    pub name: String,
+    /// What its tasks count as on the global board: todo, in_progress, blocked or done.
+    /// Default: the same as the column it goes after.
+    pub counts_as: Option<String>,
+    /// Put it after this column (name or id), or "start" for first. Default: at the end.
+    pub after: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct UpdateColumnArgs {
+    /// Project id, or its exact title.
+    pub project: String,
+    /// The column's current name, or its id.
+    pub column: String,
+    /// A new name.
+    pub name: Option<String>,
+    /// todo, in_progress, blocked or done. Moving a column into done marks its tasks finished today.
+    pub counts_as: Option<String>,
+    /// Move it after this column (name or id), or "start" for first.
+    pub after: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct UpdateProjectArgs {
+    /// Project id, or its exact title.
+    pub project: String,
+    pub title: Option<String>,
+    /// One line shown on the canvas card. An empty string clears it.
+    pub summary: Option<String>,
+    /// Markdown. Replaces the description; an empty string clears it.
+    pub description: Option<String>,
+    /// idea, active, paused, done or archived.
+    pub status: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CreateProjectArgs {
+    pub title: String,
+    /// One line.
+    pub summary: Option<String>,
+    /// Markdown.
+    pub description: Option<String>,
+    /// idea, active, paused or done. Default active.
+    pub status: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct UpdateNoteArgs {
+    /// Note id, or its exact title.
+    pub note: String,
+    /// Renames the note (and fixes links to it in other notes).
+    pub title: Option<String>,
+    /// Markdown. Replaces the whole body.
+    pub body: Option<String>,
+    /// Replace just the section under this heading (its text, without #s), up to the next heading of the same
+    /// or a higher level. Needs `section_body`.
+    pub section: Option<String>,
+    /// The section's new markdown, without its heading line.
+    pub section_body: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -496,6 +566,94 @@ enum ColumnChoice {
     Category(&'static str),
 }
 
+/// One column by its exact name (any case) or id.
+fn find_column<'a>(statuses: &'a [board::Status], wanted: &str) -> AppResult<&'a board::Status> {
+    let w = wanted.trim();
+    statuses.iter().find(|s| s.id == w || s.name.eq_ignore_ascii_case(w)).ok_or_else(|| {
+        let names: Vec<&str> = statuses.iter().map(|s| s.name.as_str()).collect();
+        bad("unknown_column", format!("No column called “{w}”. The columns are: {}.", names.join(", ")))
+    })
+}
+
+/// `after` for the column API: `None` leaves it, `Some(None)` is first, `Some(Some(id))` after that column.
+fn column_after(
+    statuses: &[board::Status],
+    after: Option<&str>,
+    moving: Option<&str>,
+) -> AppResult<Option<Option<String>>> {
+    match after.map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(a) if a.eq_ignore_ascii_case("start") || a.eq_ignore_ascii_case("first") => Ok(Some(None)),
+        Some(a) => {
+            let col = find_column(statuses, a)?;
+            if Some(col.id.as_str()) == moving {
+                return Err(bad("invalid_after", "A column can't go after itself."));
+            }
+            Ok(Some(Some(col.id.clone())))
+        }
+    }
+}
+
+/// A category from what a model might say.
+fn category_of(c: &str) -> AppResult<&'static str> {
+    Ok(match c.trim().to_lowercase().replace([' ', '-'], "_").as_str() {
+        "todo" | "to_do" => "todo",
+        "in_progress" | "doing" => "in_progress",
+        "blocked" => "blocked",
+        "done" | "finished" => "done",
+        other => {
+            return Err(bad(
+                "invalid_category",
+                format!("“{other}” isn't a category: use todo, in_progress, blocked or done."),
+            ));
+        }
+    })
+}
+
+/// Replace the body of the section under `heading` (up to the next heading
+/// of the same or a higher level). `None` when there is no such heading.
+fn replace_section(body: &str, heading: &str, text: &str) -> Option<String> {
+    let want = heading.trim().trim_start_matches('#').trim().to_lowercase();
+    let lines: Vec<&str> = body.lines().collect();
+    let level = |l: &str| {
+        let hashes = l.chars().take_while(|c| *c == '#').count();
+        (hashes > 0 && hashes <= 6 && l[hashes..].starts_with(' ')).then_some(hashes)
+    };
+    let mut in_code = false;
+    let mut start = None;
+    let mut end = lines.len();
+    for (i, l) in lines.iter().enumerate() {
+        if l.trim_start().starts_with("```") {
+            in_code = !in_code;
+            continue;
+        }
+        if in_code {
+            continue;
+        }
+        let Some(n) = level(l) else { continue };
+        match start {
+            None if l[n..].trim().to_lowercase() == want => start = Some((i, n)),
+            Some((_, m)) if n <= m => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    let (at, _) = start?;
+    let mut out: Vec<String> = lines[..=at].iter().map(|l| l.to_string()).collect();
+    out.push(String::new());
+    let text = text.trim();
+    if !text.is_empty() {
+        out.push(text.to_string());
+        out.push(String::new());
+    }
+    out.extend(lines[end..].iter().map(|l| l.to_string()));
+    let mut joined = out.join("\n").trim_end().to_string();
+    joined.push('\n');
+    Some(joined)
+}
+
 /// Projects spawned from `root`, at any depth, not counting `root`.
 async fn descendants(conn: &mut SqliteConnection, user: &User, root: &str) -> AppResult<Vec<String>> {
     Ok(sqlx::query_scalar(
@@ -518,7 +676,8 @@ or search, then get_project_context for a full briefing on one project. Notes li
 comments and can have notes linked to them: read both with get_task, and log progress or lessons with \
 add_task_comment. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
-(create_task, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, spawn_project, add_row, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
+(create_task, update_task, add_task_comment, link_note_to_task, add_note, append_to_note, update_note, \
+create_project, spawn_project, update_project, add_column, update_column, add_row, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
 
@@ -534,6 +693,19 @@ pub struct Mcp {
 impl Mcp {
     pub fn new(state: AppState) -> Self {
         Self { state, tool_router: Self::tool_router() }
+    }
+
+    /// The board's columns after a change, with any warning about Done.
+    async fn columns_reply(&self, user: &User, project: &Project, done: &str) -> AppResult<String> {
+        let _ = user;
+        let statuses = board::statuses_for(&mut *self.conn().await?, &project.id).await?;
+        let list: Vec<String> =
+            statuses.iter().map(|s| format!("{} ({})", s.name, brief::category_label(&s.category))).collect();
+        let mut out = format!("{done} {} columns, in order: {}", project.title, list.join(", "));
+        if let Some(w) = board::done_warning(&statuses) {
+            out.push_str(&format!("\nNote: {w}"));
+        }
+        Ok(out)
     }
 
     async fn conn(&self) -> AppResult<sqlx::pool::PoolConnection<sqlx::Sqlite>> {
@@ -932,15 +1104,37 @@ impl Mcp {
                 let mut conn = self.conn().await?;
                 let project = find_project(&mut conn, &user, &args.project).await?;
                 let statuses = board::statuses_for(&mut conn, &project.id).await?;
-                let status_id = match &args.column {
-                    None => None,
-                    Some(c) => match pick_column(&statuses, c)? {
+                let completed_on = match args.completed_on.as_deref().map(str::trim) {
+                    None | Some("") => None,
+                    Some(d) => Some(
+                        chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                            .map_err(|_| bad("invalid_date", "completed_on is a date like 2026-11-09."))?,
+                    ),
+                };
+                let done = args.done.unwrap_or(false) || completed_on.is_some();
+                let status_id = match (&args.column, done) {
+                    (None, false) => None,
+                    (None, true) => Some(
+                        statuses.iter().find(|s| s.category == "done").map(|s| s.id.clone()).ok_or_else(|| {
+                            bad(
+                                "no_done_column",
+                                "This board has no column that counts as done. Add one with add_column, or set one's counts_as to done with update_column.",
+                            )
+                        })?,
+                    ),
+                    (Some(c), _) => match pick_column(&statuses, c)? {
                         ColumnChoice::Status(id) => Some(id),
                         ColumnChoice::Category(cat) => {
                             statuses.iter().find(|s| s.category == cat).map(|s| s.id.clone())
                         }
                     },
                 };
+                if done {
+                    let column = statuses.iter().find(|s| Some(&s.id) == status_id.as_ref());
+                    if column.is_some_and(|s| s.category != "done") {
+                        return Err(bad("not_a_done_column", "That column doesn't count as done, so the task can't be logged as finished there."));
+                    }
+                }
                 drop(conn);
                 let req = serde_json::from_value(json!({
                     "title": args.title,
@@ -950,13 +1144,22 @@ impl Mcp {
                     "due_date": args.due_date,
                 }))
                 .map_err(|e| bad("invalid_task", e.to_string()))?;
-                let (_, Json(task)) = tasks::create_task(
+                let (_, Json(mut task)) = tasks::create_task(
                     State(self.state.clone()),
                     CurrentUser(user.clone()),
                     Path(project.id.clone()),
                     Json(req),
                 )
                 .await?;
+                if let Some(day) = completed_on {
+                    let at = crate::time::format(day.and_hms_opt(12, 0, 0).expect("noon exists").and_utc());
+                    sqlx::query("UPDATE tasks SET completed_at = ? WHERE id = ?")
+                        .bind(&at)
+                        .bind(&task.id)
+                        .execute(&self.state.db)
+                        .await?;
+                    task.completed_at = Some(at);
+                }
                 Ok(format!("Added to {}:\n{}", project.title, brief::task_line(&task)))
             })
             .await,
@@ -1282,6 +1485,246 @@ impl Mcp {
                 tx.commit().await?;
                 Ok(out)
             }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Add a column to a project's board, at the end or after a given column. Needs read-write access."
+    )]
+    async fn add_column(
+        &self,
+        Parameters(args): Parameters<AddColumnArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let mut conn = self.conn().await?;
+                let project = find_project(&mut conn, &user, &args.project).await?;
+                let statuses = board::statuses_for(&mut conn, &project.id).await?;
+                drop(conn);
+                let after = column_after(&statuses, args.after.as_deref(), None)?;
+                let left = match &after {
+                    Some(Some(id)) => statuses.iter().find(|s| &s.id == id),
+                    Some(None) => None,
+                    None => statuses.last(),
+                };
+                let category = match args.counts_as.as_deref() {
+                    Some(c) => category_of(c)?.to_string(),
+                    None => left.map(|s| s.category.clone()).unwrap_or_else(|| "todo".into()),
+                };
+                let mut body = json!({ "name": args.name, "category": category });
+                if let Some(a) = after {
+                    body["after_id"] = json!(a);
+                }
+                let req = serde_json::from_value(body).map_err(|e| bad("invalid_column", e.to_string()))?;
+                let (_, Json(status)) = board::create_status(
+                    State(self.state.clone()),
+                    CurrentUser(user.clone()),
+                    Path(project.id.clone()),
+                    Json(req),
+                )
+                .await?;
+                self.columns_reply(&user, &project, &format!("Added the {} column.", status.name)).await
+            })
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Change a board column: rename it, change what it counts as (todo, in_progress, blocked, done), or move it after another column. Needs read-write access."
+    )]
+    async fn update_column(
+        &self,
+        Parameters(args): Parameters<UpdateColumnArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let mut conn = self.conn().await?;
+                let project = find_project(&mut conn, &user, &args.project).await?;
+                let statuses = board::statuses_for(&mut conn, &project.id).await?;
+                drop(conn);
+                let column = find_column(&statuses, &args.column)?;
+                let mut body = serde_json::Map::new();
+                if let Some(n) = &args.name {
+                    body.insert("name".into(), json!(n));
+                }
+                if let Some(c) = &args.counts_as {
+                    body.insert("category".into(), json!(category_of(c)?));
+                }
+                if let Some(a) = column_after(&statuses, args.after.as_deref(), Some(&column.id))? {
+                    body.insert("after_id".into(), json!(a));
+                }
+                if body.is_empty() {
+                    return Err(bad("nothing_to_change", "Say what to change: name, counts_as or after."));
+                }
+                let req = serde_json::from_value(serde_json::Value::Object(body))
+                    .map_err(|e| bad("invalid_column", e.to_string()))?;
+                let _ = board::update_status(
+                    State(self.state.clone()),
+                    CurrentUser(user.clone()),
+                    Path(column.id.clone()),
+                    Json(req),
+                )
+                .await?;
+                self.columns_reply(&user, &project, &format!("Updated the {} column.", column.name)).await
+            })
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Change a project's title, one-line summary, description or status (idea, active, paused, done, archived). Needs read-write access."
+    )]
+    async fn update_project(
+        &self,
+        Parameters(args): Parameters<UpdateProjectArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let project = find_project(&mut *self.conn().await?, &user, &args.project).await?;
+                let blank_is_null = |v: &str| if v.trim().is_empty() { json!(null) } else { json!(v) };
+                let mut body = serde_json::Map::new();
+                if let Some(t) = &args.title {
+                    body.insert("title".into(), json!(t));
+                }
+                if let Some(s) = &args.summary {
+                    body.insert("summary".into(), blank_is_null(s));
+                }
+                if let Some(d) = &args.description {
+                    body.insert("description".into(), blank_is_null(d));
+                }
+                if let Some(s) = &args.status {
+                    body.insert("status".into(), json!(s.trim().to_lowercase()));
+                }
+                if body.is_empty() {
+                    return Err(bad(
+                        "nothing_to_change",
+                        "Say what to change: title, summary, description or status.",
+                    ));
+                }
+                let req = serde_json::from_value(serde_json::Value::Object(body))
+                    .map_err(|e| bad("invalid_project", e.to_string()))?;
+                let Json(p) = projects::update_project(
+                    State(self.state.clone()),
+                    CurrentUser(user.clone()),
+                    Path(project.id.clone()),
+                    Json(req),
+                )
+                .await?;
+                Ok(format!(
+                    "Updated “{}” · {} · id `{}`{}",
+                    p.title,
+                    p.status,
+                    p.id,
+                    p.summary.as_deref().map(|s| format!("\nSummary: {s}")).unwrap_or_default()
+                ))
+            })
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Start a new top-level project (use spawn_project for one that grew out of another). Needs read-write access."
+    )]
+    async fn create_project(
+        &self,
+        Parameters(args): Parameters<CreateProjectArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let req = serde_json::from_value(json!({
+                    "title": args.title,
+                    "summary": args.summary,
+                    "description": args.description,
+                    "status": args.status.map(|s| s.trim().to_lowercase()),
+                }))
+                .map_err(|e| bad("invalid_project", e.to_string()))?;
+                let (_, Json(p)) =
+                    projects::create_project(State(self.state.clone()), CurrentUser(user.clone()), Json(req))
+                        .await?;
+                Ok(format!(
+                    "Started “{}” (id `{}`). Its board has To do, Doing and Done columns.",
+                    p.title, p.id
+                ))
+            })
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Edit a note: rename it, replace its whole body, or replace one section under a heading. Use append_to_note to add to the end. Needs read-write access."
+    )]
+    async fn update_note(
+        &self,
+        Parameters(args): Parameters<UpdateNoteArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let id = find_note(&mut *self.conn().await?, &user, &args.note).await?;
+                let st = || State(self.state.clone());
+                let me = || CurrentUser(user.clone());
+                let mut body = serde_json::Map::new();
+                match (&args.body, &args.section, &args.section_body) {
+                    (Some(_), Some(_), _) => {
+                        return Err(bad(
+                            "pick_one",
+                            "Send either body or section with section_body, not both.",
+                        ));
+                    }
+                    (Some(b), None, _) => {
+                        body.insert("body".into(), json!(b));
+                    }
+                    (None, Some(heading), Some(text)) => {
+                        let Json(current) = notes::get_note(st(), me(), Path(id.clone())).await?;
+                        let next = replace_section(&current.body, heading, text).ok_or_else(|| {
+                            bad("unknown_section", format!("The note has no heading “{}”.", heading.trim()))
+                        })?;
+                        body.insert("body".into(), json!(next));
+                    }
+                    (None, Some(_), None) => {
+                        return Err(bad("need_section_body", "Give section_body: the section's new text."));
+                    }
+                    (None, None, _) => {}
+                }
+                if let Some(t) = &args.title {
+                    body.insert("title".into(), json!(t));
+                }
+                if body.is_empty() {
+                    return Err(bad(
+                        "nothing_to_change",
+                        "Say what to change: title, body, or section with section_body.",
+                    ));
+                }
+                let req = serde_json::from_value(serde_json::Value::Object(body))
+                    .map_err(|e| bad("invalid_note", e.to_string()))?;
+                let Json(note) = notes::update_note(st(), me(), Path(id), Json(req)).await?;
+                Ok(format!("Saved “{}” · id `{}`", note.note.title, note.note.id))
+            })
             .await,
         )
     }

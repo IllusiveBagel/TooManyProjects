@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, unwrap, type Status, type Task, type TaskDetail } from "../api/client";
 import type { components } from "../api/schema";
+import { moveColumn } from "./columns";
 import { applyMove } from "./format";
 
 type CreateTask = components["schemas"]["CreateTaskRequest"];
@@ -161,6 +162,24 @@ export function useUpdateStatus(projectId: string) {
     mutationFn: ({ id, ...body }: UpdateStatus & { id: string }) =>
       unwrap(api.PATCH("/statuses/{id}", { params: { path: { id } }, body })),
     onSuccess: () => refreshBoard(qc, projectId),
+  });
+}
+
+/** Move a column: shown at once, then saved; a failed save puts it back. */
+export function useMoveStatus(projectId: string) {
+  const qc = useQueryClient();
+  const key = taskKeys.statuses(projectId);
+  return useMutation({
+    mutationFn: ({ id, afterId }: { id: string; afterId: string | null }) =>
+      unwrap(api.PATCH("/statuses/{id}", { params: { path: { id } }, body: { after_id: afterId } })),
+    onMutate: async ({ id, afterId }) => {
+      await qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueryData<Status[]>(key);
+      qc.setQueryData<Status[]>(key, (list) => (list ? moveColumn(list, id, afterId) : list));
+      return { before };
+    },
+    onError: (_e, _v, ctx) => ctx?.before && qc.setQueryData(key, ctx.before),
+    onSettled: () => refreshBoard(qc, projectId),
   });
 }
 

@@ -164,6 +164,47 @@ async fn columns_can_be_added_moved_and_removed() {
         .collect();
     assert_eq!(names, ["To do", "Doing", "Waiting on parts", "Done"]);
 
+    // A new column can go straight in place: first, or after a given column.
+    let first = ok(
+        &app,
+        "POST",
+        &format!("/projects/{car}/statuses"),
+        &me,
+        Some(json!({"name": "Ideas", "category": "todo", "after_id": null})),
+    )
+    .await;
+    ok(
+        &app,
+        "POST",
+        &format!("/projects/{car}/statuses"),
+        &me,
+        Some(json!({"name": "Testing", "category": "in_progress", "after_id": id(&parts)})),
+    )
+    .await;
+    let names: Vec<_> = ok(&app, "GET", &format!("/projects/{car}/statuses"), &me, None)
+        .await
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["name"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(names, ["Ideas", "To do", "Doing", "Waiting on parts", "Testing", "Done"]);
+    ok(&app, "PATCH", &format!("/statuses/{}", id(&first)), &me, Some(json!({"name": "Someday"}))).await;
+    let dash = ok(&app, "GET", &format!("/projects/{car}/dashboard"), &me, None).await;
+    let history: Vec<(String, Value)> = dash["activity"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| (a["kind"].as_str().unwrap().to_string(), a["payload"].clone()))
+        .collect();
+    assert!(history.iter().any(|(k, p)| k == "status.moved" && p["after"] == "Doing"), "{history:?}");
+    assert!(history.iter().any(|(k, p)| k == "status.created" && p["name"] == "Testing"), "{history:?}");
+    assert!(history.iter().any(|(k, p)| k == "status.renamed" && p["from"] == "Ideas"), "{history:?}");
+    ok(&app, "DELETE", &format!("/statuses/{}", id(&first)), &me, None).await;
+    let testing = ok(&app, "GET", &format!("/projects/{car}/statuses"), &me, None).await[3].clone();
+    assert_eq!(testing["name"], "Testing");
+    ok(&app, "DELETE", &format!("/statuses/{}", id(&testing)), &me, None).await;
+
     // A column's category decides whether its tasks count as done.
     let t = ok(
         &app,

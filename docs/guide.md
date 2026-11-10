@@ -56,6 +56,18 @@ holds up another.)
 - **Project board** (`/projects/:id/board`): drag cards between and within
   columns. Every column counts as *to do*, *in progress*, *blocked* or *done*,
   which is what the stats, the canvas cards and the global board read.
+- **Columns:** drag a column by the handle (⠿) left of its name, or use its
+  **⋯** menu to rename it, change what it counts as, move it left or right
+  (**Alt+←/→** on the header does the same), add a column before or after it,
+  or remove it (its tasks move to a column you pick first). A move shows
+  **Undo** for a few seconds. **Columns** above the board (or under it on a
+  phone) opens a list of every column to reorder, rename and recategorise in
+  one place. Up to 20 columns.
+- **Done columns:** if nothing on a board counts as done, or a column is
+  called *Done* (or *Finished*, *Complete*, *Published*) but counts as
+  something else, the board says so and offers a one-click fix. **Not now**
+  hides the notice until the columns change. Making a column with tasks count
+  as done asks first, since its tasks are then finished, dated today.
 - **Task drawer**: click a card to edit its title, column, due date,
   priority, labels, notes and checklist, and to see its history. The open
   task is in the URL (`?task=`), so it can be linked.
@@ -239,8 +251,12 @@ if you let it, add to them.
   totals), and with read-write access `create_task`, `update_task` (move,
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
   `link_note_to_task`, `add_note` (optionally linked to a task), `append_to_note`,
-  `add_row` (values by column name), `spawn_project` and `plan_time` (a
-  session or busy time, optionally repeating). `get_calendar` reads a stretch
+  `add_row` (values by column name), `spawn_project`, `create_project`,
+  `update_project` (title, description, status, tags), `update_note` (a new
+  title or body, or one `##` section replaced), `add_column` and
+  `update_column` (rename, recategorise or move a board column) and
+  `plan_time` (a session or busy time, optionally repeating). `create_task`
+  can also log work that is already finished, with `done` and `completed_on`. `get_calendar` reads a stretch
   of the calendar (a week by default) with who's joining and hours per
   project; busy time shows only for the person connected. Projects and notes
   can be named by title or id.

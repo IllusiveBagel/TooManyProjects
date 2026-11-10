@@ -4,7 +4,7 @@
 use std::fmt::Write;
 
 use crate::{
-    board::Status,
+    board::{self, Status},
     dashboard::Dashboard,
     notes::{NoteDetail, NoteSummary, ProjectNotes},
     projects::{Project, ProjectDetail},
@@ -96,6 +96,15 @@ pub fn activity_line(a: &ActivityItem) -> String {
         "task.commented" => format!("commented on {}", quoted(p)),
         "task.note_linked" => format!("linked a note to {}", quoted(p)),
         "status.deleted" => format!("removed the {} column", s("name")),
+        "status.created" => format!("added the {} column", s("name")),
+        "status.renamed" => format!("renamed the {} column to {}", s("from"), s("name")),
+        "status.moved" => match p.get("after").and_then(|v| v.as_str()) {
+            Some(after) => format!("moved the {} column after {after}", s("name")),
+            None => format!("moved the {} column to the start", s("name")),
+        },
+        "status.recategorised" => {
+            format!("made the {} column count as {}", s("name"), category_label(&s("to")))
+        }
         "project.created" => "started the project".into(),
         "project.archived" => "archived the project".into(),
         "project.restored" => "brought the project back".into(),
@@ -218,6 +227,9 @@ pub fn project(b: &ProjectBrief) -> String {
     let columns: Vec<String> =
         b.statuses.iter().map(|s| format!("{} ({})", s.name, category_label(&s.category))).collect();
     let _ = writeln!(out, "Columns, in order: {}\n", columns.join(", "));
+    if let Some(warning) = board::done_warning(b.statuses) {
+        let _ = writeln!(out, "Note: {warning}\n");
+    }
 
     let total_notes = b.notes.notes.len() + b.notes.mentions.len();
     if total_notes > 0 {
