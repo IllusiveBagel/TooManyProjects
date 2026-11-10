@@ -196,7 +196,12 @@ async fn reads_projects_notes_and_briefings() {
         "update_task",
         "add_note",
         "append_to_note",
+        "update_note",
         "spawn_project",
+        "create_project",
+        "update_project",
+        "add_column",
+        "update_column",
         "get_task",
         "add_task_comment",
         "link_note_to_task",
@@ -613,4 +618,150 @@ async fn the_ai_reads_and_plans_the_calendar() {
 
     let (_, brief) = tool(&app, &read, "get_project_context", json!({"project": "Beetle restoration"})).await;
     assert!(brief.contains("## Coming up") && brief.contains("Rear brakes"), "{brief}");
+}
+
+#[tokio::test]
+async fn columns_projects_notes_and_done_tasks_can_be_changed() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (car, _) = seed(&app, &me).await;
+    let token = make_token(&app, &me, "write").await;
+    initialize(&app, &token).await;
+
+    // A board like Z80's: Done renamed into the In progress category, Done column gone.
+    let columns = app.call("GET", &format!("/api/v1/projects/{car}/statuses"), Some(&me), None).await.body;
+    let done = columns[2]["id"].as_str().unwrap().to_string();
+    app.call(
+        "PATCH",
+        &format!("/api/v1/statuses/{done}"),
+        Some(&me),
+        Some(json!({"category": "in_progress"})),
+    )
+    .await;
+
+    let (err, text) = tool(&app, &token, "get_project_context", json!({"project": "Car restoration"})).await;
+    assert!(!err);
+    assert!(text.contains("nothing on this board counts as finished"), "{text}");
+
+    let (err, text) = tool(
+        &app,
+        &token,
+        "create_task",
+        json!({"project": "Car restoration", "title": "Old job", "done": true}),
+    )
+    .await;
+    assert!(err && text.contains("no column that counts as done"), "{text}");
+
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_column",
+        json!({"project": "Car restoration", "column": "done", "counts_as": "done"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert!(text.contains("Done (Done)") && !text.contains("Note:"), "{text}");
+
+    // Insert between, defaulting to the category on its left.
+    let (err, text) = tool(
+        &app,
+        &token,
+        "add_column",
+        json!({"project": "Car restoration", "name": "Waiting on parts", "after": "Doing"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert!(
+        text.contains("To do (To do), Doing (In progress), Waiting on parts (In progress), Done (Done)"),
+        "{text}"
+    );
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_column",
+        json!({"project": "Car restoration", "column": "Waiting on parts", "after": "start", "counts_as": "blocked"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    assert!(text.contains("in order: Waiting on parts (Blocked), To do"), "{text}");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_column",
+        json!({"project": "Car restoration", "column": "Nope", "name": "x"}),
+    )
+    .await;
+    assert!(err && text.contains("The columns are"), "{text}");
+
+    // A finished task logged after the fact keeps its date.
+    let (err, text) = tool(
+        &app,
+        &token,
+        "create_task",
+        json!({"project": "Car restoration", "title": "Bled the brakes", "completed_on": "2026-11-01"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let tasks = app.call("GET", &format!("/api/v1/projects/{car}/tasks"), Some(&me), None).await.body;
+    let bled = tasks.as_array().unwrap().iter().find(|t| t["title"] == "Bled the brakes").unwrap();
+    assert_eq!(bled["completed_at"], "2026-11-01T12:00:00Z");
+    assert_eq!(bled["status_id"], done.as_str());
+
+    // Project summary and status.
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_project",
+        json!({"project": "Car restoration", "summary": "Back on the road by spring", "status": "Paused"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let p = app.call("GET", &format!("/api/v1/projects/{car}"), Some(&me), None).await.body;
+    assert_eq!(p["project"]["summary"], "Back on the road by spring");
+    assert_eq!(p["project"]["status"], "paused");
+
+    let (err, text) = tool(&app, &token, "create_project", json!({"title": "Garden shed"})).await;
+    assert!(!err && text.contains("Started “Garden shed”"), "{text}");
+
+    // Notes: replace one section, then the whole body.
+    let res = app
+        .call(
+            "POST",
+            "/api/v1/notes",
+            Some(&me),
+            Some(json!({"title": "Shed plan", "body": "# Shed plan\n\n## Materials\n\n- wood\n\n### Fixings\n\n- nails\n\n## Steps\n\n1. Dig\n"})),
+        )
+        .await;
+    assert_eq!(res.status, StatusCode::CREATED);
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_note",
+        json!({"note": "Shed plan", "section": "## Materials", "section_body": "- treated timber\n- felt"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let (_, note) = tool(&app, &token, "get_note", json!({"note": "Shed plan"})).await;
+    assert!(note.contains("- treated timber\n- felt\n\n## Steps"), "{note}");
+    assert!(!note.contains("nails"), "the subsection goes with its section: {note}");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "update_note",
+        json!({"note": "Shed plan", "section": "Nope", "section_body": "x"}),
+    )
+    .await;
+    assert!(err && text.contains("no heading"), "{text}");
+    let (err, _) = tool(&app, &token, "update_note", json!({"note": "Shed plan", "body": "Scrapped."})).await;
+    assert!(!err);
+    let (_, note) = tool(&app, &token, "get_note", json!({"note": "Shed plan"})).await;
+    assert!(note.contains("Scrapped.") && !note.contains("Steps"), "{note}");
+
+    // The history says what happened to the columns, via AI.
+    let dash = app.call("GET", &format!("/api/v1/projects/{car}/dashboard"), Some(&me), None).await.body;
+    let kinds: Vec<&str> =
+        dash["activity"].as_array().unwrap().iter().map(|a| a["kind"].as_str().unwrap()).collect();
+    for k in ["status.created", "status.moved", "status.recategorised"] {
+        assert!(kinds.contains(&k), "{kinds:?}");
+    }
 }

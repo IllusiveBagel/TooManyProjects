@@ -1041,7 +1041,7 @@ export interface paths {
         /** A project's board columns, left to right. */
         get: operations["list_statuses"];
         put?: never;
-        /** Add a column at the right end of the board. */
+        /** Add a column: at the right end of the board, or after `after_id`. */
         post: operations["create_status"];
         delete?: never;
         options?: never;
@@ -1681,6 +1681,8 @@ export interface components {
             role?: string | null;
         };
         CreateStatusRequest: {
+            /** @description Where to put it: after this column, or first when `null`. Left out, it goes at the end. */
+            after_id?: string | null;
             category: string;
             color?: string | null;
             name: string;

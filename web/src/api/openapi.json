@@ -3620,7 +3620,7 @@
         "tags": [
           "board"
         ],
-        "summary": "Add a column at the right end of the board.",
+        "summary": "Add a column: at the right end of the board, or after `after_id`.",
         "operationId": "create_status",
         "parameters": [
           {
@@ -5801,6 +5801,13 @@
           "category"
         ],
         "properties": {
+          "after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where to put it: after this column, or first when `null`. Left out, it goes at the end."
+          },
           "category": {
             "type": "string"
           },

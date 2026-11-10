@@ -1,4 +1,5 @@
 import {
+  closestCenter,
   closestCorners,
   DndContext,
   DragOverlay,
@@ -11,10 +12,18 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type CollisionDetection,
 } from "@dnd-kit/core";
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  horizontalListSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from "react";
 import type { Task } from "../api/client";
 import { cardAbove, findColumn, moveCard } from "./format";
 
@@ -40,6 +49,55 @@ interface BoardProps<T extends Card = Task> {
   trailing?: ReactNode;
   /** False for cards that can't move, such as tasks in a project you can only view. */
   canDrag?: (task: T) => boolean;
+  /**
+   * Columns can be dragged by the grip in their header (see `ColumnGrip`):
+   * called with the column and the one now on its left (null when first).
+   */
+  onMoveColumn?: (columnId: string, afterId: string | null) => void;
+  /** Something shown between columns, such as the new-column form: after this column, or first when null. */
+  insert?: { afterId: string | null; node: ReactNode };
+}
+
+const COLUMN = "column:";
+const isColumnId = (id: unknown) => String(id).startsWith(COLUMN);
+
+/** Column drags only collide with columns, card drags only with cards and column bodies. */
+const collisions: CollisionDetection = (args) => {
+  const columnDrag = isColumnId(args.active.id);
+  const droppableContainers = args.droppableContainers.filter((c) => isColumnId(c.id) === columnDrag);
+  return columnDrag ? closestCenter({ ...args, droppableContainers }) : closestCorners({ ...args, droppableContainers });
+};
+
+type GripProps = { ref: (el: HTMLElement | null) => void; attributes: HTMLAttributes<HTMLElement>; listeners: object | undefined };
+const GripContext = createContext<GripProps | null>(null);
+
+/**
+ * The handle that drags a column, for use inside a column header. Renders
+ * nothing when the board can't reorder columns. Space or Enter picks the
+ * column up for the keyboard, arrows move it, Space drops it.
+ */
+export function ColumnGrip({ label }: { label: string }) {
+  const grip = useContext(GripContext);
+  if (!grip) return null;
+  return (
+    <button
+      type="button"
+      ref={grip.ref}
+      {...grip.attributes}
+      {...grip.listeners}
+      aria-label={label}
+      className="text-text-quiet/70 hover:text-text -ml-1 grid h-8 w-5 shrink-0 cursor-grab touch-none place-items-center rounded-sm active:cursor-grabbing"
+    >
+      <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
+        <circle cx="2" cy="3" r="1.5" />
+        <circle cx="8" cy="3" r="1.5" />
+        <circle cx="2" cy="8" r="1.5" />
+        <circle cx="8" cy="8" r="1.5" />
+        <circle cx="2" cy="13" r="1.5" />
+        <circle cx="8" cy="13" r="1.5" />
+      </svg>
+    </button>
+  );
 }
 
 /**
@@ -47,7 +105,16 @@ interface BoardProps<T extends Card = Task> {
  * order; after a drop it keeps that order until new columns arrive from the
  * cache, so a card never flicks back to where it came from.
  */
-export function Board<T extends Card = Task>({ columns, renderCard, onMove, reorderable = true, trailing, canDrag }: BoardProps<T>) {
+export function Board<T extends Card = Task>({
+  columns,
+  renderCard,
+  onMove,
+  reorderable = true,
+  trailing,
+  canDrag,
+  onMoveColumn,
+  insert,
+}: BoardProps<T>) {
   // Keyed on the ids alone, so re-rendered headers don't count as new data.
   const signature = columns.map((c) => `${c.id}:${c.tasks.map((t) => t.id).join(",")}`).join("|");
   const fromProps = useMemo(
@@ -57,6 +124,10 @@ export function Board<T extends Card = Task>({ columns, renderCard, onMove, reor
   const [order, setOrder] = useState<Record<string, string[]> | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [startColumn, setStartColumn] = useState<string | null>(null);
+  // Column order while one is dragged, and after the drop until the server agrees.
+  const columnIds = columns.map((c) => c.id).join("|");
+  const [columnOrder, setColumnOrder] = useState<string[] | null>(null);
+  useEffect(() => setColumnOrder(null), [columnIds]);
 
   // New data from the server (or the cache) replaces any local order.
   useEffect(() => {
@@ -73,6 +144,10 @@ export function Board<T extends Card = Task>({ columns, renderCard, onMove, reor
   );
 
   const onDragStart = ({ active }: DragStartEvent) => {
+    if (isColumnId(active.id)) {
+      setColumnOrder(columns.map((c) => c.id));
+      return;
+    }
     const id = String(active.id);
     setActiveId(id);
     setStartColumn(findColumn(fromProps, id) ?? null);
@@ -81,6 +156,16 @@ export function Board<T extends Card = Task>({ columns, renderCard, onMove, reor
 
   const onDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
+    if (isColumnId(active.id)) {
+      if (!isColumnId(over.id) || over.id === active.id) return;
+      const from = String(active.id).slice(COLUMN.length);
+      const to = String(over.id).slice(COLUMN.length);
+      setColumnOrder((o) => {
+        const base = o ?? columns.map((c) => c.id);
+        return arrayMove(base, base.indexOf(from), base.indexOf(to));
+      });
+      return;
+    }
     setOrder((o) => {
       const base = o ?? fromProps;
       const id = String(active.id);
@@ -93,6 +178,18 @@ export function Board<T extends Card = Task>({ columns, renderCard, onMove, reor
   };
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (isColumnId(active.id)) {
+      const id = String(active.id).slice(COLUMN.length);
+      const order = columnOrder ?? columns.map((c) => c.id);
+      const was = columns.findIndex((c) => c.id === id);
+      const now = order.indexOf(id);
+      if (!over || was === now) {
+        setColumnOrder(null);
+        return;
+      }
+      onMoveColumn?.(id, now === 0 ? null : order[now - 1]!);
+      return;
+    }
     const id = String(active.id);
     setActiveId(null);
     const base = order ?? fromProps;
@@ -116,26 +213,60 @@ export function Board<T extends Card = Task>({ columns, renderCard, onMove, reor
   };
 
   const active = activeId ? byId.get(activeId) : undefined;
+  const ordered = columnOrder
+    ? columnOrder.map((id) => columns.find((c) => c.id === id)).filter((c): c is BoardColumn<T> => !!c)
+    : columns;
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={onMoveColumn ? collisions : closestCorners}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
       onDragCancel={() => {
         setActiveId(null);
         setOrder(null);
+        setColumnOrder(null);
       }}
     >
       <div className="flex min-w-0 gap-3 overflow-x-auto px-4 pb-4 sm:min-h-0 sm:flex-1 sm:px-5">
-        {columns.map((col) => (
-          <Column key={col.id} column={col} ids={current[col.id] ?? []} byId={byId} renderCard={renderCard} canDrag={canDrag} />
-        ))}
+        <SortableContext items={ordered.map((c) => COLUMN + c.id)} strategy={horizontalListSortingStrategy}>
+          {insert && insert.afterId === null && insert.node}
+          {ordered.map((col) => (
+            <ColumnSlot key={col.id} column={col} sortable={!!onMoveColumn}>
+              <Column column={col} ids={current[col.id] ?? []} byId={byId} renderCard={renderCard} canDrag={canDrag} />
+              {insert && insert.afterId === col.id && insert.node}
+            </ColumnSlot>
+          ))}
+        </SortableContext>
         {trailing}
       </div>
       <DragOverlay dropAnimation={null}>{active ? renderCard(active, true) : null}</DragOverlay>
     </DndContext>
+  );
+}
+
+/** Makes a column draggable by its grip, and hands the grip to the header through context. */
+function ColumnSlot<T extends Card>({ column, sortable, children }: { column: BoardColumn<T>; sortable: boolean; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: COLUMN + column.id,
+    disabled: !sortable,
+  });
+  const grip = useMemo<GripProps | null>(
+    () => (sortable ? { ref: setActivatorNodeRef, attributes, listeners } : null),
+    [sortable, setActivatorNodeRef, attributes, listeners],
+  );
+  return (
+    <GripContext.Provider value={grip}>
+      <div
+        ref={setNodeRef}
+        data-dragging-column={isDragging || undefined}
+        style={{ transform: CSS.Translate.toString(transform), transition }}
+        className={`flex shrink-0 gap-3 ${isDragging ? "relative z-10 [&>section]:ring-accent [&>section]:shadow-card-selected [&>section]:-rotate-1 [&>section]:ring-2" : ""}`}
+      >
+        {children}
+      </div>
+    </GripContext.Provider>
   );
 }
 

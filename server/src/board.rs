@@ -58,6 +58,10 @@ pub struct CreateStatusRequest {
     pub name: String,
     pub category: String,
     pub color: Option<String>,
+    /// Where to put it: after this column, or first when `null`. Left out, it goes at the end.
+    #[serde(default, deserialize_with = "some")]
+    #[schema(value_type = Option<String>)]
+    pub after_id: Option<Option<String>>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -109,6 +113,44 @@ fn check_category(c: &str) -> AppResult<()> {
             "invalid_category",
             "Category is todo, in_progress, blocked or done.".into(),
         ))
+    }
+}
+
+/// Column names that read as "finished", matched without case.
+const DONE_NAMES: &[&str] = &["done", "finished", "complete", "completed", "published"];
+
+/// Whether a column's name says its tasks are finished.
+pub fn sounds_done(name: &str) -> bool {
+    DONE_NAMES.contains(&name.trim().to_lowercase().as_str())
+}
+
+/// Why a board might never count anything as finished, if it might: no
+/// column in the Done category, or a column named like one that isn't.
+/// The web app shows the same warning above the board.
+pub fn done_warning(statuses: &[Status]) -> Option<String> {
+    let misnamed: Vec<&str> = statuses
+        .iter()
+        .filter(|s| s.category != "done" && sounds_done(&s.name))
+        .map(|s| s.name.as_str())
+        .collect();
+    if !statuses.iter().any(|s| s.category == "done") {
+        let hint = match misnamed.first() {
+            Some(n) => format!(" The “{n}” column counts as {} instead.", category_word(statuses, n)),
+            None => String::new(),
+        };
+        Some(format!("nothing on this board counts as finished.{hint}"))
+    } else {
+        misnamed.first().map(|n| {
+            format!("the “{n}” column counts as {}, so its tasks stay open.", category_word(statuses, n))
+        })
+    }
+}
+
+fn category_word(statuses: &[Status], name: &str) -> &'static str {
+    match statuses.iter().find(|s| s.name == name).map(|s| s.category.as_str()) {
+        Some("todo") => "To do",
+        Some("blocked") => "Blocked",
+        _ => "In progress",
     }
 }
 
@@ -189,8 +231,20 @@ pub async fn insert_status(
     category: &str,
     color: Option<&str>,
 ) -> AppResult<Status> {
-    let id = time::new_id();
     let pos = position_last(conn, "statuses", "project_id", project_id).await?;
+    insert_status_at(conn, project_id, name, category, color, pos).await
+}
+
+/// Insert a column at a position key made with [`position_after`].
+pub async fn insert_status_at(
+    conn: &mut SqliteConnection,
+    project_id: &str,
+    name: &str,
+    category: &str,
+    color: Option<&str>,
+    pos: String,
+) -> AppResult<Status> {
+    let id = time::new_id();
     sqlx::query(
         "INSERT INTO statuses (id, project_id, name, category, color, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
@@ -229,11 +283,11 @@ pub(crate) async fn list_statuses(
     Ok(Json(statuses_for(&mut conn, &id).await?))
 }
 
-/// Add a column at the right end of the board.
+/// Add a column: at the right end of the board, or after `after_id`.
 #[utoipa::path(post, path = "/projects/{id}/statuses", tag = "board", params(("id" = String, Path)),
     request_body = CreateStatusRequest,
     responses((status = 201, body = Status), (status = 400, body = crate::error::ErrorBody)))]
-async fn create_status(
+pub(crate) async fn create_status(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -253,7 +307,19 @@ async fn create_status(
     if count >= 20 {
         return Err(AppError::BadRequest("too_many_columns", "A board can have up to 20 columns.".into()));
     }
-    let status = insert_status(&mut tx, &id, &name, &req.category, req.color.as_deref()).await?;
+    let pos = match &req.after_id {
+        None => position_last(&mut tx, "statuses", "project_id", &id).await?,
+        Some(after) => position_after(&mut tx, "statuses", "project_id", &id, after.as_deref(), None).await?,
+    };
+    let status = insert_status_at(&mut tx, &id, &name, &req.category, req.color.as_deref(), pos).await?;
+    log_activity(
+        &mut tx,
+        &id,
+        &user.id,
+        "status.created",
+        serde_json::json!({ "name": status.name, "category": status.category }),
+    )
+    .await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(status)))
 }
@@ -262,7 +328,7 @@ async fn create_status(
 #[utoipa::path(patch, path = "/statuses/{id}", tag = "board", params(("id" = String, Path)),
     request_body = UpdateStatusRequest,
     responses((status = 200, body = Status), (status = 404, body = crate::error::ErrorBody)))]
-async fn update_status(
+pub(crate) async fn update_status(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,
@@ -302,8 +368,43 @@ async fn update_status(
         .bind(&id)
         .execute(&mut *tx)
         .await?;
+    if name != current.name {
+        log_activity(
+            &mut tx,
+            &current.project_id,
+            &user.id,
+            "status.renamed",
+            serde_json::json!({ "from": current.name, "name": name }),
+        )
+        .await?;
+    }
+    if pos != current.position {
+        let after: Option<String> = sqlx::query_scalar(
+            "SELECT name FROM statuses WHERE project_id = ? AND position < ? ORDER BY position DESC LIMIT 1",
+        )
+        .bind(&current.project_id)
+        .bind(&pos)
+        .fetch_optional(&mut *tx)
+        .await?;
+        log_activity(
+            &mut tx,
+            &current.project_id,
+            &user.id,
+            "status.moved",
+            serde_json::json!({ "name": name, "after": after }),
+        )
+        .await?;
+    }
     // A column moving in or out of `done` changes whether its tasks are complete.
     if category != current.category {
+        log_activity(
+            &mut tx,
+            &current.project_id,
+            &user.id,
+            "status.recategorised",
+            serde_json::json!({ "name": name, "from": current.category, "to": category }),
+        )
+        .await?;
         let now = time::now();
         sqlx::query(
             "UPDATE tasks SET completed_at = CASE WHEN ? = 'done' THEN COALESCE(completed_at, ?) ELSE NULL END

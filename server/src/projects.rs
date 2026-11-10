@@ -464,7 +464,7 @@ pub(crate) async fn get_project(
     request_body = UpdateProjectRequest,
     responses((status = 200, body = Project), (status = 400, body = crate::error::ErrorBody),
         (status = 404, body = crate::error::ErrorBody)))]
-async fn update_project(
+pub(crate) async fn update_project(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,

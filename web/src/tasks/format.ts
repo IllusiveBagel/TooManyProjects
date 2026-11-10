@@ -117,6 +117,14 @@ export function activityText(a: Pick<ActivityItem, "kind" | "payload">): string 
       return `linked a note to ${quote(p)}`;
     case "status.deleted":
       return `removed the ${p.name} column`;
+    case "status.created":
+      return `added the ${p.name} column`;
+    case "status.renamed":
+      return `renamed the ${p.from} column to ${p.name}`;
+    case "status.moved":
+      return p.after ? `moved the ${p.name} column after ${p.after}` : `moved the ${p.name} column to the start`;
+    case "status.recategorised":
+      return `made the ${p.name} column count as ${CATEGORY_LABEL[String(p.to)] ?? p.to}`;
     case "project.created":
       return "started the project";
     case "project.archived":

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useOutletContext, useParams } from "react-router";
+import { Link, NavLink, Outlet, useMatch, useOutletContext, useParams } from "react-router";
 import type { ProjectDetail } from "../api/client";
 import { STATUS_LABEL, STATUS_TONE } from "../canvas/format";
 import { useProjectDetail } from "../canvas/queries";
@@ -22,6 +22,9 @@ export interface ProjectContext {
   canEdit: boolean;
   /** Opens the New task dialog, optionally for one column. */
   newTask: (statusId?: string) => void;
+  /** The Columns panel on the Board tab. */
+  columnsOpen: boolean;
+  setColumnsOpen: (open: boolean) => void;
 }
 
 export const useProject = () => useOutletContext<ProjectContext>();
@@ -32,6 +35,8 @@ export function ProjectPage() {
   const detail = useProjectDetail(id);
   const [newTaskFor, setNewTaskFor] = useState<string | null | undefined>(undefined);
   const [sharing, setSharing] = useState(false);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const onBoard = !!useMatch("/projects/:id/board");
 
   if (detail.isError) return <div className="p-5"><ErrorNote error={detail.error} /></div>;
   if (!detail.data) return <p className="label-mono text-text-quiet p-5">Loading…</p>;
@@ -63,6 +68,11 @@ export function ProjectPage() {
           </span>
           <div className="ml-auto flex items-center gap-2">
             <People projectId={id} isOwner={project.role === "owner"} onOpen={() => setSharing(true)} />
+            {canEdit && onBoard && (
+              <Button className="min-h-10 px-3 text-sm max-sm:hidden" onClick={() => setColumnsOpen(true)}>
+                Columns
+              </Button>
+            )}
             {canEdit && (
               <Button variant="primary" className="min-h-10 px-3 text-sm" onClick={() => setNewTaskFor(null)}>
                 + Task
@@ -81,7 +91,15 @@ export function ProjectPage() {
       </header>
       <div className="relative flex flex-col sm:min-h-0 sm:flex-1">
         <Outlet
-          context={{ detail: detail.data, canEdit, newTask: (s?: string) => setNewTaskFor(s ?? null) } satisfies ProjectContext}
+          context={
+            {
+              detail: detail.data,
+              canEdit,
+              newTask: (s?: string) => setNewTaskFor(s ?? null),
+              columnsOpen,
+              setColumnsOpen,
+            } satisfies ProjectContext
+          }
         />
         <TaskDrawer />
       </div>
