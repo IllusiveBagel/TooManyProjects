@@ -447,7 +447,14 @@ function CanvasBoard() {
       )}
 
       <ProjectDrawer onJump={jumpTo} />
-      <NewProjectDialog parentTitle={parentTitle} suggestedColor={suggestedColor} />
+      <NewProjectDialog
+        parentTitle={parentTitle}
+        suggestedColor={suggestedColor}
+        projects={projects
+          .filter((p) => p.role !== "viewer" && p.status !== "archived")
+          .map((p) => ({ id: p.id, title: p.title }))
+          .sort((a, b) => a.title.localeCompare(b.title))}
+      />
     </main>
   );
 }

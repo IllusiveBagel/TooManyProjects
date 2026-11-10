@@ -26,6 +26,7 @@ pub mod projects;
 pub mod search;
 pub mod sharing;
 pub mod tasks;
+pub mod templates;
 pub mod themes;
 pub mod time;
 pub mod tls;

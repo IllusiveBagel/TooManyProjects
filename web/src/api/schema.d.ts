@@ -1063,6 +1063,26 @@ export interface paths {
         patch: operations["update_project"];
         trace?: never;
     };
+    "/projects/{id}/apply-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give a project with an empty board a template's columns, labels, starter
+         *     tasks, databases and notes. A board that has tasks can't switch.
+         */
+        post: operations["apply_template"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{id}/cover": {
         parameters: {
             query?: never;
@@ -1525,6 +1545,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Templates you can start a project from: the built-ins, yours, and the ones
+         *     shared with you.
+         */
+        get: operations["list_templates"];
+        put?: never;
+        /**
+         * Save a project as a template, or copy one (built-ins can't be edited, but
+         *     a copy can).
+         */
+        post: operations["create_template"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one of your templates. Projects made from it keep everything. */
+        delete: operations["delete_template"];
+        options?: never;
+        head?: never;
+        /** Rename or share one of your templates. */
+        patch: operations["update_template"];
+        trace?: never;
+    };
     "/themes": {
         parameters: {
             query?: never;
@@ -1646,6 +1708,9 @@ export interface components {
             revoked_at?: string | null;
             /** @description `read` or `write`. */
             scope: string;
+        };
+        ApplyTemplateRequest: {
+            template_id: string;
         };
         ApproveRequest: {
             /** @description False for Cancel. */
@@ -1988,6 +2053,11 @@ export interface components {
             status?: string | null;
             summary?: string | null;
             target_date?: string | null;
+            /**
+             * @description Start from this template (see `GET /templates`): its columns, labels,
+             *     starter tasks, databases and notes. Blank when left out.
+             */
+            template_id?: string | null;
             title: string;
         };
         CreateRowRequest: {
@@ -2030,6 +2100,25 @@ export interface components {
             /** @description Column to add it to. Defaults to the first column. */
             status_id?: string | null;
             title: string;
+        };
+        /** @description Save a project as a template, or copy another template. */
+        CreateTemplateRequest: {
+            /** @description From a project: its board columns. Default true. */
+            columns?: boolean;
+            /** @description From a project: its databases' columns and views, without rows. Default true. */
+            databases?: boolean;
+            /** @description Or copy this template (a built-in or one you can see). */
+            from_template_id?: string | null;
+            /** @description From a project: its labels. Default true. */
+            labels?: boolean;
+            name: string;
+            /** @description From a project: its notes' headings, as skeletons. Default false. */
+            notes?: boolean;
+            /** @description Save this project's set-up. */
+            project_id?: string | null;
+            shared?: boolean;
+            /** @description From a project: its open tasks, as starter tasks. Default true. */
+            tasks?: boolean;
         };
         CreateTokenRequest: {
             /** @description What it's for, such as "Claude on my laptop". */
@@ -2508,6 +2597,30 @@ export interface components {
             /** Format: int64 */
             total_tasks: number;
         };
+        /** @description A template as the picker shows it. */
+        ProjectTemplate: {
+            /** @description One line on what else it brings. */
+            blurb: string;
+            builtin: boolean;
+            columns: components["schemas"]["TemplateColumn"][];
+            created_at?: string | null;
+            database_names: string[];
+            /** @description `builtin-pcb` and so on for the built-ins. */
+            id: string;
+            label_names: string[];
+            /** @description You saved it, so you can rename, share or delete it. */
+            mine: boolean;
+            name: string;
+            note_titles: string[];
+            /** @description Who saved it, when that isn't you. */
+            owner_name?: string | null;
+            /** @description Shown to the people its owner shares everything with. */
+            shared: boolean;
+            /** @description The project it was saved from. */
+            source_title?: string | null;
+            /** Format: int64 */
+            task_count: number;
+        };
         QuickAddRequest: {
             /** @description More text, such as what a share sheet sent besides the link. */
             body?: string | null;
@@ -2789,6 +2902,13 @@ export interface components {
             notes: components["schemas"]["NoteSummary"][];
             task: components["schemas"]["Task"];
         };
+        /** @description A board column a template brings. */
+        TemplateColumn: {
+            /** @description `todo`, `in_progress`, `blocked` or `done`. */
+            category: string;
+            color?: string | null;
+            name: string;
+        };
         ThemeModeSummary: {
             label: string;
             /** @description `dark` or `light`. */
@@ -2938,6 +3058,10 @@ export interface components {
             /** @description Move to this column. */
             status_id?: string | null;
             title?: string | null;
+        };
+        UpdateTemplateRequest: {
+            name?: string | null;
+            shared?: boolean | null;
         };
         UpdateViewRequest: {
             after_id?: string | null;
@@ -5677,6 +5801,48 @@ export interface operations {
             };
         };
     };
+    apply_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The board has tasks */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     set_cover: {
         parameters: {
             query?: never;
@@ -6802,6 +6968,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LinkedRows"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_templates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplate"][];
+                };
+            };
+        };
+    };
+    create_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTemplateRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplate"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_template: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTemplateRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectTemplate"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             404: {

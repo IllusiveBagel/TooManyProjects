@@ -295,6 +295,40 @@ an episode tracker or a budget.
 - **Limits:** 50 databases a project, 60 columns, 20 views and 10,000 rows a
   database.
 
+## Project templates
+
+A new project can start from a template instead of a blank board. Pick one under
+**Start from** in the New project dialog:
+
+| Template | Columns | Also brings |
+| --- | --- | --- |
+| Blank | To do, Doing, Done | Nothing else (today's default) |
+| Electronics / PCB | Design, Ready to order, Ordered, Assembly, Testing, Done | Parts database, labels Schematic, Layout, Firmware |
+| 3D print / prop | Print, Fill, Prime, Mask, Paint, Weather, Done | Parts database, a finishing checklist task |
+| Car / restoration | To do, Doing, Waiting on parts (Blocked), Done | Parts database, labels Disassembly, Bodywork, Engine |
+| Video | Idea, Script, Shoot, Edit, Published | Labels Episode, Short, B-roll |
+| Software | Backlog, Doing, Review, Done | Labels Bug, Feature |
+
+Each column already counts as the right thing (To do, In progress, Blocked or Done), so
+the global board and Today read the new project correctly from the start. Everything a
+template makes is ordinary afterwards: rename, move or delete any of it.
+
+**Save your own.** Open a project's panel on the canvas and choose **Save as template…**.
+Pick what comes along: board columns, labels, open tasks as starter tasks (with their
+checklists), database columns and views without rows, and note skeletons (each note's
+headings, without the words under them). Your templates appear in the picker marked
+*Yours*.
+
+**Manage them** in Settings → Templates: rename, delete, or tick **Shared** so the people
+you share everything with can start from it too. Built-in templates can't be edited, but
+**Copy a built-in to change it** makes one of your own.
+
+**A project with an empty board** can still switch: **Use a template…** in its panel
+replaces the columns and adds the rest. Once a board has tasks it keeps its columns.
+
+Through the MCP server, `create_project` and `spawn_project` take an optional `template`
+by name, such as "Electronics / PCB".
+
 ## Parts and the Shopping list
 
 For builds that need things bought: one Parts database per project, and one

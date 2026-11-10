@@ -19,7 +19,7 @@ use crate::{
     auth::CurrentUser,
     canvas,
     error::{AppError, AppResult},
-    links, notes, time,
+    links, notes, templates, time,
 };
 
 pub fn router() -> OpenApiRouter<AppState> {
@@ -123,6 +123,9 @@ pub struct CreateProjectRequest {
     pub spawned_from: Option<String>,
     /// Where to put the card on your home canvas. Defaults to beside the others.
     pub position: Option<Position>,
+    /// Start from this template (see `GET /templates`): its columns, labels,
+    /// starter tasks, databases and notes. Blank when left out.
+    pub template_id: Option<String>,
 }
 
 /// Fields left out stay as they are. Send `null` to clear an optional field.
@@ -292,28 +295,6 @@ pub async fn log_activity(
     Ok(())
 }
 
-/// Board columns every new project starts with.
-async fn create_default_statuses(conn: &mut SqliteConnection, project_id: &str) -> AppResult<()> {
-    let now = time::now();
-    let positions = crate::position::spread(3);
-    for (i, (name, category)) in
-        [("To do", "todo"), ("Doing", "in_progress"), ("Done", "done")].into_iter().enumerate()
-    {
-        sqlx::query(
-            "INSERT INTO statuses (id, project_id, name, category, position, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .bind(time::new_id())
-        .bind(project_id)
-        .bind(name)
-        .bind(category)
-        .bind(&positions[i])
-        .bind(&now)
-        .execute(&mut *conn)
-        .await?;
-    }
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
 // Handlers
 
@@ -355,6 +336,10 @@ pub(crate) async fn create_project(
     }
 
     let mut tx = state.db.begin().await?;
+    let template = match req.template_id.as_deref().filter(|t| !t.is_empty()) {
+        Some(t) => Some(templates::load(&mut tx, &user.id, t).await?),
+        None => None,
+    };
     // A project spawned from a shared one joins its parent's family: the
     // parent's owner owns it, so it is shared the same way.
     let owner_id = match &req.spawned_from {
@@ -392,7 +377,9 @@ pub(crate) async fn create_project(
     .bind(&now)
     .execute(&mut *tx)
     .await?;
-    create_default_statuses(&mut tx, &id).await?;
+    let body = template.as_ref().map(|(_, b)| b.clone()).unwrap_or_else(templates::blank);
+    templates::insert_columns(&mut tx, &id, &body).await?;
+    templates::apply_rest(&mut tx, &id, &body).await?;
     if let Some(parent) = &req.spawned_from {
         links::insert_link(&mut tx, parent, &id, "spawned", None).await?;
     }
@@ -420,11 +407,16 @@ pub(crate) async fn create_project(
         &id,
         &user.id,
         "project.created",
-        serde_json::json!({ "spawned_from": req.spawned_from }),
+        serde_json::json!({
+            "spawned_from": req.spawned_from,
+            "template": template.as_ref().map(|(name, _)| name),
+        }),
     )
     .await?;
-    let project = visible_project(&mut tx, &user.id, &id).await?;
     tx.commit().await?;
+    templates::write_notes(&state, &user, &id, &body.notes).await?;
+    let mut conn = state.db.acquire().await?;
+    let project = visible_project(&mut conn, &user.id, &id).await?;
     Ok((StatusCode::CREATED, Json(project)))
 }
 

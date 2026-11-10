@@ -44,6 +44,7 @@ use crate::{
     notes, oauth,
     projects::{self, Project, as_ai, visible_project},
     tasks::{self, Task},
+    templates,
     tokens::{self, TokenCaller},
 };
 
@@ -267,6 +268,10 @@ pub struct CreateProjectArgs {
     pub description: Option<String>,
     /// idea, active, paused or done. Default active.
     pub status: Option<String>,
+    /// Start from a template, by name or id: Blank, Electronics / PCB,
+    /// 3D print / prop, Car / restoration, Video, Software, or one the user saved.
+    /// It brings board columns, labels, starter tasks, databases and notes.
+    pub template: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -386,6 +391,10 @@ pub struct SpawnArgs {
     pub summary: Option<String>,
     /// Markdown.
     pub description: Option<String>,
+    /// Start from a template, by name or id: Blank, Electronics / PCB,
+    /// 3D print / prop, Car / restoration, Video, Software, or one the user saved.
+    /// It brings board columns, labels, starter tasks, databases and notes.
+    pub template: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -765,6 +774,30 @@ impl Mcp {
             out.push_str(&format!("\nNote: {w}"));
         }
         Ok(out)
+    }
+
+    /// "Its board has Design, Ordered and Done columns, 2 starter tasks and a Parts database."
+    async fn board_line(&self, project_id: &str) -> AppResult<String> {
+        let mut conn = self.conn().await?;
+        let columns: Vec<String> =
+            crate::board::statuses_for(&mut conn, project_id).await?.into_iter().map(|s| s.name).collect();
+        let tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE project_id = ?")
+            .bind(project_id)
+            .fetch_one(&mut *conn)
+            .await?;
+        let dbs: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM databases WHERE project_id = ? ORDER BY position")
+                .bind(project_id)
+                .fetch_all(&mut *conn)
+                .await?;
+        let mut line = format!("Its board has these columns: {}.", columns.join(", "));
+        if tasks > 0 {
+            line.push_str(&format!(" {tasks} starter task{}.", if tasks == 1 { "" } else { "s" }));
+        }
+        if !dbs.is_empty() {
+            line.push_str(&format!(" Databases: {}.", dbs.join(", ")));
+        }
+        Ok(line)
     }
 
     async fn conn(&self) -> AppResult<sqlx::pool::PoolConnection<sqlx::Sqlite>> {
@@ -1846,7 +1879,7 @@ impl Mcp {
     }
 
     #[tool(
-        description = "Start a new top-level project (use spawn_project for one that grew out of another). Needs read-write access."
+        description = "Start a new top-level project (use spawn_project for one that grew out of another), optionally from a template such as Electronics / PCB or Video. Needs read-write access."
     )]
     async fn create_project(
         &self,
@@ -1859,20 +1892,25 @@ impl Mcp {
         };
         reply(
             as_ai(async {
+                let template = match &args.template {
+                    Some(t) if !t.trim().is_empty() => {
+                        Some(templates::find(&mut *self.conn().await?, &user.id, t).await?)
+                    }
+                    _ => None,
+                };
                 let req = serde_json::from_value(json!({
                     "title": args.title,
                     "summary": args.summary,
                     "description": args.description,
                     "status": args.status.map(|s| s.trim().to_lowercase()),
+                    "template_id": template,
                 }))
                 .map_err(|e| bad("invalid_project", e.to_string()))?;
                 let (_, Json(p)) =
                     projects::create_project(State(self.state.clone()), CurrentUser(user.clone()), Json(req))
                         .await?;
-                Ok(format!(
-                    "Started “{}” (id `{}`). Its board has To do, Doing and Done columns.",
-                    p.title, p.id
-                ))
+                let board = self.board_line(&p.id).await?;
+                Ok(format!("Started “{}” (id `{}`). {board}", p.title, p.id))
             })
             .await,
         )
@@ -1951,17 +1989,25 @@ impl Mcp {
         reply(
             as_ai(async {
                 let parent = find_project(&mut *self.conn().await?, &user, &args.parent).await?;
+                let template = match &args.template {
+                    Some(t) if !t.trim().is_empty() => {
+                        Some(templates::find(&mut *self.conn().await?, &user.id, t).await?)
+                    }
+                    _ => None,
+                };
                 let req = serde_json::from_value(json!({
                     "title": args.title,
                     "summary": args.summary,
                     "description": args.description,
                     "spawned_from": parent.id,
+                    "template_id": template,
                 }))
                 .map_err(|e| bad("invalid_project", e.to_string()))?;
                 let (_, Json(p)) =
                     projects::create_project(State(self.state.clone()), CurrentUser(user.clone()), Json(req))
                         .await?;
-                Ok(format!("Started “{}” (id `{}`), spawned from {}.", p.title, p.id, parent.title))
+                let board = self.board_line(&p.id).await?;
+                Ok(format!("Started “{}” (id `{}`), spawned from {}. {board}", p.title, p.id, parent.title))
             })
             .await,
         )

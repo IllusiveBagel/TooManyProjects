@@ -9,6 +9,7 @@ import { UpdatesPanel } from "../system/UpdatesPanel";
 import { HttpsPanel } from "../system/HttpsPanel";
 import { useInstanceSettings, useUpdateInstanceSettings } from "../parts/queries";
 import { Button, ErrorNote, Field, Panel } from "../components/ui";
+import { TemplatesPanel } from "../templates/TemplatesPanel";
 import { useThemeStore } from "../theme/store";
 import type { ModePreference } from "../theme/types";
 
@@ -20,6 +21,7 @@ export function SettingsPage() {
       <AppearancePanel />
       <SharingPanel />
       <NotesPanel />
+      <TemplatesPanel />
       <AiAccessPanel />
       <HttpsPanel owner={me.role === "owner"} />
       {me.role === "owner" && <MoneyPanel />}

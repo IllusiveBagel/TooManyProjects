@@ -4,6 +4,8 @@ import type { ProjectDetail } from "../api/client";
 import { ColorPicker, StatusPicker } from "../components/Pickers";
 import { Button, ErrorNote } from "../components/ui";
 import { SharedNote } from "../sharing/SharedNote";
+import { ApplyTemplateDialog } from "../templates/ApplyTemplateDialog";
+import { SaveTemplateDialog } from "../templates/SaveTemplateDialog";
 import { projectColor } from "../theme/resolve";
 import { lastActive, progress } from "./format";
 import { useDeleteProject, useProjectDetail, useUpdateProject } from "./queries";
@@ -55,6 +57,7 @@ function DrawerBody({ detail, onJump }: { detail: ProjectDetail; onJump: (id: st
   const [summary, setSummary] = useState(project.summary ?? "");
   const [description, setDescription] = useState(project.description ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [templateDialog, setTemplateDialog] = useState<"save" | "apply" | null>(null);
   const save = (fields: Parameters<typeof update.mutate>[0]) => update.mutate(fields);
   const archived = project.status === "archived";
   const color = projectColor(project.color);
@@ -156,8 +159,21 @@ function DrawerBody({ detail, onJump }: { detail: ProjectDetail; onJump: (id: st
 
         <ErrorNote error={update.error ?? remove.error} />
 
+        <div className="border-rule flex flex-wrap gap-2 border-x-0 border-b-0 pt-4">
+          <Button type="button" onClick={() => setTemplateDialog("save")}>
+            Save as template…
+          </Button>
+          {canEdit && project.stats.total_tasks === 0 && (
+            <Button type="button" onClick={() => setTemplateDialog("apply")}>
+              Use a template…
+            </Button>
+          )}
+        </div>
+        {templateDialog === "save" && <SaveTemplateDialog project={project} onClose={() => setTemplateDialog(null)} />}
+        {templateDialog === "apply" && <ApplyTemplateDialog project={project} onClose={() => setTemplateDialog(null)} />}
+
         {canEdit && (
-          <div className="border-rule flex flex-wrap gap-2 border-x-0 border-b-0 pt-4">
+          <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => save({ id: project.id, status: archived ? "active" : "archived" })}>
               {archived ? "Restore" : "Archive"}
             </Button>
