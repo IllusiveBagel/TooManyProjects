@@ -28,12 +28,15 @@ import { NewProjectDialog } from "../canvas/NewProjectDialog";
 import { ProjectDrawer } from "../canvas/ProjectDrawer";
 import {
   useCanvas,
+  useCopyLayout,
   useCreateGroup,
   useCreateLink,
   useDeleteGroup,
   useDeleteLink,
+  useRestoreLayout,
   useSaveNodes,
   useUpdateGroup,
+  type LayoutSnapshot,
 } from "../canvas/queries";
 import { useCanvasUi } from "../canvas/store";
 import { Modal } from "../components/Modal";
@@ -366,6 +369,26 @@ function CanvasBoard() {
   const suggestedColor = `slot-${(projects.length % 8) + 1}`;
   const sharers = [...new Map(projects.filter((p) => p.role !== "owner").map((p) => [p.owner_id, p.owner_name])).entries()];
   const [copyFrom, setCopyFrom] = useState<{ id: string; name: string } | null>(null);
+  const copyLayout = useCopyLayout();
+  const restoreLayout = useRestoreLayout();
+  const [copied, setCopied] = useState<{ text: string; undo: LayoutSnapshot } | null>(null);
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+  const runCopy = () => {
+    if (!copyFrom) return;
+    copyLayout.mutate(copyFrom.id, {
+      onSuccess: (r) => {
+        setCopyFrom(null);
+        const groups = r.groups === 1 ? "1 group" : `${r.groups} groups`;
+        const moved = r.moved === 1 ? "1 project" : `${r.moved} projects`;
+        setCopied({ text: `Copied ${r.owner_name}’s layout: ${moved} moved, ${groups} added.`, undo: r.undo });
+        window.setTimeout(() => flow.fitView({ padding: 0.2, maxZoom: 1, duration: 300 }), 300);
+      },
+    });
+  };
 
   return (
     <main ref={mainRef} className="relative flex-1" onDoubleClick={onPaneDoubleClick}>
@@ -476,12 +499,34 @@ function CanvasBoard() {
               The copies are yours: move or rename them freely. Nothing changes on {copyFrom.name}'s canvas, and later
               changes there don't follow. You can undo this straight after.
             </p>
+            <ErrorNote error={copyLayout.error} />
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" onClick={() => setCopyFrom(null)}>Cancel</Button>
-              <Button type="button" variant="primary" onClick={() => setCopyFrom(null)}>Copy layout</Button>
+              <Button type="button" variant="primary" disabled={copyLayout.isPending} onClick={runCopy}>
+                Copy layout
+              </Button>
             </div>
           </div>
         </Modal>
+      )}
+
+      {copied && (
+        <div
+          role="status"
+          className="border-rule bg-surface-raised shadow-card fixed bottom-20 left-1/2 z-50 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-4 rounded-md px-4 py-2.5 sm:bottom-6"
+        >
+          <span className="font-semibold">{copied.text}</span>
+          <button
+            type="button"
+            className="label-mono text-accent min-h-9 cursor-pointer px-1 text-[11px]"
+            onClick={() => {
+              restoreLayout.mutate(copied.undo);
+              setCopied(null);
+            }}
+          >
+            Undo
+          </button>
+        </div>
       )}
 
       <ProjectDrawer onJump={jumpTo} />

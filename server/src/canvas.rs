@@ -2,7 +2,7 @@
 //! projects themselves, so moving a card never touches a project, and each
 //! person arranges their own canvas.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use axum::{
     Json,
@@ -399,7 +399,23 @@ async fn home_canvas(
     .chain(locked_ids.iter().map(|s| s.to_string()))
     .filter(|id| !placed.contains(id))
     .collect();
+    // Someone else's project lands where they keep it, inside a copy of their
+    // group around it (see layout.rs). Anything else takes the next grid cell.
+    let owners: HashMap<&str, &str> = projects.iter().map(|p| (p.id.as_str(), p.owner_id.as_str())).collect();
+    let mut by_owner: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut grid = Vec::new();
     for project_id in unplaced {
+        match owners.get(project_id.as_str()) {
+            Some(owner) if *owner != user.id => {
+                by_owner.entry(owner.to_string()).or_default().push(project_id)
+            }
+            _ => grid.push(project_id),
+        }
+    }
+    for (owner, ids) in by_owner {
+        grid.extend(crate::layout::place_shared(&mut tx, &canvas_id, &owner, &ids).await?);
+    }
+    for project_id in grid {
         let (x, y) = next_free_spot(&mut tx, &canvas_id).await?;
         place_project(&mut tx, &canvas_id, &project_id, x, y).await?;
     }

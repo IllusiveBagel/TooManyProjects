@@ -6,7 +6,16 @@ import { useMe } from "../auth/queries";
 import { Modal } from "../components/Modal";
 import { Button, ErrorNote } from "../components/ui";
 import { initials, ROLE_LABEL } from "./format";
-import { useCreateShare, useDeleteShare, useMembers, usePeople, useUpdateShare, type Member } from "./queries";
+import {
+  useCreateShare,
+  useDeleteShare,
+  useExclude,
+  useLetBackIn,
+  useMembers,
+  usePeople,
+  useUpdateShare,
+  type Member,
+} from "./queries";
 
 const selectClass =
   "border-rule bg-surface min-h-11 rounded-md px-2 font-mono text-[13px] outline-none focus:border-accent";
@@ -27,6 +36,8 @@ export function ShareDialog({ project, onClose }: { project: Project; onClose: (
   const create = useCreateShare();
   const update = useUpdateShare();
   const remove = useDeleteShare();
+  const exclude = useExclude();
+  const letBackIn = useLetBackIn();
   const isOwner = project.role === "owner";
   const [person, setPerson] = useState("");
   const [role, setRole] = useState<"viewer" | "editor">("editor");
@@ -72,7 +83,16 @@ export function ShareDialog({ project, onClose }: { project: Project; onClose: (
             </p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" onClick={() => setConfirming(null)}>Cancel</Button>
-              <Button type="button" variant="primary" onClick={() => setConfirming(null)}>Remove from this project</Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={exclude.isPending}
+                onClick={() =>
+                  exclude.mutate({ projectId: project.id, userId: confirming.user_id }, { onSuccess: () => setConfirming(null) })
+                }
+              >
+                Remove from this project
+              </Button>
             </div>
           </div>
         )}
@@ -87,7 +107,13 @@ export function ShareDialog({ project, onClose }: { project: Project; onClose: (
                     {initials(m.name)}
                   </span>
                   <span className="text-text-quiet min-w-0 flex-1 truncate">{m.name}</span>
-                  <Button type="button">Let back in</Button>
+                  <Button
+                    type="button"
+                    disabled={letBackIn.isPending}
+                    onClick={() => letBackIn.mutate({ projectId: project.id, userId: m.user_id })}
+                  >
+                    Let back in
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -122,7 +148,7 @@ export function ShareDialog({ project, onClose }: { project: Project; onClose: (
                 <Button variant="primary" type="submit" disabled={!person || create.isPending}>Share</Button>
               </>
             )}
-            <ErrorNote error={create.error ?? update.error ?? remove.error} />
+            <ErrorNote error={create.error ?? update.error ?? remove.error ?? exclude.error ?? letBackIn.error} />
             {me.role === "owner" && <InviteToProject project={project} />}
             <p className="text-text-quiet text-xs leading-relaxed">
               Viewers can see the board, tasks and the project's notes. Editors can also change them. Only you can delete

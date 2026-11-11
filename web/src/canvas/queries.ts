@@ -169,3 +169,23 @@ export function useDeleteGroup() {
     onError: () => qc.invalidateQueries({ queryKey: canvasKeys.all }),
   });
 }
+
+export type LayoutSnapshot = components["schemas"]["LayoutSnapshot"];
+
+/** Lay out what one person shares with you the way they have it. */
+export function useCopyLayout() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (ownerId: string) => unwrap(api.POST("/canvases/home/copy-layout", { body: { owner_id: ownerId } })),
+    onSuccess: refresh,
+  });
+}
+
+/** Undo a layout copy. */
+export function useRestoreLayout() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: (snapshot: LayoutSnapshot) => unwrap(api.POST("/canvases/home/restore-layout", { body: snapshot })),
+    onSuccess: refresh,
+  });
+}

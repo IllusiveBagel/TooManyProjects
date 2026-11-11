@@ -1081,6 +1081,91 @@
         }
       }
     },
+    "/canvases/home/copy-layout": {
+      "post": {
+        "tags": [
+          "canvas"
+        ],
+        "summary": "Lay out everything one person shares with you the way they have it: their\nprojects move to where they keep them, and their groups are copied around\nthem, set to the right of your own cards. Earlier copies of their groups\nare replaced. Your own projects and groups stay put, and nothing changes\non their canvas. The result says how to undo it.",
+        "operationId": "copy_layout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyLayoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopyLayoutResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/canvases/home/restore-layout": {
+      "post": {
+        "tags": [
+          "canvas"
+        ],
+        "summary": "Undo a layout copy: put the cards back, take the copied groups away and\nbring back the ones it replaced.",
+        "operationId": "restore_layout",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LayoutSnapshot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/canvases/{id}/groups": {
       "post": {
         "tags": [
@@ -4350,6 +4435,128 @@
         }
       }
     },
+    "/projects/{id}/exclusions/{user_id}": {
+      "put": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Take a project (and the projects spawned from it) away from someone who\ngets it through a whole-account share or a parent project's share. They\nkeep everything else. Only the owner. Someone given this project directly\nloses it by removing that share instead.",
+        "operationId": "create_exclusion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "sharing"
+        ],
+        "summary": "Let someone back into a project you removed them from.",
+        "operationId": "delete_exclusion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}/labels": {
       "get": {
         "tags": [
@@ -6694,6 +6901,27 @@
           }
         }
       },
+      "CardPosition": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "ChangePasswordRequest": {
         "type": "object",
         "required": [
@@ -7027,6 +7255,45 @@
           "scope": {
             "type": "string",
             "description": "`read` or `write`."
+          }
+        }
+      },
+      "CopyLayoutRequest": {
+        "type": "object",
+        "required": [
+          "owner_id"
+        ],
+        "properties": {
+          "owner_id": {
+            "type": "string",
+            "description": "The person whose layout to copy. They must share at least one project with you."
+          }
+        }
+      },
+      "CopyLayoutResult": {
+        "type": "object",
+        "required": [
+          "owner_name",
+          "moved",
+          "groups",
+          "undo"
+        ],
+        "properties": {
+          "groups": {
+            "type": "integer",
+            "description": "Groups copied around them.",
+            "minimum": 0
+          },
+          "moved": {
+            "type": "integer",
+            "description": "Cards moved to match the owner's canvas.",
+            "minimum": 0
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "undo": {
+            "$ref": "#/components/schemas/LayoutSnapshot"
           }
         }
       },
@@ -7458,7 +7725,7 @@
               "string",
               "null"
             ],
-            "description": "Someone who can see the project."
+            "description": "Someone who can see the project, or `null` for nobody. Left out, the\ntask is assigned to whoever creates it."
           },
           "at_top": {
             "type": "boolean",
@@ -7792,6 +8059,38 @@
           "message": {
             "type": "string",
             "description": "A sentence fit to show a person."
+          }
+        }
+      },
+      "Exclusion": {
+        "type": "object",
+        "description": "Someone taken off one project (and the projects spawned from it) that a\nwider share would otherwise give them.",
+        "required": [
+          "project_id",
+          "project_title",
+          "grantee_id",
+          "grantee_name",
+          "grantee_email",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "grantee_email": {
+            "type": "string"
+          },
+          "grantee_id": {
+            "type": "string"
+          },
+          "grantee_name": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_title": {
+            "type": "string"
           }
         }
       },
@@ -8176,6 +8475,38 @@
           }
         }
       },
+      "LayoutSnapshot": {
+        "type": "object",
+        "description": "What a copy changed, so it can be undone with `POST /canvases/home/restore-layout`.",
+        "required": [
+          "cards",
+          "removed_groups",
+          "added_groups"
+        ],
+        "properties": {
+          "added_groups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The groups the copy added."
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CardPosition"
+            },
+            "description": "Where the moved cards were before."
+          },
+          "removed_groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedGroup"
+            },
+            "description": "Earlier copies of this person's groups that the copy replaced."
+          }
+        }
+      },
       "Link": {
         "type": "object",
         "required": [
@@ -8376,7 +8707,7 @@
           },
           "role": {
             "type": "string",
-            "description": "`owner`, `editor` or `viewer`."
+            "description": "`owner`, `editor` or `viewer`; `none` for someone removed from it."
           },
           "share_id": {
             "type": [
@@ -8390,7 +8721,7 @@
           },
           "via": {
             "type": "string",
-            "description": "`owner`, `project` (shared directly), `account` (the owner shared\neverything) or `family` (shared through a parent project)."
+            "description": "`owner`, `project` (shared directly), `account` (the owner shared\neverything), `family` (shared through a parent project) or `excluded`\n(removed from this project; only its owner sees these)."
           }
         }
       },
@@ -8398,7 +8729,8 @@
         "type": "object",
         "required": [
           "given",
-          "received"
+          "received",
+          "removed"
         ],
         "properties": {
           "given": {
@@ -8414,6 +8746,13 @@
               "$ref": "#/components/schemas/Share"
             },
             "description": "Shares others have made with you."
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Exclusion"
+            },
+            "description": "People you removed from one of your projects that they would otherwise\nget through a whole-account or parent-project share."
           }
         }
       },
@@ -9461,6 +9800,48 @@
               "$ref": "#/components/schemas/NodePosition"
             },
             "description": "Up to 500 cards at once, sent after a drag."
+          }
+        }
+      },
+      "SavedGroup": {
+        "type": "object",
+        "description": "A group as it was, to put back.",
+        "required": [
+          "label",
+          "color",
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "copied_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "height": {
+            "type": "number",
+            "format": "double"
+          },
+          "label": {
+            "type": "string"
+          },
+          "width": {
+            "type": "number",
+            "format": "double"
+          },
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
           }
         }
       },

@@ -183,8 +183,11 @@ pub struct CreateTaskRequest {
     pub due_date: Option<String>,
     #[serde(default)]
     pub label_ids: Vec<String>,
-    /// Someone who can see the project.
-    pub assignee_id: Option<String>,
+    /// Someone who can see the project, or `null` for nobody. Left out, the
+    /// task is assigned to whoever creates it.
+    #[serde(default, deserialize_with = "some")]
+    #[schema(value_type = Option<String>)]
+    pub assignee_id: Option<Option<String>>,
     /// Add at the top of the column instead of the bottom.
     #[serde(default)]
     pub at_top: bool,
@@ -503,7 +506,8 @@ pub(crate) async fn create_task(
 
     let mut tx = state.db.begin().await?;
     editable_project(&mut tx, &user.id, &id).await?;
-    check_assignee(&mut tx, &id, &req.assignee_id).await?;
+    let assignee_id = req.assignee_id.clone().unwrap_or_else(|| Some(user.id.clone()));
+    check_assignee(&mut tx, &id, &assignee_id).await?;
     let status = match &req.status_id {
         Some(s) => {
             let status = editable_status(&mut tx, &user.id, s).await?;
@@ -548,7 +552,7 @@ pub(crate) async fn create_task(
     .bind(&req.priority)
     .bind(&req.due_date)
     .bind(&pos)
-    .bind(&req.assignee_id)
+    .bind(&assignee_id)
     .bind(&completed_at)
     .bind(&now)
     .bind(&now)

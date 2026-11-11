@@ -2,7 +2,15 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { Button, ErrorNote, Panel } from "../components/ui";
 import { initials } from "../sharing/format";
-import { useCreateShare, useDeleteShare, usePeople, useShares, useUpdateShare, type Share } from "../sharing/queries";
+import {
+  useCreateShare,
+  useDeleteShare,
+  useLetBackIn,
+  usePeople,
+  useShares,
+  useUpdateShare,
+  type Share,
+} from "../sharing/queries";
 
 const selectClass =
   "border-rule bg-surface min-h-11 rounded-md px-2 font-mono text-[13px] outline-none focus:border-accent";
@@ -14,12 +22,14 @@ export function SharingPanel() {
   const create = useCreateShare();
   const update = useUpdateShare();
   const remove = useDeleteShare();
+  const letBackIn = useLetBackIn();
   const [person, setPerson] = useState("");
   const [role, setRole] = useState<"viewer" | "editor">("viewer");
   const [notes, setNotes] = useState(false);
 
   const given = shares.data?.given ?? [];
   const received = shares.data?.received ?? [];
+  const removed = shares.data?.removed ?? [];
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (person) create.mutate({ grantee_id: person, role, include_notes: notes }, { onSuccess: () => setPerson("") });
@@ -29,8 +39,9 @@ export function SharingPanel() {
     <Panel title="Sharing">
       <p className="text-text-quiet mb-4 text-sm leading-relaxed">
         Share everything you have with someone on this server: every project, its board and its notes, now and later.
-        To share just one project, open it and use <b className="text-text">Share</b>. Each person keeps their own canvas
-        layout.
+        To share just one project, open it and use <b className="text-text">Share</b>; to keep one project back from
+        someone you share everything with, remove them there. Each person keeps their own canvas, and your projects land
+        on theirs where you keep them.
       </p>
 
       {(people.data?.length ?? 0) === 0 ? (
@@ -64,7 +75,7 @@ export function SharingPanel() {
           </label>
         </form>
       )}
-      <ErrorNote error={create.error ?? update.error ?? remove.error ?? shares.error} />
+      <ErrorNote error={create.error ?? update.error ?? remove.error ?? letBackIn.error ?? shares.error} />
 
       {given.length > 0 && (
         <ShareList title="You share">
@@ -91,6 +102,36 @@ export function SharingPanel() {
               >
                 Stop
               </button>
+            </li>
+          ))}
+        </ShareList>
+      )}
+
+      {removed.length > 0 && (
+        <ShareList title="Removed from one project">
+          {removed.map((x) => (
+            <li
+              key={`${x.project_id}-${x.grantee_id}`}
+              className="border-rule flex min-h-14 flex-wrap items-center gap-x-3 gap-y-1 border-x-0 border-t-0 py-2 last:border-b-0"
+            >
+              <Avatar name={x.grantee_name} />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate font-bold">{x.grantee_name}</span>
+                <span className="label-mono text-text-quiet truncate text-[10px]">
+                  Not{" "}
+                  <Link to={`/projects/${x.project_id}`} className="hover:text-accent">
+                    {x.project_title}
+                  </Link>{" "}
+                  or its spawn
+                </span>
+              </span>
+              <Button
+                type="button"
+                disabled={letBackIn.isPending}
+                onClick={() => letBackIn.mutate({ projectId: x.project_id, userId: x.grantee_id })}
+              >
+                Let back in
+              </Button>
             </li>
           ))}
         </ShareList>

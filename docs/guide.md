@@ -100,9 +100,11 @@ holds up another.)
 - **Phones:** the same, with bigger resize handles, and the group's tools in a
   bar above the tabs. A new group zooms in so you can read its name as you
   type it.
-- **Sharing:** groups are part of your own canvas layout, like card positions,
-  so nobody else sees them. You can put projects shared with you in your
-  groups, and people you share with arrange their own.
+- **Sharing:** groups are part of your own canvas layout, like card positions.
+  When someone shares a project with you, it lands where they keep it, inside a
+  copy of their group around it, set to the right of your own cards. The copy is
+  yours to move, rename or delete; nothing follows their later changes. See
+  **Copying someone's layout** under Sharing.
 - **AI access:** `list_projects` ends with the groups and the projects in
   each, and takes a `group` filter, so you can ask about "my electronics
   projects".
@@ -252,6 +254,13 @@ someone who already has an account here, or invite them.
   *View only*, and whether projects spawned from it come too (on by default).
   The dialog lists everyone who can see the project and why: owner, shared
   this project, shared everything, or through a parent project.
+- **Taking one project back:** in a project's Share dialog, the **×** beside
+  someone removes them. For a person given that project on its own, that ends
+  the share. For someone who gets it because you share everything (or through
+  a parent project), it removes them from this project and the projects
+  spawned from it only; they keep everything else. They then show under
+  *Removed from this project* with **Let back in**, and in **Settings →
+  Sharing**. Tasks assigned to them stay assigned for when they come back.
 - **Everything:** **Settings → Sharing** shares every project you have, now and
   later, with *Can edit* or *View only*. Tick the box to include your knowledge
   notes as well, not only project notes. The same panel lists what you share
@@ -262,13 +271,22 @@ someone who already has an account here, or invite them.
   an editor spawns from a shared project belongs to its owner, and the editor
   keeps access to it.
 - **Canvas:** shared projects sit on your canvas with the owner's initials
-  (dashed for view only), and you lay them out yourself. A link to a project
-  you can't see shows a *Private project* card, so the arrow still makes sense.
+  (dashed for view only). A link to a project you can't see shows a *Private
+  project* card, so the arrow still makes sense.
+- **Copying someone's layout:** a project shared with you lands where its owner
+  keeps it, in a copy of their group, with their whole layout set to the right
+  of your own cards. **Copy *name*'s layout** on the canvas toolbar (one button
+  per person who shares with you) does it again for everything they share: it
+  moves their cards back to match, replaces the groups copied before, and
+  leaves your own projects and groups alone. **Undo** in the message after it
+  puts things back. Only groups holding a project you can see are copied.
 - **Notes follow projects:** a note filed under a shared project is shared with
   it, under **Notes → Shared with me**. Editors edit it in place in the owner's
   vault; only the owner can delete it.
 - **Assignees:** a task can be assigned to anyone who can see its project, and
-  **My tasks** on the global board shows yours.
+  **My tasks** on the global board shows yours. A new task is assigned to
+  whoever makes it (on a board, with quick add or through Claude); pick someone
+  else or *Nobody* in the New task box, or later in the task.
 - **Invites:** the server's owner can make an invite that also shares
   everything, or (from a project's Share dialog) one project.
 - **AI access:** a token sees what its person sees, shared projects included.
@@ -429,7 +447,8 @@ if you let it, add to them.
   title or body, or one `##` section replaced), `add_column` and
   `update_column` (rename, recategorise or move a board column) and
   `plan_time` (a session or busy time, optionally repeating). `create_task`
-  can also log work that is already finished, with `done` and `completed_on`,
+  assigns the task to the person connected unless `assignee` names someone else
+  (a name or email) or `none`, and can also log work that is already finished, with `done` and `completed_on`,
   and `update_task` takes `completed_on` to finish a task on the day it was really done. `get_calendar` reads a stretch
   of the calendar (a week by default) with who's joining and hours per
   project; busy time shows only for the person connected. Projects and notes
@@ -581,7 +600,8 @@ few lines of text whose `resource` is your `https://` address followed by
 Claude not reaching it is gone, and you can connect.
 
 Putting the app online makes its sign-in page public. Accounts are invite-only
-and passwords are at least 10 characters, but use a strong one.
+and passwords are at least 10 characters, but use a strong one. The eye button
+in any password box shows what you typed, to check it before you send it.
 
 **Settings → Account** lists every browser and device signed in to your
 account. Sign out one you don't recognise, or all but this one. **Change

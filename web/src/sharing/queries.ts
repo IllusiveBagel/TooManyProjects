@@ -67,3 +67,25 @@ export function useDeleteShare() {
     onSuccess: refresh,
   });
 }
+
+export type Exclusion = components["schemas"]["Exclusion"];
+
+/** Take one project away from someone who gets it through a wider share. */
+export function useExclude() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) =>
+      unwrap(api.PUT("/projects/{id}/exclusions/{user_id}", { params: { path: { id: projectId, user_id: userId } } })),
+    onSuccess: refresh,
+  });
+}
+
+/** Let someone back into a project you removed them from. */
+export function useLetBackIn() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) =>
+      unwrap(api.DELETE("/projects/{id}/exclusions/{user_id}", { params: { path: { id: projectId, user_id: userId } } })),
+    onSuccess: refresh,
+  });
+}

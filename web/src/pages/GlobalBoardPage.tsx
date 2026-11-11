@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router";
+import { useMe } from "../auth/queries";
 import { useCanvas } from "../canvas/queries";
 import { ErrorNote } from "../components/ui";
 import { Board, type BoardColumn } from "../tasks/Board";
@@ -18,6 +19,7 @@ const selectClass =
  */
 export function GlobalBoardPage() {
   const [params, setParams] = useSearchParams();
+  const me = useMe();
   const filter: GlobalFilter = useMemo(() => {
     const f: GlobalFilter = {};
     const project = params.get("project");
@@ -36,7 +38,7 @@ export function GlobalBoardPage() {
   const parents = new Set((canvas.data?.links ?? []).filter((l) => l.kind === "spawned").map((l) => l.source_id));
   const families = projects.filter((p) => parents.has(p.id));
   const viewOnly = new Set(projects.filter((p) => p.role === "viewer").map((p) => p.id));
-  const shared = projects.some((p) => p.role !== "owner") || (tasks.data ?? []).some((t) => t.assignee_id);
+  const shared = projects.some((p) => p.role !== "owner") || (tasks.data ?? []).some((t) => t.assignee_id && t.assignee_id !== me.id);
 
   const setFilter = (key: "project" | "family", value: string) =>
     setParams((p) => {

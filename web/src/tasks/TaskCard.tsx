@@ -1,6 +1,8 @@
 import type { Task } from "../api/client";
 import { dueLabel } from "../canvas/format";
+import { useMe } from "../auth/queries";
 import { initials } from "../sharing/format";
+import { usePeople } from "../sharing/queries";
 import { projectColor } from "../theme/resolve";
 import { partsBadge } from "../parts/format";
 import { PRIORITY_LABEL, taskRef } from "./format";
@@ -20,6 +22,11 @@ export function TaskCard({
   const done = task.category === "done";
   const hot = task.priority === "urgent" || task.priority === "high";
   const parts = done ? null : partsBadge(task);
+  // New tasks go to whoever makes them. Alone on the server, your own initials
+  // on every card would only be noise.
+  const me = useMe();
+  const alone = usePeople().data?.length === 0;
+  const showAssignee = !!task.assignee_name && !(alone && task.assignee_id === me.id);
   return (
     <div
       role="button"
@@ -77,7 +84,7 @@ export function TaskCard({
         {task.due_date && !done && (
           <span className={`ml-auto ${task.overdue ? "text-late font-semibold" : ""}`}>{dueLabel(task.due_date)}</span>
         )}
-        {task.assignee_name && (
+        {showAssignee && task.assignee_name && (
           <span
             title={`Assigned to ${task.assignee_name}`}
             className={`bg-surface-raised text-text grid size-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${task.due_date && !done ? "" : "ml-auto"}`}
