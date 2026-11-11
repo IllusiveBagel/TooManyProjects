@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useMatch, useOutletContext, useParams } from "react-router";
 import type { ProjectDetail } from "../api/client";
+import { useMe } from "../auth/queries";
 import { STATUS_LABEL, STATUS_TONE } from "../canvas/format";
 import { useProjectDetail } from "../canvas/queries";
 import { Modal } from "../components/Modal";
@@ -148,9 +149,12 @@ function NewTaskDialog({ projectId, statusId, onClose }: { projectId: string; st
   const [title, setTitle] = useState("");
   const [column, setColumn] = useState(statusId ?? "");
   const [due, setDue] = useState("");
+  const me = useMe();
+  const members = useMembers(projectId).data ?? [];
+  const [assignee, setAssignee] = useState(me.id);
   const submit = (andOpen: boolean) =>
     create.mutate(
-      { projectId, title, status_id: column || null, due_date: due || null },
+      { projectId, title, status_id: column || null, due_date: due || null, assignee_id: assignee || null },
       {
         onSuccess: (task) => {
           onClose();
@@ -202,6 +206,23 @@ function NewTaskDialog({ projectId, statusId, onClose }: { projectId: string; st
             />
           </label>
         </div>
+        {members.length > 1 && (
+          <label className="flex flex-col gap-1.5">
+            <span className="label-mono text-text-quiet">Assigned to</span>
+            <select
+              className="border-rule bg-surface min-h-11 rounded-md px-3 font-mono text-[13px] outline-none focus:border-accent"
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+            >
+              <option value="">Nobody</option>
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.user_id === me.id ? `${m.name} (you)` : m.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <ErrorNote error={create.error} />
         <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" onClick={onClose}>Cancel</Button>

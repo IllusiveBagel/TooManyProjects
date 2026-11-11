@@ -28,14 +28,18 @@ import { NewProjectDialog } from "../canvas/NewProjectDialog";
 import { ProjectDrawer } from "../canvas/ProjectDrawer";
 import {
   useCanvas,
+  useCopyLayout,
   useCreateGroup,
   useCreateLink,
   useDeleteGroup,
   useDeleteLink,
+  useRestoreLayout,
   useSaveNodes,
   useUpdateGroup,
+  type LayoutSnapshot,
 } from "../canvas/queries";
 import { useCanvasUi } from "../canvas/store";
+import { Modal } from "../components/Modal";
 import { Button, ErrorNote } from "../components/ui";
 import { projectColor } from "../theme/resolve";
 
@@ -363,6 +367,28 @@ function CanvasBoard() {
   const projects = view?.projects ?? [];
   const parentTitle = draft?.spawnedFrom ? projects.find((p) => p.id === draft.spawnedFrom)?.title : undefined;
   const suggestedColor = `slot-${(projects.length % 8) + 1}`;
+  const sharers = [...new Map(projects.filter((p) => p.role !== "owner").map((p) => [p.owner_id, p.owner_name])).entries()];
+  const [copyFrom, setCopyFrom] = useState<{ id: string; name: string } | null>(null);
+  const copyLayout = useCopyLayout();
+  const restoreLayout = useRestoreLayout();
+  const [copied, setCopied] = useState<{ text: string; undo: LayoutSnapshot } | null>(null);
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+  const runCopy = () => {
+    if (!copyFrom) return;
+    copyLayout.mutate(copyFrom.id, {
+      onSuccess: (r) => {
+        setCopyFrom(null);
+        const groups = r.groups === 1 ? "1 group" : `${r.groups} groups`;
+        const moved = r.moved === 1 ? "1 project" : `${r.moved} projects`;
+        setCopied({ text: `Copied ${r.owner_name}’s layout: ${moved} moved, ${groups} added.`, undo: r.undo });
+        window.setTimeout(() => flow.fitView({ padding: 0.2, maxZoom: 1, duration: 300 }), 300);
+      },
+    });
+  };
 
   return (
     <main ref={mainRef} className="relative flex-1" onDoubleClick={onPaneDoubleClick}>
@@ -412,6 +438,21 @@ function CanvasBoard() {
             <input type="checkbox" className="accent-[var(--tmp-accent)]" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             Show archived
           </label>
+          {sharers.map(([id, name]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setCopyFrom({ id, name })}
+              title={`Move ${name}'s projects to where ${name} has them, inside copies of ${name}'s groups`}
+              className="border-rule bg-surface-card shadow-card label-mono text-text-quiet hover:text-text flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1.5" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+                <rect x="6.5" y="6.5" width="8" height="8" rx="1.5" fill="currentColor" />
+              </svg>
+              Copy {name}'s layout
+            </button>
+          ))}
         </Panel>
 
         <Panel position="bottom-left" className="!m-4 hidden sm:block">
@@ -444,6 +485,48 @@ function CanvasBoard() {
       {view && projects.length === 0 && <EmptyState onCreate={() => startNewProject()} />}
       {createLink.error && (
         <div className="absolute inset-x-4 top-20 mx-auto max-w-md"><ErrorNote error={createLink.error} /></div>
+      )}
+
+      {copyFrom && (
+        <Modal title={`Copy ${copyFrom.name}'s layout`} onClose={() => setCopyFrom(null)}>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm leading-relaxed">
+              {copyFrom.name}'s {projects.filter((p) => p.owner_id === copyFrom.id).length} projects move to where{" "}
+              {copyFrom.name} has them, and {copyFrom.name}'s groups are copied around them. Your own projects and groups
+              stay where they are.
+            </p>
+            <p className="text-text-quiet text-xs leading-relaxed">
+              The copies are yours: move or rename them freely. Nothing changes on {copyFrom.name}'s canvas, and later
+              changes there don't follow. You can undo this straight after.
+            </p>
+            <ErrorNote error={copyLayout.error} />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" onClick={() => setCopyFrom(null)}>Cancel</Button>
+              <Button type="button" variant="primary" disabled={copyLayout.isPending} onClick={runCopy}>
+                Copy layout
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {copied && (
+        <div
+          role="status"
+          className="border-rule bg-surface-raised shadow-card fixed bottom-20 left-1/2 z-50 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-4 rounded-md px-4 py-2.5 sm:bottom-6"
+        >
+          <span className="font-semibold">{copied.text}</span>
+          <button
+            type="button"
+            className="label-mono text-accent min-h-9 cursor-pointer px-1 text-[11px]"
+            onClick={() => {
+              restoreLayout.mutate(copied.undo);
+              setCopied(null);
+            }}
+          >
+            Undo
+          </button>
+        </div>
       )}
 
       <ProjectDrawer onJump={jumpTo} />

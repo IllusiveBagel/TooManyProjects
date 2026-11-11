@@ -26,6 +26,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(list_shares, create_share))
         .routes(routes!(update_share, delete_share))
         .routes(routes!(project_people))
+        .routes(routes!(create_exclusion, delete_exclusion))
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,21 @@ pub struct MyShares {
     pub given: Vec<Share>,
     /// Shares others have made with you.
     pub received: Vec<Share>,
+    /// People you removed from one of your projects that they would otherwise
+    /// get through a whole-account or parent-project share.
+    pub removed: Vec<Exclusion>,
+}
+
+/// Someone taken off one project (and the projects spawned from it) that a
+/// wider share would otherwise give them.
+#[derive(Serialize, FromRow, ToSchema)]
+pub struct Exclusion {
+    pub project_id: String,
+    pub project_title: String,
+    pub grantee_id: String,
+    pub grantee_name: String,
+    pub grantee_email: String,
+    pub created_at: String,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -95,10 +111,11 @@ pub struct Member {
     pub user_id: String,
     pub name: String,
     pub email: String,
-    /// `owner`, `editor` or `viewer`.
+    /// `owner`, `editor` or `viewer`; `none` for someone removed from it.
     pub role: String,
     /// `owner`, `project` (shared directly), `account` (the owner shared
-    /// everything) or `family` (shared through a parent project).
+    /// everything), `family` (shared through a parent project) or `excluded`
+    /// (removed from this project; only its owner sees these).
     pub via: String,
     /// The share to change or remove, for `project` and `account`.
     pub share_id: Option<String>,
@@ -223,7 +240,19 @@ async fn list_shares(
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
-    Ok(Json(MyShares { given, received }))
+    let removed = sqlx::query_as::<_, Exclusion>(
+        "SELECT e.project_id, p.title AS project_title, e.grantee_id, g.name AS grantee_name,
+            g.email AS grantee_email, e.created_at
+         FROM share_exclusions e
+         JOIN projects p ON p.id = e.project_id
+         JOIN users g ON g.id = e.grantee_id
+         WHERE p.owner_id = ?
+         ORDER BY g.name, p.title",
+    )
+    .bind(&user.id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(MyShares { given, received, removed }))
 }
 
 /// Share your whole account, or one of your projects, with someone here.
@@ -305,6 +334,21 @@ async fn delete_share(
         return Err(AppError::NotFound);
     }
     sqlx::query("DELETE FROM shares WHERE id = ?").bind(&id).execute(&mut *tx).await?;
+    // Removals only mean something while a wider share stands. Once nothing
+    // from this owner is left, forget them, so a fresh share starts clean.
+    sqlx::query(
+        "DELETE FROM share_exclusions
+         WHERE grantee_id = ?1
+           AND project_id IN (SELECT id FROM projects WHERE owner_id = ?2)
+           AND NOT EXISTS (
+               SELECT 1 FROM shares s LEFT JOIN projects p ON p.id = s.project_id
+               WHERE s.grantee_id = ?1 AND COALESCE(s.owner_id, p.owner_id) = ?2
+           )",
+    )
+    .bind(&share.grantee_id)
+    .bind(&share.owner_id)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -346,6 +390,98 @@ async fn project_people(
             };
             Member { user_id, name, email, role, via: via.into(), share_id }
         })
-        .collect();
+        .collect::<Vec<_>>();
+    let mut members = members;
+    if project.owner_id == user.id {
+        let removed: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT u.id, u.name, u.email FROM share_exclusions e JOIN users u ON u.id = e.grantee_id
+             WHERE e.project_id = ? ORDER BY u.name",
+        )
+        .bind(&id)
+        .fetch_all(&mut *conn)
+        .await?;
+        members.extend(removed.into_iter().map(|(user_id, name, email)| Member {
+            user_id,
+            name,
+            email,
+            role: "none".into(),
+            via: "excluded".into(),
+            share_id: None,
+        }));
+    }
     Ok(Json(members))
+}
+
+/// Take a project (and the projects spawned from it) away from someone who
+/// gets it through a whole-account share or a parent project's share. They
+/// keep everything else. Only the owner. Someone given this project directly
+/// loses it by removing that share instead.
+#[utoipa::path(put, path = "/projects/{id}/exclusions/{user_id}", tag = "sharing",
+    params(("id" = String, Path), ("user_id" = String, Path)),
+    responses((status = 204), (status = 400, body = crate::error::ErrorBody),
+        (status = 403, body = crate::error::ErrorBody), (status = 404, body = crate::error::ErrorBody),
+        (status = 409, body = crate::error::ErrorBody)))]
+async fn create_exclusion(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path((id, grantee_id)): Path<(String, String)>,
+) -> AppResult<StatusCode> {
+    let mut tx = state.db.begin().await?;
+    let project = owned_project(&mut tx, &user.id, &id).await?;
+    if grantee_id == project.owner_id {
+        return Err(AppError::BadRequest("self_exclusion", "You own this project.".into()));
+    }
+    let known: Option<String> = sqlx::query_scalar("SELECT id FROM users WHERE id = ?")
+        .bind(&grantee_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+    if known.is_none() {
+        return Err(AppError::NotFound);
+    }
+    let direct: Option<String> =
+        sqlx::query_scalar("SELECT id FROM shares WHERE project_id = ? AND grantee_id = ?")
+            .bind(&id)
+            .bind(&grantee_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    if direct.is_some() {
+        return Err(AppError::Conflict(
+            "shared_directly",
+            "This project was shared with them on its own. Remove that share instead.".into(),
+        ));
+    }
+    sqlx::query(
+        "INSERT OR IGNORE INTO share_exclusions (project_id, grantee_id, created_at) VALUES (?, ?, ?)",
+    )
+    .bind(&id)
+    .bind(&grantee_id)
+    .bind(time::now())
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Let someone back into a project you removed them from.
+#[utoipa::path(delete, path = "/projects/{id}/exclusions/{user_id}", tag = "sharing",
+    params(("id" = String, Path), ("user_id" = String, Path)),
+    responses((status = 204), (status = 403, body = crate::error::ErrorBody),
+        (status = 404, body = crate::error::ErrorBody)))]
+async fn delete_exclusion(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path((id, grantee_id)): Path<(String, String)>,
+) -> AppResult<StatusCode> {
+    let mut tx = state.db.begin().await?;
+    owned_project(&mut tx, &user.id, &id).await?;
+    let gone = sqlx::query("DELETE FROM share_exclusions WHERE project_id = ? AND grantee_id = ?")
+        .bind(&id)
+        .bind(&grantee_id)
+        .execute(&mut *tx)
+        .await?;
+    if gone.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
 }

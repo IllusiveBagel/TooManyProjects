@@ -217,6 +217,9 @@ pub struct CreateTaskArgs {
     pub done: Option<bool>,
     /// YYYY-MM-DD the finished task was done, for work logged after the fact. Default: now. Implies `done`.
     pub completed_on: Option<String>,
+    /// Who does it: a name or email of someone the project is shared with, or "none".
+    /// Default: the user this connection belongs to.
+    pub assignee: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -566,6 +569,46 @@ fn parse_day(v: Option<&str>) -> AppResult<Option<chrono::NaiveDate>> {
 
 /// A project by id, or by exact title (any case) among those the person can
 /// see, their own first.
+/// Someone a task can go to: "me", "none" (nobody), or the name or email of
+/// someone who can see the project. `None` means nobody.
+async fn find_assignee(
+    conn: &mut SqliteConnection,
+    project_id: &str,
+    user: &User,
+    who: &str,
+) -> AppResult<Option<String>> {
+    let who = who.trim();
+    match who.to_lowercase().as_str() {
+        "" | "me" | "myself" => return Ok(Some(user.id.clone())),
+        "none" | "nobody" | "no one" | "unassigned" => return Ok(None),
+        _ => {}
+    }
+    let people: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT u.id, u.name, u.email FROM project_access a JOIN users u ON u.id = a.user_id
+         WHERE a.project_id = ? ORDER BY u.name",
+    )
+    .bind(project_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let found: Vec<&(String, String, String)> = people
+        .iter()
+        .filter(|(_, name, email)| name.eq_ignore_ascii_case(who) || email.eq_ignore_ascii_case(who))
+        .collect();
+    match found.as_slice() {
+        [one] => Ok(Some(one.0.clone())),
+        [] => Err(bad(
+            "unknown_assignee",
+            format!(
+                "Nobody called {who} can see this project. It is shared with: {}.",
+                people.iter().map(|p| p.1.as_str()).collect::<Vec<_>>().join(", ")
+            ),
+        )),
+        _ => {
+            Err(bad("ambiguous_assignee", format!("More than one person is called {who}. Use their email.")))
+        }
+    }
+}
+
 async fn find_project(conn: &mut SqliteConnection, user: &User, key: &str) -> AppResult<Project> {
     let key = key.trim();
     if let Ok(p) = visible_project(conn, &user.id, key).await {
@@ -1398,6 +1441,10 @@ impl Mcp {
                         return Err(bad("not_a_done_column", "That column doesn't count as done, so the task can't be logged as finished there."));
                     }
                 }
+                let assignee = match args.assignee.as_deref() {
+                    None => user.id.clone(),
+                    Some(who) => find_assignee(&mut conn, &project.id, &user, who).await?.unwrap_or_default(),
+                };
                 drop(conn);
                 let req = serde_json::from_value(json!({
                     "title": args.title,
@@ -1405,6 +1452,7 @@ impl Mcp {
                     "description": args.description,
                     "priority": args.priority,
                     "due_date": args.due_date,
+                    "assignee_id": (!assignee.is_empty()).then_some(assignee),
                 }))
                 .map_err(|e| bad("invalid_task", e.to_string()))?;
                 let (_, Json(mut task)) = tasks::create_task(

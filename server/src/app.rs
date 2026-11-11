@@ -24,7 +24,7 @@ use crate::{
     config::Config,
     dashboard, databases,
     error::AppError,
-    invites,
+    invites, layout,
     limits::LoginLimiter,
     links, mcp, notes, oauth,
     openapi::ApiDoc,
@@ -68,6 +68,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(projects::router())
         .merge(links::router())
         .merge(canvas::router())
+        .merge(layout::router())
         .merge(board::router())
         .merge(tasks::router())
         .merge(templates::router())

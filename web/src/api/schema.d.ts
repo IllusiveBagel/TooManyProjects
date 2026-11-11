@@ -240,6 +240,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/canvases/home/copy-layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lay out everything one person shares with you the way they have it: their
+         *     projects move to where they keep them, and their groups are copied around
+         *     them, set to the right of your own cards. Earlier copies of their groups
+         *     are replaced. Your own projects and groups stay put, and nothing changes
+         *     on their canvas. The result says how to undo it.
+         */
+        post: operations["copy_layout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/canvases/home/restore-layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a layout copy: put the cards back, take the copied groups away and
+         *     bring back the ones it replaced.
+         */
+        post: operations["restore_layout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/canvases/{id}/groups": {
         parameters: {
             query?: never;
@@ -1227,6 +1270,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{id}/exclusions/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Take a project (and the projects spawned from it) away from someone who
+         *     gets it through a whole-account share or a parent project's share. They
+         *     keep everything else. Only the owner. Someone given this project directly
+         *     loses it by removing that share instead.
+         */
+        put: operations["create_exclusion"];
+        post?: never;
+        /** Let someone back into a project you removed them from. */
+        delete: operations["delete_exclusion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{id}/labels": {
         parameters: {
             query?: never;
@@ -1915,6 +1981,13 @@ export interface components {
             /** @description Your projects and the ones shared with you. */
             projects: components["schemas"]["Project"][];
         };
+        CardPosition: {
+            project_id: string;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
         ChangePasswordRequest: {
             current_password: string;
             new_password: string;
@@ -2022,6 +2095,18 @@ export interface components {
             redirect_host: string;
             /** @description `read` or `write`. */
             scope: string;
+        };
+        CopyLayoutRequest: {
+            /** @description The person whose layout to copy. They must share at least one project with you. */
+            owner_id: string;
+        };
+        CopyLayoutResult: {
+            /** @description Groups copied around them. */
+            groups: number;
+            /** @description Cards moved to match the owner's canvas. */
+            moved: number;
+            owner_name: string;
+            undo: components["schemas"]["LayoutSnapshot"];
         };
         CoverRequest: {
             /** @description A photo on this project, or `null` for no cover. */
@@ -2164,7 +2249,10 @@ export interface components {
             name: string;
         };
         CreateTaskRequest: {
-            /** @description Someone who can see the project. */
+            /**
+             * @description Someone who can see the project, or `null` for nobody. Left out, the
+             *     task is assigned to whoever creates it.
+             */
             assignee_id?: string | null;
             /** @description Add at the top of the column instead of the bottom. */
             at_top?: boolean;
@@ -2264,6 +2352,18 @@ export interface components {
             code: string;
             /** @description A sentence fit to show a person. */
             message: string;
+        };
+        /**
+         * @description Someone taken off one project (and the projects spawned from it) that a
+         *     wider share would otherwise give them.
+         */
+        Exclusion: {
+            created_at: string;
+            grantee_email: string;
+            grantee_id: string;
+            grantee_name: string;
+            project_id: string;
+            project_title: string;
         };
         FamilySpend: {
             /** @description Projects spawned from this one (and from those) that have parts. */
@@ -2381,6 +2481,15 @@ export interface components {
             color?: string | null;
             name?: string | null;
         };
+        /** @description What a copy changed, so it can be undone with `POST /canvases/home/restore-layout`. */
+        LayoutSnapshot: {
+            /** @description The groups the copy added. */
+            added_groups: string[];
+            /** @description Where the moved cards were before. */
+            cards: components["schemas"]["CardPosition"][];
+            /** @description Earlier copies of this person's groups that the copy replaced. */
+            removed_groups: components["schemas"]["SavedGroup"][];
+        };
         Link: {
             created_at: string;
             id: string;
@@ -2438,14 +2547,15 @@ export interface components {
         Member: {
             email: string;
             name: string;
-            /** @description `owner`, `editor` or `viewer`. */
+            /** @description `owner`, `editor` or `viewer`; `none` for someone removed from it. */
             role: string;
             /** @description The share to change or remove, for `project` and `account`. */
             share_id?: string | null;
             user_id: string;
             /**
              * @description `owner`, `project` (shared directly), `account` (the owner shared
-             *     everything) or `family` (shared through a parent project).
+             *     everything), `family` (shared through a parent project) or `excluded`
+             *     (removed from this project; only its owner sees these).
              */
             via: string;
         };
@@ -2454,6 +2564,11 @@ export interface components {
             given: components["schemas"]["Share"][];
             /** @description Shares others have made with you. */
             received: components["schemas"]["Share"][];
+            /**
+             * @description People you removed from one of your projects that they would otherwise
+             *     get through a whole-account or parent-project share.
+             */
+            removed: components["schemas"]["Exclusion"][];
         };
         NodePosition: {
             /** Format: double */
@@ -2785,6 +2900,20 @@ export interface components {
             groups?: components["schemas"]["GroupPosition"][];
             /** @description Up to 500 cards at once, sent after a drag. */
             nodes?: components["schemas"]["NodePosition"][];
+        };
+        /** @description A group as it was, to put back. */
+        SavedGroup: {
+            color: string;
+            copied_from?: string | null;
+            /** Format: double */
+            height: number;
+            label: string;
+            /** Format: double */
+            width: number;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         ScanResult: {
             /** @description Files read again because they were new or had changed. */
@@ -3945,6 +4074,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CanvasView"];
+                };
+            };
+        };
+    };
+    copy_layout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyLayoutRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyLayoutResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    restore_layout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LayoutSnapshot"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };
@@ -6231,6 +6428,94 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_exclusion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_exclusion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1029,3 +1029,39 @@ async fn attach_file_finish_dates_and_the_weekly_review() {
     assert!(due.contains("Order seals"), "{review}");
     assert!(review.contains("suggest updates for me to approve"), "{review}");
 }
+
+#[tokio::test]
+async fn create_task_assigns_to_the_connection_owner_by_default() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let (car, _) = seed(&app, &me).await;
+    let token = make_token(&app, &me, "write").await;
+    let find = |list: &Value, title: &str| {
+        list.as_array().unwrap().iter().find(|t| t["title"] == title).unwrap().clone()
+    };
+
+    let (err, text) =
+        tool(&app, &token, "create_task", json!({"project": car, "title": "Mine by default"})).await;
+    assert!(!err, "{text}");
+    let (err, text) =
+        tool(&app, &token, "create_task", json!({"project": car, "title": "Unassigned", "assignee": "none"}))
+            .await;
+    assert!(!err, "{text}");
+    let (err, text) = tool(
+        &app,
+        &token,
+        "create_task",
+        json!({"project": car, "title": "By email", "assignee": "logan@example.com"}),
+    )
+    .await;
+    assert!(!err, "{text}");
+    let (err, text) =
+        tool(&app, &token, "create_task", json!({"project": car, "title": "Stranger", "assignee": "Sam"}))
+            .await;
+    assert!(err && text.contains("shared with: Logan"), "{text}");
+
+    let tasks = app.call("GET", &format!("/api/v1/projects/{car}/tasks"), Some(&me), None).await.body;
+    assert_eq!(find(&tasks, "Mine by default")["assignee_name"], "Logan");
+    assert_eq!(find(&tasks, "Unassigned")["assignee_id"], Value::Null);
+    assert_eq!(find(&tasks, "By email")["assignee_name"], "Logan");
+}

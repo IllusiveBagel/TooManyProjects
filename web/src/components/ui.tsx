@@ -1,4 +1,4 @@
-import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 
 type Variant = "primary" | "ghost";
 
@@ -22,21 +22,49 @@ export function Button({
 export function Field({
   label,
   hint,
+  type,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: ReactNode }) {
   const id = useId();
+  const [shown, setShown] = useState(false);
+  const isPassword = type === "password";
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="label-mono text-text-quiet">
         {label}
       </label>
-      <input
-        id={id}
-        className="border-rule bg-surface text-text min-h-11 rounded-md px-3 font-mono text-[13px] outline-none focus:border-accent"
-        {...props}
-      />
+      <div className="relative">
+        <input
+          id={id}
+          type={isPassword && shown ? "text" : type}
+          className={`border-rule bg-surface text-text min-h-11 w-full rounded-md px-3 font-mono text-[13px] outline-none focus:border-accent ${isPassword ? "pr-12" : ""}`}
+          {...props}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            aria-label={shown ? "Hide password" : "Show password"}
+            aria-pressed={shown}
+            title={shown ? "Hide password" : "Show password"}
+            onClick={() => setShown((v) => !v)}
+            className="text-text-quiet hover:text-text absolute inset-y-0 right-0 grid w-11 cursor-pointer place-items-center"
+          >
+            <EyeIcon open={!shown} />
+          </button>
+        )}
+      </div>
       {hint && <p className="text-text-quiet text-xs">{hint}</p>}
     </div>
+  );
+}
+
+function EyeIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6S1.5 10 1.5 10Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <circle cx="10" cy="10" r="2.6" stroke="currentColor" strokeWidth="1.6" />
+      {!open && <path d="M3 17 17 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />}
+    </svg>
   );
 }
 
