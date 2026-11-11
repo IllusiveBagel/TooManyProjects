@@ -19,7 +19,7 @@ How each part of **too many projects** works. For installing it, see the
 
 ## Today, search and quick add
 
-**Today** (`/today`, the first tab on a phone, and where the phone app opens)
+**Today** (`/today`, the first tab on a phone, and the page the site opens on)
 answers "what should I touch next?" across every project:
 
 - **Now**: tasks in a column that counts as in progress. **Blocked**: tasks in
