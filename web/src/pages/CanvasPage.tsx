@@ -36,6 +36,7 @@ import {
   useUpdateGroup,
 } from "../canvas/queries";
 import { useCanvasUi } from "../canvas/store";
+import { Modal } from "../components/Modal";
 import { Button, ErrorNote } from "../components/ui";
 import { projectColor } from "../theme/resolve";
 
@@ -363,6 +364,8 @@ function CanvasBoard() {
   const projects = view?.projects ?? [];
   const parentTitle = draft?.spawnedFrom ? projects.find((p) => p.id === draft.spawnedFrom)?.title : undefined;
   const suggestedColor = `slot-${(projects.length % 8) + 1}`;
+  const sharers = [...new Map(projects.filter((p) => p.role !== "owner").map((p) => [p.owner_id, p.owner_name])).entries()];
+  const [copyFrom, setCopyFrom] = useState<{ id: string; name: string } | null>(null);
 
   return (
     <main ref={mainRef} className="relative flex-1" onDoubleClick={onPaneDoubleClick}>
@@ -412,6 +415,21 @@ function CanvasBoard() {
             <input type="checkbox" className="accent-[var(--tmp-accent)]" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             Show archived
           </label>
+          {sharers.map(([id, name]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setCopyFrom({ id, name })}
+              title={`Move ${name}'s projects to where ${name} has them, inside copies of ${name}'s groups`}
+              className="border-rule bg-surface-card shadow-card label-mono text-text-quiet hover:text-text flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1.5" y="1.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+                <rect x="6.5" y="6.5" width="8" height="8" rx="1.5" fill="currentColor" />
+              </svg>
+              Copy {name}'s layout
+            </button>
+          ))}
         </Panel>
 
         <Panel position="bottom-left" className="!m-4 hidden sm:block">
@@ -444,6 +462,26 @@ function CanvasBoard() {
       {view && projects.length === 0 && <EmptyState onCreate={() => startNewProject()} />}
       {createLink.error && (
         <div className="absolute inset-x-4 top-20 mx-auto max-w-md"><ErrorNote error={createLink.error} /></div>
+      )}
+
+      {copyFrom && (
+        <Modal title={`Copy ${copyFrom.name}'s layout`} onClose={() => setCopyFrom(null)}>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm leading-relaxed">
+              {copyFrom.name}'s {projects.filter((p) => p.owner_id === copyFrom.id).length} projects move to where{" "}
+              {copyFrom.name} has them, and {copyFrom.name}'s groups are copied around them. Your own projects and groups
+              stay where they are.
+            </p>
+            <p className="text-text-quiet text-xs leading-relaxed">
+              The copies are yours: move or rename them freely. Nothing changes on {copyFrom.name}'s canvas, and later
+              changes there don't follow. You can undo this straight after.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" onClick={() => setCopyFrom(null)}>Cancel</Button>
+              <Button type="button" variant="primary" onClick={() => setCopyFrom(null)}>Copy layout</Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       <ProjectDrawer onJump={jumpTo} />

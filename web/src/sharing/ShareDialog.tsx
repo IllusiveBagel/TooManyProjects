@@ -16,6 +16,7 @@ const VIA: Record<string, string> = {
   project: "Shared this project",
   account: "Shared everything",
   family: "Through a parent project",
+  excluded: "Removed from this project",
 };
 
 /** Who can see a project. Its owner can add people, change roles and remove them. */
@@ -30,6 +31,10 @@ export function ShareDialog({ project, onClose }: { project: Project; onClose: (
   const [person, setPerson] = useState("");
   const [role, setRole] = useState<"viewer" | "editor">("editor");
   const [children, setChildren] = useState(true);
+  const [confirming, setConfirming] = useState<Member | null>(null);
+  const all = members.data ?? [];
+  const current = all.filter((m) => m.via !== "excluded");
+  const excluded = all.filter((m) => m.via === "excluded");
 
   const directly = new Set((members.data ?? []).filter((m) => m.via === "project" || m.via === "owner").map((m) => m.user_id));
   const candidates = (people.data ?? []).filter((p) => !directly.has(p.id));
@@ -47,16 +52,47 @@ export function ShareDialog({ project, onClose }: { project: Project; onClose: (
     <Modal title={`Share ${project.title}`} onClose={onClose}>
       <div className="flex flex-col gap-5">
         <ul aria-label="People with access" className="flex flex-col">
-          {(members.data ?? []).map((m) => (
+          {current.map((m) => (
             <MemberRow
               key={m.user_id}
               member={m}
               editable={isOwner && m.via === "project"}
+              removable={isOwner && (m.via === "account" || m.via === "family")}
               onRole={(r) => m.share_id && update.mutate({ id: m.share_id, role: r })}
-              onRemove={() => m.share_id && remove.mutate(m.share_id)}
+              onRemove={() => (m.via === "project" ? m.share_id && remove.mutate(m.share_id) : setConfirming(m))}
             />
           ))}
         </ul>
+
+        {confirming && (
+          <div role="alertdialog" aria-label={`Remove ${confirming.name}`} className="border-rule bg-surface-raised flex flex-col gap-3 rounded-lg p-4">
+            <p className="text-sm leading-relaxed">
+              <strong>Remove {confirming.name} from {project.title}?</strong> They keep everything else you share with them
+              {confirming.via === "family" ? " through the parent project" : ""}. Projects spawned from {project.title} go too.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" onClick={() => setConfirming(null)}>Cancel</Button>
+              <Button type="button" variant="primary" onClick={() => setConfirming(null)}>Remove from this project</Button>
+            </div>
+          </div>
+        )}
+
+        {isOwner && excluded.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="label-mono text-text-quiet">Removed from this project</span>
+            <ul aria-label="Removed from this project" className="flex flex-col">
+              {excluded.map((m) => (
+                <li key={m.user_id} className="flex min-h-12 items-center gap-3">
+                  <span className="bg-surface-raised label-mono text-text-quiet grid size-9 shrink-0 place-items-center rounded-full text-[11px] font-semibold">
+                    {initials(m.name)}
+                  </span>
+                  <span className="text-text-quiet min-w-0 flex-1 truncate">{m.name}</span>
+                  <Button type="button">Let back in</Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {isOwner ? (
           <form onSubmit={submit} className="border-rule flex flex-col gap-3 border-x-0 border-b-0 pt-4">
@@ -105,11 +141,13 @@ export function ShareDialog({ project, onClose }: { project: Project; onClose: (
 function MemberRow({
   member,
   editable,
+  removable,
   onRole,
   onRemove,
 }: {
   member: Member;
   editable: boolean;
+  removable: boolean;
   onRole: (role: "viewer" | "editor") => void;
   onRemove: () => void;
 }) {
@@ -143,9 +181,22 @@ function MemberRow({
           </button>
         </>
       ) : (
-        <span className={`label-mono text-[11px] ${member.role === "viewer" ? "text-text-quiet" : "text-accent"}`}>
-          {ROLE_LABEL[member.role] ?? member.role}
-        </span>
+        <>
+          <span className={`label-mono text-[11px] ${member.role === "viewer" ? "text-text-quiet" : "text-accent"}`}>
+            {ROLE_LABEL[member.role] ?? member.role}
+          </span>
+          {removable && (
+            <button
+              type="button"
+              aria-label={`Remove ${member.name} from this project`}
+              title="Remove from this project only"
+              className="text-text-quiet hover:text-late grid size-11 cursor-pointer place-items-center text-xl"
+              onClick={onRemove}
+            >
+              ×
+            </button>
+          )}
+        </>
       )}
     </li>
   );
