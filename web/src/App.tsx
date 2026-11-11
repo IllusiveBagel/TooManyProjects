@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, RouterProvider, useLocation, useNavigate } from "react-router";
+import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "react-router";
 import { MeContext, useAuthStatus } from "./auth/queries";
 import { AppShell } from "./components/AppShell";
 import { AuthLayout } from "./components/AuthLayout";
@@ -44,16 +44,17 @@ function Gate({ need, children }: { need: "setup" | "guest" | "user"; children: 
   return <MeContext.Provider value={user ?? null}>{children}</MeContext.Provider>;
 }
 
-/** Phones open on Today; after that, the Canvas tab is the canvas. */
-// Opened straight at some other page (a link, a reload): leave it be.
-let launched = window.location.pathname !== "/";
+/** The site opens on Today; after that, the Canvas link is the canvas. */
+// Opened straight at an app page (a link, a reload): leave it be. Signing in,
+// setting up or accepting an invite still ends up on Today.
+const path = window.location.pathname;
+let landed = !(path === "/" || path === "/login" || path === "/setup" || path.startsWith("/invite/"));
 function Home() {
-  const navigate = useNavigate();
+  const toToday = !landed;
   useEffect(() => {
-    if (launched) return;
-    launched = true;
-    if (window.matchMedia("(max-width: 639px)").matches) navigate("/today", { replace: true });
+    landed = true;
   }, []);
+  if (toToday) return <Navigate to={{ pathname: "/today", search: window.location.search }} replace />;
   return <CanvasPage />;
 }
 
