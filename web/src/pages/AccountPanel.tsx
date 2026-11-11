@@ -57,7 +57,7 @@ function PasswordForm() {
   return (
     <div className="border-rule flex flex-col gap-3 border-x-0 border-b-0 pt-4">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[14rem] flex-1">
           <h3 className="font-display font-extrabold">Password</h3>
           {change.data && !open ? (
             <p role="status" className="text-accent text-sm">
@@ -110,7 +110,7 @@ function SessionList() {
   return (
     <div className="border-rule flex flex-col gap-3 border-x-0 border-b-0 pt-4">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[14rem] flex-1">
           <h3 className="font-display font-extrabold">Signed in on</h3>
           <p className="text-text-quiet text-sm">Sign out anything you don't recognise, or a device you've lost.</p>
         </div>
