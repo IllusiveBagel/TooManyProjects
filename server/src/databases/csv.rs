@@ -43,15 +43,41 @@ pub fn parse(text: &str) -> Vec<Vec<String>> {
     rows
 }
 
-/// One CSV line, quoting fields that need it, ending in CRLF.
+/// Whether a spreadsheet would run this cell as a formula. A leading `-`
+/// counts unless the cell is just a negative number.
+fn looks_like_formula(f: &str) -> bool {
+    match f.chars().next() {
+        Some('=' | '+' | '@' | '\t' | '\r') => true,
+        Some('-') => f.trim().parse::<f64>().is_err(),
+        _ => false,
+    }
+}
+
+/// A cell made safe to open in a spreadsheet: one that would run as a
+/// formula gets a `'` in front, which spreadsheets show as plain text.
+pub fn escape_formula(f: &str) -> String {
+    if looks_like_formula(f) { format!("'{f}") } else { f.to_string() }
+}
+
+/// Undo [`escape_formula`], so our own exports import unchanged.
+pub fn unescape_formula(f: &str) -> &str {
+    match f.strip_prefix('\'') {
+        Some(rest) if looks_like_formula(rest) => rest,
+        _ => f,
+    }
+}
+
+/// One CSV line, quoting fields that need it, ending in CRLF. Cells that
+/// look like spreadsheet formulas are escaped with [`escape_formula`].
 pub fn line(fields: &[String]) -> String {
     let mut out = fields
         .iter()
+        .map(|f| escape_formula(f))
         .map(|f| {
             if f.contains([',', '"', '\n', '\r']) || f.starts_with(' ') || f.ends_with(' ') {
                 format!("\"{}\"", f.replace('"', "\"\""))
             } else {
-                f.clone()
+                f
             }
         })
         .collect::<Vec<_>>()
@@ -156,6 +182,22 @@ mod tests {
             ]
         );
         assert_eq!(line(&["a,b".into(), "c".into()]), "\"a,b\",c\r\n");
+    }
+
+    #[test]
+    fn escapes_formulas() {
+        let cells: Vec<String> =
+            ["=HYPERLINK(\"x\")", "+1+2", "@SUM(A1)", "-2+3", "\tx", "-12.5", "plain", "a=b", ""]
+                .map(String::from)
+                .into();
+        assert_eq!(
+            line(&cells),
+            "\"'=HYPERLINK(\"\"x\"\")\",'+1+2,'@SUM(A1),'-2+3,'\tx,-12.5,plain,a=b,\r\n"
+        );
+        for c in &cells {
+            assert_eq!(unescape_formula(&escape_formula(c)), c);
+        }
+        assert_eq!(unescape_formula("'quoted"), "'quoted");
     }
 
     #[test]

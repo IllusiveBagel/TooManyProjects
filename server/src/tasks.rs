@@ -325,10 +325,10 @@ async fn attach_labels(conn: &mut SqliteConnection, rows: Vec<TaskRow>) -> AppRe
 
 /// A task the person can see, else 404.
 pub(crate) async fn visible_task(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Task> {
-    let row = sqlx::query_as::<_, TaskRow>(&format!(
+    let row = sqlx::query_as::<_, TaskRow>(sqlx::AssertSqlSafe(format!(
         "{TASK_SELECT} WHERE t.id = ?
             AND EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ?)"
-    ))
+    )))
     .bind(id)
     .bind(user_id)
     .fetch_optional(&mut *conn)
@@ -345,9 +345,9 @@ pub(crate) async fn editable_task(conn: &mut SqliteConnection, user_id: &str, id
 }
 
 pub async fn project_tasks(conn: &mut SqliteConnection, project_id: &str) -> AppResult<Vec<Task>> {
-    let rows = sqlx::query_as::<_, TaskRow>(&format!(
+    let rows = sqlx::query_as::<_, TaskRow>(sqlx::AssertSqlSafe(format!(
         "{TASK_SELECT} WHERE t.project_id = ? ORDER BY s.position, t.position"
-    ))
+    )))
     .bind(project_id)
     .fetch_all(&mut *conn)
     .await?;
@@ -359,7 +359,7 @@ pub async fn project_tasks(conn: &mut SqliteConnection, project_id: &str) -> App
 /// to `user_id`, or nobody's tasks on their own projects, so a friend's
 /// shared board doesn't fill someone's day.
 pub async fn today_tasks(conn: &mut SqliteConnection, user_id: &str, until: &str) -> AppResult<Vec<Task>> {
-    let rows = sqlx::query_as::<_, TaskRow>(&format!(
+    let rows = sqlx::query_as::<_, TaskRow>(sqlx::AssertSqlSafe(format!(
         "{TASK_SELECT}
          WHERE EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ?1)
            AND p.status <> 'archived' AND s.category <> 'done'
@@ -369,7 +369,7 @@ pub async fn today_tasks(conn: &mut SqliteConnection, user_id: &str, until: &str
             CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END,
             t.updated_at DESC
          LIMIT 300"
-    ))
+    )))
     .bind(user_id)
     .bind(until)
     .fetch_all(&mut *conn)
@@ -379,12 +379,12 @@ pub async fn today_tasks(conn: &mut SqliteConnection, user_id: &str, until: &str
 
 /// Tasks a note is linked to, among those `viewer` can see, open ones first.
 pub async fn note_tasks(conn: &mut SqliteConnection, viewer: &str, note_id: &str) -> AppResult<Vec<Task>> {
-    let rows = sqlx::query_as::<_, TaskRow>(&format!(
+    let rows = sqlx::query_as::<_, TaskRow>(sqlx::AssertSqlSafe(format!(
         "{TASK_SELECT} JOIN task_notes tn ON tn.task_id = t.id
          WHERE tn.note_id = ?
            AND EXISTS (SELECT 1 FROM project_access a WHERE a.project_id = t.project_id AND a.user_id = ?)
          ORDER BY s.category = 'done', t.updated_at DESC"
-    ))
+    )))
     .bind(note_id)
     .bind(viewer)
     .fetch_all(&mut *conn)
@@ -452,10 +452,10 @@ async fn column_for_category(
     board::CATEGORIES.contains(&category).then_some(()).ok_or_else(|| {
         AppError::BadRequest("invalid_category", "Category is todo, in_progress, blocked or done.".into())
     })?;
-    let found = sqlx::query_as::<_, Status>(&format!(
+    let found = sqlx::query_as::<_, Status>(sqlx::AssertSqlSafe(format!(
         "SELECT {} FROM statuses WHERE project_id = ? AND category = ? ORDER BY position LIMIT 1",
         board::STATUS_COLUMNS
-    ))
+    )))
     .bind(project_id)
     .bind(category)
     .fetch_optional(&mut *conn)
@@ -615,9 +615,9 @@ pub(crate) async fn get_task(
     .bind(&id)
     .fetch_all(&mut *conn)
     .await?;
-    let activity = sqlx::query_as::<_, ActivityItem>(&format!(
+    let activity = sqlx::query_as::<_, ActivityItem>(sqlx::AssertSqlSafe(format!(
         "{ACTIVITY_SELECT} WHERE a.task_id = ? ORDER BY a.created_at DESC, a.rowid DESC LIMIT 30"
-    ))
+    )))
     .bind(&id)
     .fetch_all(&mut *conn)
     .await?;

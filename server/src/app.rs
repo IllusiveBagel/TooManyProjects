@@ -129,6 +129,17 @@ async fn host_header(mut req: Request, next: Next) -> Response {
     next.run(req).await
 }
 
+/// What the browser may load. Everything comes from this server: scripts,
+/// styles, fonts, API calls. Images also from `data:` and `blob:` (previews
+/// before upload), but never from other sites, so a shared note can't tell its
+/// author when it's read. Inline styles are allowed because React, React Flow
+/// and CodeMirror set them; inline scripts are not. Files people uploaded set
+/// a stricter policy of their own.
+pub const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self'; \
+     style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; \
+     media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; \
+     object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+
 pub fn build_router(state: AppState) -> Router {
     let (api, _) = api();
     let api = api
@@ -162,6 +173,10 @@ pub fn build_router(state: AppState) -> Router {
     }
 
     router
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(CONTENT_SECURITY_POLICY),
+        ))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),

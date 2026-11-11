@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ago, folderTree, openWikiQuery, parseTags, parseWiki, readWikiHref, snippetParts, vaultFile, wikiToMarkdown } from "./format";
+import { ago, externalHost, folderTree, openWikiQuery, parseTags, parseWiki, readWikiHref, snippetParts, vaultFile, wikiToMarkdown } from "./format";
 
 describe("parseWiki", () => {
   it("reads titles, aliases, headings and projects", () => {
@@ -86,5 +86,16 @@ describe("database embeds", () => {
     expect(vaultFile("Car/photo.png")).toBe("Car/photo.png");
     expect(vaultFile("https://x.com/a.png")).toBeNull();
     expect(wikiToMarkdown("see ![[Parts list]] here")).toBe("see Parts list here");
+  });
+});
+
+describe("externalHost", () => {
+  it("names other sites only", () => {
+    const here = "https://projects.example.com";
+    expect(externalHost("https://tracker.evil.test/p.gif", here)).toBe("tracker.evil.test");
+    expect(externalHost("//cdn.test/a.png", here)).toBe("cdn.test");
+    expect(externalHost("https://projects.example.com/api/v1/x.png", here)).toBeNull();
+    expect(externalHost("vault:photo.png", here)).toBeNull();
+    expect(externalHost("photo.png", here)).toBeNull();
   });
 });

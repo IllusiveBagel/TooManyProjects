@@ -254,10 +254,10 @@ async fn summaries(
 
 /// A note the person may read, else 404.
 async fn note_row(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<NoteRow> {
-    sqlx::query_as::<_, NoteRow>(&format!(
+    sqlx::query_as::<_, NoteRow>(sqlx::AssertSqlSafe(format!(
         "SELECT {NOTE_COLUMNS} FROM notes n
          WHERE n.id = ? AND EXISTS (SELECT 1 FROM note_access na WHERE na.note_id = n.id AND na.user_id = ?)"
-    ))
+    )))
     .bind(id)
     .bind(user_id)
     .fetch_optional(&mut *conn)
@@ -589,12 +589,12 @@ async fn detail(
     let note = summaries(conn, viewer, vec![row]).await?.remove(0);
     let text = vault::read_file(&root, &note.path).await?;
     let (_, body) = markdown::split(&text);
-    let backlinks = sqlx::query_as::<_, NoteRow>(&format!(
+    let backlinks = sqlx::query_as::<_, NoteRow>(sqlx::AssertSqlSafe(format!(
         "SELECT DISTINCT {NOTE_COLUMNS} FROM note_links l JOIN notes n ON n.id = l.note_id
          JOIN note_access na ON na.note_id = n.id AND na.user_id = ?
          WHERE n.user_id = ? AND l.target_kind = 'note' AND l.target_title = ? AND n.id <> ?
          ORDER BY n.updated_at DESC"
-    ))
+    )))
     .bind(viewer)
     .bind(&vault_owner)
     .bind(&note.title)
@@ -769,22 +769,22 @@ pub(crate) async fn project_notes(
 ) -> AppResult<Json<ProjectNotes>> {
     let mut conn = state.db.acquire().await?;
     let project = visible_project(&mut conn, &user.id, &id).await?;
-    let notes = sqlx::query_as::<_, NoteRow>(&format!(
+    let notes = sqlx::query_as::<_, NoteRow>(sqlx::AssertSqlSafe(format!(
         "SELECT {NOTE_COLUMNS} FROM notes n JOIN note_projects np ON np.note_id = n.id
          JOIN note_access na ON na.note_id = n.id
          WHERE na.user_id = ? AND np.project_id = ? ORDER BY n.updated_at DESC"
-    ))
+    )))
     .bind(&user.id)
     .bind(&id)
     .fetch_all(&mut *conn)
     .await?;
-    let mentions = sqlx::query_as::<_, NoteRow>(&format!(
+    let mentions = sqlx::query_as::<_, NoteRow>(sqlx::AssertSqlSafe(format!(
         "SELECT DISTINCT {NOTE_COLUMNS} FROM note_links l JOIN notes n ON n.id = l.note_id
          JOIN note_access na ON na.note_id = n.id
          WHERE na.user_id = ? AND l.target_kind = 'project' AND l.target_title = ?
            AND NOT EXISTS (SELECT 1 FROM note_projects np WHERE np.note_id = n.id AND np.project_id = ?)
          ORDER BY n.updated_at DESC"
-    ))
+    )))
     .bind(&user.id)
     .bind(&project.title)
     .bind(&id)
@@ -839,12 +839,12 @@ pub async fn task_notes(
     viewer: &str,
     task_id: &str,
 ) -> AppResult<(Vec<NoteSummary>, i64)> {
-    let rows = sqlx::query_as::<_, NoteRow>(&format!(
+    let rows = sqlx::query_as::<_, NoteRow>(sqlx::AssertSqlSafe(format!(
         "SELECT {NOTE_COLUMNS} FROM task_notes tn JOIN notes n ON n.id = tn.note_id
          WHERE tn.task_id = ?
            AND EXISTS (SELECT 1 FROM note_access na WHERE na.note_id = n.id AND na.user_id = ?)
          ORDER BY n.updated_at DESC"
-    ))
+    )))
     .bind(task_id)
     .bind(viewer)
     .fetch_all(&mut *conn)

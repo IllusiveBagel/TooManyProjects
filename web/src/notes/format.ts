@@ -216,3 +216,18 @@ export function parseTags(input: string): string[] {
   }
   return out;
 }
+
+/**
+ * The site an image address points at, when it is another site than
+ * `origin`. Such images aren't loaded (the Content-Security-Policy blocks
+ * them), so a note's author can't see when it's read.
+ */
+export function externalHost(src: string, origin: string): string | null {
+  if (!/^(https?:)?\/\//i.test(src.trim())) return null;
+  try {
+    const url = new URL(src.trim(), origin);
+    return url.origin === origin ? null : url.host;
+  } catch {
+    return null;
+  }
+}

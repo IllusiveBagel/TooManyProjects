@@ -456,12 +456,14 @@ fn parse_instant(s: &str, what: &str) -> AppResult<DateTime<Utc>> {
 
 /// An event the viewer can see, else 404.
 pub async fn visible_event(conn: &mut SqliteConnection, viewer: &str, id: &str) -> AppResult<CalendarEvent> {
-    let row = sqlx::query_as::<_, EventRow>(&format!("{EVENT_SELECT} WHERE e.id = ?2 AND {VISIBLE}"))
-        .bind(viewer)
-        .bind(id)
-        .fetch_optional(conn)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let row = sqlx::query_as::<_, EventRow>(sqlx::AssertSqlSafe(format!(
+        "{EVENT_SELECT} WHERE e.id = ?2 AND {VISIBLE}"
+    )))
+    .bind(viewer)
+    .bind(id)
+    .fetch_optional(conn)
+    .await?
+    .ok_or(AppError::NotFound)?;
     Ok(finish(row, viewer))
 }
 
@@ -536,10 +538,10 @@ pub async fn occurrences_between(
         return Err(bad("invalid_range", format!("Ask for at most {MAX_RANGE_DAYS} days at a time.")));
     }
     let project_filter = if project_id.is_some() { " AND e.project_id = ?4" } else { "" };
-    let rows = sqlx::query_as::<_, EventRow>(&format!(
+    let rows = sqlx::query_as::<_, EventRow>(sqlx::AssertSqlSafe(format!(
         "{EVENT_SELECT} WHERE {VISIBLE} AND e.first_start_at < ?2
             AND (e.last_end_at IS NULL OR e.last_end_at > ?3){project_filter}"
-    ))
+    )))
     .bind(viewer)
     .bind(time::format(to))
     .bind(time::format(from))

@@ -189,14 +189,14 @@ const VISIBLE: &str = "SELECT * FROM (
     LEFT JOIN users u ON u.id = a.added_by
 ) v WHERE v.role IS NOT NULL";
 
-fn visible<'a>(viewer: &'a str) -> QueryBuilder<'a, Sqlite> {
+fn visible(viewer: &str) -> QueryBuilder<Sqlite> {
     let mut q = QueryBuilder::new("");
     push_visible(&mut q, viewer);
     q
 }
 
 /// Pushes [`VISIBLE`] with the viewer bound in both places.
-fn push_visible<'a>(q: &mut QueryBuilder<'a, Sqlite>, viewer: &'a str) {
+fn push_visible(q: &mut QueryBuilder<Sqlite>, viewer: &str) {
     let (head, rest) = VISIBLE.split_once('?').unwrap();
     let (mid, tail) = rest.split_once('?').unwrap();
     q.push(head).push_bind(viewer).push(mid).push_bind(viewer).push(tail);
@@ -299,7 +299,7 @@ pub async fn list(conn: &mut SqliteConnection, viewer: &str, q: &ListQuery) -> A
 
 async fn finish_list(
     conn: &mut SqliteConnection,
-    mut sql: QueryBuilder<'_, Sqlite>,
+    mut sql: QueryBuilder<Sqlite>,
     q: &ListQuery,
 ) -> AppResult<Vec<Attachment>> {
     if q.images_only {

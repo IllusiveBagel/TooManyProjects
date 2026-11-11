@@ -202,6 +202,9 @@ time.
   project's **Data** tab instead).
   Nothing is overwritten: a clashing name gets a number. Export downloads the
   whole vault as a zip.
+- **Images from other sites** (`![](https://…)`) aren't loaded; they show as a
+  link you can open. That way whoever wrote a note you were shared can't see
+  when you read it.
 
 ## Photos and files
 
@@ -579,6 +582,12 @@ Claude not reaching it is gone, and you can connect.
 
 Putting the app online makes its sign-in page public. Accounts are invite-only
 and passwords are at least 10 characters, but use a strong one.
+
+**Settings → Account** lists every browser and device signed in to your
+account. Sign out one you don't recognise, or all but this one. **Change
+password** there signs out everywhere else too. Finish setup (the owner
+account) before you put a fresh install online: until then, whoever opens it
+first becomes the owner.
 
 ## Theming
 

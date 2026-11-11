@@ -87,9 +87,9 @@ async fn list_tokens(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> AppResult<Json<Vec<ApiToken>>> {
-    let rows = sqlx::query_as::<_, ApiToken>(&format!(
+    let rows = sqlx::query_as::<_, ApiToken>(sqlx::AssertSqlSafe(format!(
         "SELECT {COLUMNS} FROM api_tokens WHERE user_id = ? ORDER BY revoked_at IS NOT NULL, created_at DESC"
-    ))
+    )))
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
@@ -136,10 +136,12 @@ async fn create_token(
     .bind(time::now())
     .execute(&state.db)
     .await?;
-    let token = sqlx::query_as::<_, ApiToken>(&format!("SELECT {COLUMNS} FROM api_tokens WHERE id = ?"))
-        .bind(&id)
-        .fetch_one(&state.db)
-        .await?;
+    let token = sqlx::query_as::<_, ApiToken>(sqlx::AssertSqlSafe(format!(
+        "SELECT {COLUMNS} FROM api_tokens WHERE id = ?"
+    )))
+    .bind(&id)
+    .fetch_one(&state.db)
+    .await?;
     Ok((StatusCode::CREATED, Json(CreatedToken { token, secret: format!("{PREFIX}{raw}") })))
 }
 

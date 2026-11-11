@@ -431,7 +431,7 @@ fn clean_name(name: &str) -> AppResult<String> {
 }
 
 async fn visible_row(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<TemplateRow> {
-    sqlx::query_as::<_, TemplateRow>(&format!("{TEMPLATE_SELECT} AND t.id = ?"))
+    sqlx::query_as::<_, TemplateRow>(sqlx::AssertSqlSafe(format!("{TEMPLATE_SELECT} AND t.id = ?")))
         .bind(user_id)
         .bind(user_id)
         .bind(id)
@@ -468,11 +468,13 @@ pub async fn visible_templates(
             )
         })
         .collect();
-    let rows = sqlx::query_as::<_, TemplateRow>(&format!("{TEMPLATE_SELECT} ORDER BY t.created_at DESC"))
-        .bind(user_id)
-        .bind(user_id)
-        .fetch_all(conn)
-        .await?;
+    let rows = sqlx::query_as::<_, TemplateRow>(sqlx::AssertSqlSafe(format!(
+        "{TEMPLATE_SELECT} ORDER BY t.created_at DESC"
+    )))
+    .bind(user_id)
+    .bind(user_id)
+    .fetch_all(conn)
+    .await?;
     for r in &rows {
         let body = parse(r);
         out.push(summarise(

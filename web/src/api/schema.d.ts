@@ -777,6 +777,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change your password. Checks the current one first, then signs out every
+         *     other browser and device; this one stays signed in.
+         */
+        post: operations["change_password"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/preferences": {
         parameters: {
             query?: never;
@@ -792,6 +812,57 @@ export interface paths {
         head?: never;
         /** Save the signed-in person's theme choice. */
         patch: operations["update_preferences"];
+        trace?: never;
+    };
+    "/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The browsers and devices signed in to your account, most recent first. */
+        get: operations["list_sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions/sign-out-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out every browser and device except this one. */
+        post: operations["end_other_sessions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Sign out one browser or device. Use `/auth/logout` for this one. */
+        delete: operations["end_session"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/notes": {
@@ -1844,6 +1915,10 @@ export interface components {
             /** @description Your projects and the ones shared with you. */
             projects: components["schemas"]["Project"][];
         };
+        ChangePasswordRequest: {
+            current_password: string;
+            new_password: string;
+        };
         ChecklistItem: {
             done: boolean;
             id: string;
@@ -2742,6 +2817,21 @@ export interface components {
             /** @description The name to show: a title, or for a comment the words around the match. */
             title: string;
             updated_at: string;
+        };
+        /** @description A browser or device signed in to this account. */
+        SessionInfo: {
+            created_at: string;
+            /** @description The browser making this request. */
+            current: boolean;
+            /** @description A short handle for signing it out; not the session token. */
+            id: string;
+            last_seen_at: string;
+            /** @description The browser it signed in from, as it described itself. */
+            user_agent?: string | null;
+        };
+        SessionsEnded: {
+            /** Format: int64 */
+            ended: number;
         };
         SetupRequest: {
             email: string;
@@ -5151,6 +5241,48 @@ export interface operations {
             };
         };
     };
+    change_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Changed; how many other sessions were signed out */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsEnded"];
+                };
+            };
+            /** @description Wrong current password, or the new one is too short */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too many wrong passwords; wait */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     update_preferences: {
         parameters: {
             query?: never;
@@ -5173,6 +5305,88 @@ export interface operations {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionInfo"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    end_other_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionsEnded"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    end_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed out */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

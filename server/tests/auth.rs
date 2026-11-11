@@ -271,3 +271,87 @@ async fn big_bodies_are_refused_outside_imports() {
         app.call("POST", "/api/v1/auth/login", None, Some(json!({"email": "a@b.co", "password": big}))).await;
     assert_eq!(res.status, StatusCode::PAYLOAD_TOO_LARGE);
 }
+
+async fn login(app: &TestApp, password: &str) -> common::Res {
+    app.call(
+        "POST",
+        "/api/v1/auth/login",
+        None,
+        Some(json!({"email": "logan@example.com", "password": password})),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn change_password_signs_out_other_devices() {
+    let app = TestApp::new().await;
+    let laptop = app.setup_owner().await;
+    let phone = login(&app, "correct horse").await.cookie.unwrap();
+
+    // Both show, this one first and marked.
+    let list = app.call("GET", "/api/v1/me/sessions", Some(&laptop), None).await;
+    assert_eq!(list.status, StatusCode::OK);
+    let list = list.body.as_array().unwrap().clone();
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0]["current"], true);
+    assert_eq!(list[1]["current"], false);
+    assert_eq!(list[0]["id"].as_str().unwrap().len(), 16);
+
+    // A wrong current password is refused; so is a short new one.
+    let body = |current: &str, new: &str| Some(json!({"current_password": current, "new_password": new}));
+    let wrong =
+        app.call("POST", "/api/v1/me/password", Some(&laptop), body("guess guess", "a brand new one")).await;
+    assert_eq!(wrong.status, StatusCode::BAD_REQUEST);
+    assert_eq!(wrong.body["code"], "wrong_password");
+    let short = app.call("POST", "/api/v1/me/password", Some(&laptop), body("correct horse", "short")).await;
+    assert_eq!(short.body["code"], "weak_password");
+
+    let ok = app
+        .call("POST", "/api/v1/me/password", Some(&laptop), body("correct horse", "a brand new one"))
+        .await;
+    assert_eq!(ok.status, StatusCode::OK, "{:?}", ok.body);
+    assert_eq!(ok.body["ended"], 1);
+    assert_eq!(app.call("GET", "/api/v1/me", Some(&laptop), None).await.status, StatusCode::OK);
+    assert_eq!(app.call("GET", "/api/v1/me", Some(&phone), None).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(login(&app, "correct horse").await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(login(&app, "a brand new one").await.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn sign_out_one_device_or_all_others() {
+    let app = TestApp::new().await;
+    let laptop = app.setup_owner().await;
+    let phone = login(&app, "correct horse").await.cookie.unwrap();
+    let tablet = login(&app, "correct horse").await.cookie.unwrap();
+
+    // Sign the phone out from the laptop. Its id is in the phone's own list.
+    let phone_list = app.call("GET", "/api/v1/me/sessions", Some(&phone), None).await;
+    let phone_id = phone_list.body[0]["id"].as_str().unwrap().to_string();
+    assert_eq!(phone_list.body[0]["current"], true);
+    // Not this one, and not someone else's.
+    let own = app.call("GET", "/api/v1/me/sessions", Some(&laptop), None).await.body[0]["id"].clone();
+    let res = app
+        .call("DELETE", &format!("/api/v1/me/sessions/{}", own.as_str().unwrap()), Some(&laptop), None)
+        .await;
+    assert_eq!(res.status, StatusCode::NOT_FOUND);
+    let res = app.call("DELETE", &format!("/api/v1/me/sessions/{phone_id}"), Some(&laptop), None).await;
+    assert_eq!(res.status, StatusCode::NO_CONTENT);
+    assert_eq!(app.call("GET", "/api/v1/me", Some(&phone), None).await.status, StatusCode::UNAUTHORIZED);
+
+    let res = app.call("POST", "/api/v1/me/sessions/sign-out-others", Some(&laptop), None).await;
+    assert_eq!(res.body["ended"], 1);
+    assert_eq!(app.call("GET", "/api/v1/me", Some(&tablet), None).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(app.call("GET", "/api/v1/me", Some(&laptop), None).await.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn every_response_has_a_content_security_policy() {
+    let app = TestApp::new().await;
+    let req = Request::builder().uri("/api/health").body(Body::empty()).unwrap();
+    let res = app.router.clone().oneshot(req).await.unwrap();
+    let csp = res.headers()[header::CONTENT_SECURITY_POLICY].to_str().unwrap();
+    assert!(csp.contains("default-src 'self'"), "{csp}");
+    assert!(csp.contains("img-src 'self' data: blob:;"), "{csp}");
+    assert!(csp.contains("frame-ancestors 'none'"), "{csp}");
+    assert!(!csp.contains("script-src 'self' 'unsafe"), "{csp}");
+}

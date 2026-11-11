@@ -255,9 +255,9 @@ async fn own_canvas(conn: &mut SqliteConnection, canvas_id: &str, user_id: &str)
 }
 
 async fn fetch_group(conn: &mut SqliteConnection, canvas_id: &str, group_id: &str) -> AppResult<CanvasNode> {
-    sqlx::query_as::<_, CanvasNode>(&format!(
+    sqlx::query_as::<_, CanvasNode>(sqlx::AssertSqlSafe(format!(
         "SELECT {NODE_COLUMNS} FROM canvas_nodes WHERE id = ? AND canvas_id = ? AND kind = 'group'"
-    ))
+    )))
     .bind(group_id)
     .bind(canvas_id)
     .fetch_optional(&mut *conn)
@@ -276,9 +276,9 @@ pub fn card_in_group(group: &CanvasNode, x: f64, y: f64) -> bool {
 /// (that they can see) whose cards sit inside it.
 pub async fn groups_with_members(conn: &mut SqliteConnection, user_id: &str) -> AppResult<Vec<GroupMembers>> {
     let canvas_id = home_canvas_id(conn, user_id).await?;
-    let mut groups = sqlx::query_as::<_, CanvasNode>(&format!(
+    let mut groups = sqlx::query_as::<_, CanvasNode>(sqlx::AssertSqlSafe(format!(
         "SELECT {NODE_COLUMNS} FROM canvas_nodes WHERE canvas_id = ? AND kind = 'group'"
-    ))
+    )))
     .bind(&canvas_id)
     .fetch_all(&mut *conn)
     .await?;
@@ -328,9 +328,9 @@ async fn home_canvas(
         .await?;
 
     let archived = if q.include_archived { "" } else { " AND p.status <> 'archived'" };
-    let projects = sqlx::query_as::<_, Project>(&format!(
+    let projects = sqlx::query_as::<_, Project>(sqlx::AssertSqlSafe(format!(
         "{PROJECT_SELECT} WHERE a.user_id = ?{archived} ORDER BY p.created_at"
-    ))
+    )))
     .bind(&user.id)
     .fetch_all(&mut *tx)
     .await?;
@@ -346,12 +346,12 @@ async fn home_canvas(
     // Every link touching a project shown here. An end you have no access to
     // at all becomes a locked card; an end you can see but that is hidden
     // (archived) drops the link, as before.
-    let links: Vec<Link> = sqlx::query_as::<_, Link>(&format!(
+    let links: Vec<Link> = sqlx::query_as::<_, Link>(sqlx::AssertSqlSafe(format!(
         "SELECT {LINK_COLUMNS} FROM project_links l
          WHERE l.source_id IN (SELECT project_id FROM project_access WHERE user_id = ?1)
             OR l.target_id IN (SELECT project_id FROM project_access WHERE user_id = ?1)
          ORDER BY created_at"
-    ))
+    )))
     .bind(&user.id)
     .fetch_all(&mut *tx)
     .await?

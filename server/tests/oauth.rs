@@ -267,13 +267,6 @@ async fn sign_in_allow_and_use_the_mcp_server() {
     assert_eq!(r.status, StatusCode::OK, "{}", r.body);
     let access2 = r.body["access_token"].as_str().unwrap().to_string();
     let refresh2 = r.body["refresh_token"].as_str().unwrap().to_string();
-    let spent = form(
-        &app,
-        "/oauth/token",
-        &[("grant_type", "refresh_token"), ("refresh_token", &refresh), ("client_id", &client)],
-    )
-    .await;
-    assert_eq!(spent.body["error"], "invalid_grant");
     assert_eq!(mcp(&app, &access2, "tools/list", json!({})).await.status, StatusCode::OK);
 
     // A wrong PKCE verifier is refused.
@@ -311,6 +304,44 @@ async fn sign_in_allow_and_use_the_mcp_server() {
     assert_eq!(r.body["error"], "invalid_grant");
     let list = app.call("GET", "/api/v1/oauth/connections", Some(&me), None).await;
     assert!(list.body.as_array().unwrap().is_empty());
+}
+
+async fn refresh_grant(app: &TestApp, client: &str, token: String) -> Raw {
+    form(
+        app,
+        "/oauth/token",
+        &[("grant_type", "refresh_token"), ("refresh_token", &token), ("client_id", client)],
+    )
+    .await
+}
+
+#[tokio::test]
+async fn reusing_a_refresh_token_ends_the_connection() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let client = register(&app).await;
+    let (_, refresh) = connect(&app, &me, &client, "write").await;
+    let refresh_with = |token: String| refresh_grant(&app, &client, token);
+
+    let r = refresh_with(refresh.clone()).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.body);
+    let access2 = r.body["access_token"].as_str().unwrap().to_string();
+    let refresh2 = r.body["refresh_token"].as_str().unwrap().to_string();
+    assert_eq!(mcp(&app, &access2, "tools/list", json!({})).await.status, StatusCode::OK);
+
+    // The first refresh token comes back (say, stolen): refused, and the
+    // whole connection ends, including the tokens the real app holds.
+    let reused = refresh_with(refresh.clone()).await;
+    assert_eq!(reused.body["error"], "invalid_grant");
+    assert_eq!(mcp(&app, &access2, "tools/list", json!({})).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(refresh_with(refresh2).await.body["error"], "invalid_grant");
+    let list = app.call("GET", "/api/v1/oauth/connections", Some(&me), None).await;
+    assert!(list.body.as_array().unwrap().is_empty());
+
+    // Connecting again works, and the old spent token can't end the new one.
+    let (access3, _) = connect(&app, &me, &client, "write").await;
+    assert_eq!(refresh_with(refresh).await.body["error"], "invalid_grant");
+    assert_eq!(mcp(&app, &access3, "tools/list", json!({})).await.status, StatusCode::OK);
 }
 
 #[tokio::test]

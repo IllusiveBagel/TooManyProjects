@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import remarkGfm from "remark-gfm";
 import { NoteEmbed } from "../data/NoteEmbed";
 import { noteFileUrl } from "../files/format";
-import { EMBED_LANG, isImageName, readWikiHref, vaultFile, VAULT_PREFIX, wikiToMarkdown, type NoteLink } from "./format";
+import { EMBED_LANG, externalHost, isImageName, readWikiHref, vaultFile, VAULT_PREFIX, wikiToMarkdown, type NoteLink } from "./format";
 
 /**
  * A note's markdown, rendered. Wiki links go to the note or project they
@@ -73,6 +73,22 @@ export function NoteMarkdown({
       },
       img({ src = "", alt }) {
         const name = typeof src === "string" ? vaultFile(src) : null;
+        const host = typeof src === "string" ? externalHost(src, window.location.origin) : null;
+        if (host) {
+          // Images from other sites aren't loaded (the Content-Security-Policy
+          // blocks them), so whoever wrote the note can't see when it's read.
+          return (
+            <a
+              href={src as string}
+              target="_blank"
+              rel="noreferrer noopener"
+              title="Images from other sites aren't loaded. Open it in a new tab."
+              className="border-rule label-mono inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-[12px] no-underline"
+            >
+              ▨ {alt ? `${alt} · ` : ""}image from {host}
+            </a>
+          );
+        }
         if (!name || !noteId) return <img src={typeof src === "string" ? src : undefined} alt={alt ?? ""} />;
         if (!isImageName(name)) {
           return (

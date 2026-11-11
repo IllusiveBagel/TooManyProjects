@@ -166,11 +166,13 @@ pub async fn insert_link(
 }
 
 async fn link_by_id(conn: &mut SqliteConnection, id: &str) -> AppResult<Link> {
-    sqlx::query_as::<_, Link>(&format!("SELECT {LINK_COLUMNS} FROM project_links WHERE id = ?"))
-        .bind(id)
-        .fetch_optional(conn)
-        .await?
-        .ok_or(AppError::NotFound)
+    sqlx::query_as::<_, Link>(sqlx::AssertSqlSafe(format!(
+        "SELECT {LINK_COLUMNS} FROM project_links WHERE id = ?"
+    )))
+    .bind(id)
+    .fetch_optional(conn)
+    .await?
+    .ok_or(AppError::NotFound)
 }
 
 /// A link the person may change: they must be able to edit both ends.

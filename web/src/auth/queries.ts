@@ -72,3 +72,35 @@ export function useUpdatePreferences() {
     onSuccess: setUser,
   });
 }
+
+const sessionsKey = ["sessions"] as const;
+
+/** The browsers and devices signed in to this account, this one first. */
+export function useSessions() {
+  return useQuery({ queryKey: sessionsKey, queryFn: () => unwrap(api.GET("/me/sessions")) });
+}
+
+export function useChangePassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { current_password: string; new_password: string }) =>
+      unwrap(api.POST("/me/password", { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sessionsKey }),
+  });
+}
+
+export function useEndSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.DELETE("/me/sessions/{id}", { params: { path: { id } } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sessionsKey }),
+  });
+}
+
+export function useEndOtherSessions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/me/sessions/sign-out-others")),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sessionsKey }),
+  });
+}
