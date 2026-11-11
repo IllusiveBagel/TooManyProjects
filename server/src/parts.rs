@@ -305,7 +305,7 @@ async fn roles_of(
                AND (role IS NOT NULL OR is_title = 1)",
             placeholders(chunk.len())
         );
-        let mut q = sqlx::query_as::<_, (String, String, Option<String>, bool)>(&sql);
+        let mut q = sqlx::query_as::<_, (String, String, Option<String>, bool)>(sqlx::AssertSqlSafe(sql));
         for id in chunk {
             q = q.bind(id);
         }
@@ -343,8 +343,10 @@ async fn load_parts(conn: &mut SqliteConnection, user_id: &str, scope: Scope<'_>
         }
     };
     sql.push_str(" ORDER BY p.title COLLATE NOCASE, d.position, r.position");
-    let mut q = sqlx::query_as::<_, (String, String, String, String, String, String, String, String)>(&sql)
-        .bind(user_id);
+    let mut q = sqlx::query_as::<_, (String, String, String, String, String, String, String, String)>(
+        sqlx::AssertSqlSafe(sql),
+    )
+    .bind(user_id);
     for p in projects {
         q = q.bind(p);
     }
@@ -366,7 +368,8 @@ async fn load_parts(conn: &mut SqliteConnection, user_id: &str, scope: Scope<'_>
              WHERE x.target_kind = 'task' AND x.row_id IN ({}) ORDER BY x.position",
             placeholders(chunk.len())
         );
-        let mut q = sqlx::query_as::<_, (String, String, i64, String)>(&sql).bind(user_id);
+        let mut q =
+            sqlx::query_as::<_, (String, String, i64, String)>(sqlx::AssertSqlSafe(sql)).bind(user_id);
         for id in chunk {
             q = q.bind(id);
         }
@@ -654,12 +657,12 @@ pub async fn after_arrival(
     .await?;
     let mut ready = vec![];
     for (task_id, project_id, number, title) in tasks {
-        let parts: Vec<(String, Option<String>)> = sqlx::query_as(&format!(
+        let parts: Vec<(String, Option<String>)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {TITLE_SQL}, {STAGE_SQL} FROM db_relations x
              JOIN db_columns fc ON fc.id = x.column_id AND fc.role = 'for_task'
              JOIN db_rows r ON r.id = x.row_id
              WHERE x.target_kind = 'task' AND x.target_id = ? ORDER BY r.position"
-        ))
+        )))
         .bind(&task_id)
         .fetch_all(&mut *conn)
         .await?;

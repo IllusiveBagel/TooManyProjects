@@ -467,32 +467,34 @@ async fn touch(conn: &mut SqliteConnection, database_id: &str) -> AppResult<()> 
 }
 
 pub(crate) async fn load_database(conn: &mut SqliteConnection, id: &str) -> AppResult<Database> {
-    Ok(sqlx::query_as::<_, Database>(&format!("{DATABASE_SELECT} WHERE d.id = ?"))
+    Ok(sqlx::query_as::<_, Database>(sqlx::AssertSqlSafe(format!("{DATABASE_SELECT} WHERE d.id = ?")))
         .bind(id)
         .fetch_one(conn)
         .await?)
 }
 
 pub(crate) async fn columns_of(conn: &mut SqliteConnection, database_id: &str) -> AppResult<Vec<Column>> {
-    let rows =
-        sqlx::query_as::<_, ColumnRow>(&format!("{COLUMN_SELECT} WHERE database_id = ? ORDER BY position"))
-            .bind(database_id)
-            .fetch_all(conn)
-            .await?;
+    let rows = sqlx::query_as::<_, ColumnRow>(sqlx::AssertSqlSafe(format!(
+        "{COLUMN_SELECT} WHERE database_id = ? ORDER BY position"
+    )))
+    .bind(database_id)
+    .fetch_all(conn)
+    .await?;
     Ok(rows.into_iter().map(Column::from).collect())
 }
 
 async fn views_of(conn: &mut SqliteConnection, database_id: &str) -> AppResult<Vec<View>> {
-    let rows =
-        sqlx::query_as::<_, ViewRow>(&format!("{VIEW_SELECT} WHERE database_id = ? ORDER BY position"))
-            .bind(database_id)
-            .fetch_all(conn)
-            .await?;
+    let rows = sqlx::query_as::<_, ViewRow>(sqlx::AssertSqlSafe(format!(
+        "{VIEW_SELECT} WHERE database_id = ? ORDER BY position"
+    )))
+    .bind(database_id)
+    .fetch_all(conn)
+    .await?;
     Ok(rows.into_iter().map(View::from).collect())
 }
 
 async fn column(conn: &mut SqliteConnection, id: &str) -> AppResult<Column> {
-    let row = sqlx::query_as::<_, ColumnRow>(&format!("{COLUMN_SELECT} WHERE id = ?"))
+    let row = sqlx::query_as::<_, ColumnRow>(sqlx::AssertSqlSafe(format!("{COLUMN_SELECT} WHERE id = ?")))
         .bind(id)
         .fetch_optional(conn)
         .await?
@@ -501,7 +503,7 @@ async fn column(conn: &mut SqliteConnection, id: &str) -> AppResult<Column> {
 }
 
 async fn view(conn: &mut SqliteConnection, id: &str) -> AppResult<View> {
-    let row = sqlx::query_as::<_, ViewRow>(&format!("{VIEW_SELECT} WHERE id = ?"))
+    let row = sqlx::query_as::<_, ViewRow>(sqlx::AssertSqlSafe(format!("{VIEW_SELECT} WHERE id = ?")))
         .bind(id)
         .fetch_optional(conn)
         .await?
@@ -939,8 +941,10 @@ async fn resolve_targets(
                      WHERE r.id IN ({ph})"
                 ),
             };
-            let mut q =
-                sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(&sql).bind(user_id);
+            let mut q = sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
+                sqlx::AssertSqlSafe(sql),
+            )
+            .bind(user_id);
             for id in chunk {
                 q = q.bind(*id);
             }
@@ -967,7 +971,7 @@ async fn relations_of(
              ORDER BY row_id, column_id, position",
             placeholders(chunk.len())
         );
-        let mut q = sqlx::query_as::<_, (String, String, String, String)>(&sql);
+        let mut q = sqlx::query_as::<_, (String, String, String, String)>(sqlx::AssertSqlSafe(sql));
         for id in chunk {
             q = q.bind(id);
         }
@@ -1031,7 +1035,7 @@ const ROW_SELECT: &str = "SELECT id, database_id, data, position, created_at, up
     FROM db_rows";
 
 async fn one_row(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Row> {
-    let rec = sqlx::query_as::<_, RowRecord>(&format!("{ROW_SELECT} WHERE id = ?"))
+    let rec = sqlx::query_as::<_, RowRecord>(sqlx::AssertSqlSafe(format!("{ROW_SELECT} WHERE id = ?")))
         .bind(id)
         .fetch_optional(&mut *conn)
         .await?
@@ -1048,11 +1052,12 @@ pub(crate) async fn query_rows(
     q: Option<&str>,
 ) -> AppResult<Vec<Row>> {
     let columns = columns_of(&mut *conn, database_id).await?;
-    let records =
-        sqlx::query_as::<_, RowRecord>(&format!("{ROW_SELECT} WHERE database_id = ? ORDER BY position"))
-            .bind(database_id)
-            .fetch_all(&mut *conn)
-            .await?;
+    let records = sqlx::query_as::<_, RowRecord>(sqlx::AssertSqlSafe(format!(
+        "{ROW_SELECT} WHERE database_id = ? ORDER BY position"
+    )))
+    .bind(database_id)
+    .fetch_all(&mut *conn)
+    .await?;
     let mut rows = build_rows(conn, user_id, records).await?;
     // Relations reach filters and sorts as their titles, joined.
     let cell = |row: &Row, column: &Column| -> Option<Value> {
@@ -1802,10 +1807,10 @@ async fn task_rows(
             continue;
         }
         let Some(r) = refs.iter().find(|r| r.id == database_id) else { continue };
-        let records = sqlx::query_as::<_, RowRecord>(&format!(
+        let records = sqlx::query_as::<_, RowRecord>(sqlx::AssertSqlSafe(format!(
             "{ROW_SELECT} WHERE id IN (SELECT row_id FROM db_relations WHERE column_id = ? AND target_kind = 'task'
              AND target_id = ?) ORDER BY position"
-        ))
+        )))
         .bind(&column_id)
         .bind(&id)
         .fetch_all(&mut *conn)

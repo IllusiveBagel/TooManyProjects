@@ -155,9 +155,9 @@ fn category_word(statuses: &[Status], name: &str) -> &'static str {
 }
 
 pub async fn statuses_for(conn: &mut SqliteConnection, project_id: &str) -> AppResult<Vec<Status>> {
-    Ok(sqlx::query_as::<_, Status>(&format!(
+    Ok(sqlx::query_as::<_, Status>(sqlx::AssertSqlSafe(format!(
         "SELECT {STATUS_COLUMNS} FROM statuses WHERE project_id = ? ORDER BY position"
-    ))
+    )))
     .bind(project_id)
     .fetch_all(conn)
     .await?)
@@ -165,11 +165,13 @@ pub async fn statuses_for(conn: &mut SqliteConnection, project_id: &str) -> AppR
 
 /// A column the person may change (and so move tasks into), else 404 or 403.
 pub async fn editable_status(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Status> {
-    let status = sqlx::query_as::<_, Status>(&format!("SELECT {STATUS_COLUMNS} FROM statuses WHERE id = ?"))
-        .bind(id)
-        .fetch_optional(&mut *conn)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let status = sqlx::query_as::<_, Status>(sqlx::AssertSqlSafe(format!(
+        "SELECT {STATUS_COLUMNS} FROM statuses WHERE id = ?"
+    )))
+    .bind(id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(AppError::NotFound)?;
     editable_project(conn, user_id, &status.project_id).await?;
     Ok(status)
 }
@@ -178,8 +180,8 @@ pub async fn editable_status(conn: &mut SqliteConnection, user_id: &str, id: &st
 /// list ordered by `position`, skipping `moving` itself.
 pub async fn position_after(
     conn: &mut SqliteConnection,
-    table: &str,
-    scope_column: &str,
+    table: &'static str,
+    scope_column: &'static str,
     scope: &str,
     after: Option<&str>,
     moving: Option<&str>,
@@ -187,20 +189,22 @@ pub async fn position_after(
     let moving = moving.unwrap_or("");
     let a: Option<String> = match after {
         Some(id) => Some(
-            sqlx::query_scalar(&format!("SELECT position FROM {table} WHERE id = ? AND {scope_column} = ?"))
-                .bind(id)
-                .bind(scope)
-                .fetch_optional(&mut *conn)
-                .await?
-                .ok_or_else(|| {
-                    AppError::BadRequest("invalid_after", "That neighbour isn't in this list.".into())
-                })?,
+            sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT position FROM {table} WHERE id = ? AND {scope_column} = ?"
+            )))
+            .bind(id)
+            .bind(scope)
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or_else(|| {
+                AppError::BadRequest("invalid_after", "That neighbour isn't in this list.".into())
+            })?,
         ),
         None => None,
     };
-    let b: Option<String> = sqlx::query_scalar(&format!(
+    let b: Option<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT position FROM {table} WHERE {scope_column} = ? AND id <> ? AND position > ? ORDER BY position LIMIT 1"
-    ))
+    )))
     .bind(scope)
     .bind(moving)
     .bind(a.as_deref().unwrap_or(""))
@@ -212,15 +216,16 @@ pub async fn position_after(
 /// The key for the end of a list.
 pub async fn position_last(
     conn: &mut SqliteConnection,
-    table: &str,
-    scope_column: &str,
+    table: &'static str,
+    scope_column: &'static str,
     scope: &str,
 ) -> AppResult<String> {
-    let last: Option<String> =
-        sqlx::query_scalar(&format!("SELECT MAX(position) FROM {table} WHERE {scope_column} = ?"))
-            .bind(scope)
-            .fetch_one(&mut *conn)
-            .await?;
+    let last: Option<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT MAX(position) FROM {table} WHERE {scope_column} = ?"
+    )))
+    .bind(scope)
+    .fetch_one(&mut *conn)
+    .await?;
     Ok(position::between(last.as_deref(), None))
 }
 

@@ -125,9 +125,9 @@ pub(crate) async fn project_dashboard(
     });
     open.truncate(5);
 
-    let activity = sqlx::query_as::<_, ActivityItem>(&format!(
+    let activity = sqlx::query_as::<_, ActivityItem>(sqlx::AssertSqlSafe(format!(
         "{ACTIVITY_SELECT} WHERE a.project_id = ? ORDER BY a.created_at DESC, a.id DESC LIMIT 15"
-    ))
+    )))
     .bind(&id)
     .fetch_all(&mut *conn)
     .await?;

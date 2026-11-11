@@ -182,7 +182,7 @@ pub async fn insert_account_share(
 }
 
 async fn share_by_id(conn: &mut SqliteConnection, id: &str) -> AppResult<Share> {
-    sqlx::query_as::<_, Share>(&format!("{SHARE_SELECT} WHERE s.id = ?"))
+    sqlx::query_as::<_, Share>(sqlx::AssertSqlSafe(format!("{SHARE_SELECT} WHERE s.id = ?")))
         .bind(id)
         .fetch_optional(conn)
         .await?
@@ -211,15 +211,15 @@ async fn list_shares(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
 ) -> AppResult<Json<MyShares>> {
-    let given = sqlx::query_as::<_, Share>(&format!(
+    let given = sqlx::query_as::<_, Share>(sqlx::AssertSqlSafe(format!(
         "{SHARE_SELECT} WHERE COALESCE(s.owner_id, p.owner_id) = ? ORDER BY s.project_id IS NOT NULL, p.title, g.name"
-    ))
+    )))
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
-    let received = sqlx::query_as::<_, Share>(&format!(
+    let received = sqlx::query_as::<_, Share>(sqlx::AssertSqlSafe(format!(
         "{SHARE_SELECT} WHERE s.grantee_id = ? ORDER BY s.project_id IS NOT NULL, o.name, p.title"
-    ))
+    )))
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;

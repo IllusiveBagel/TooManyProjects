@@ -276,11 +276,11 @@ impl FromRequestParts<AppState> for CurrentUser {
 async fn user_for_token(state: &AppState, raw: &str) -> AppResult<Option<User>> {
     let hash = hash_token(raw);
     let now = time::now();
-    let user = sqlx::query_as::<_, User>(&format!(
+    let user = sqlx::query_as::<_, User>(sqlx::AssertSqlSafe(format!(
         "SELECT {} FROM sessions s JOIN users u ON u.id = s.user_id
          WHERE s.token_hash = ? AND s.expires_at > ?",
         USER_COLUMNS.split(", ").map(|c| format!("u.{c}")).collect::<Vec<_>>().join(", ")
-    ))
+    )))
     .bind(&hash)
     .bind(&now)
     .fetch_optional(&state.db)
@@ -299,7 +299,7 @@ pub async fn user_by_id<'e, E>(executor: E, id: &str) -> AppResult<User>
 where
     E: sqlx::Executor<'e, Database = Sqlite>,
 {
-    sqlx::query_as::<_, User>(&format!("SELECT {USER_COLUMNS} FROM users WHERE id = ?"))
+    sqlx::query_as::<_, User>(sqlx::AssertSqlSafe(format!("SELECT {USER_COLUMNS} FROM users WHERE id = ?")))
         .bind(id)
         .fetch_optional(executor)
         .await?
@@ -553,12 +553,12 @@ async fn list_sessions(
     headers: HeaderMap,
 ) -> AppResult<Json<Vec<SessionInfo>>> {
     let current = current_session_hash(&headers)?;
-    let sessions = sqlx::query_as::<_, SessionInfo>(&format!(
+    let sessions = sqlx::query_as::<_, SessionInfo>(sqlx::AssertSqlSafe(format!(
         "SELECT substr(token_hash, 1, {SESSION_ID_LEN}) AS id, created_at, last_seen_at, user_agent,
                 token_hash = ? AS current
          FROM sessions WHERE user_id = ? AND expires_at > ?
          ORDER BY token_hash = ? DESC, last_seen_at DESC"
-    ))
+    )))
     .bind(&current)
     .bind(&user.id)
     .bind(time::now())

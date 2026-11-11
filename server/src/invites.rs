@@ -119,9 +119,11 @@ async fn list_invites(
     CurrentUser(user): CurrentUser,
 ) -> AppResult<Json<Vec<Invite>>> {
     require_owner(&user)?;
-    let invites = sqlx::query_as::<_, Invite>(&format!("{INVITE_SELECT} ORDER BY i.created_at DESC"))
-        .fetch_all(&state.db)
-        .await?;
+    let invites = sqlx::query_as::<_, Invite>(sqlx::AssertSqlSafe(format!(
+        "{INVITE_SELECT} ORDER BY i.created_at DESC"
+    )))
+    .fetch_all(&state.db)
+    .await?;
     Ok(Json(invites))
 }
 
@@ -179,7 +181,7 @@ async fn create_invite(
     .bind(time::format(now))
     .execute(&state.db)
     .await?;
-    let invite = sqlx::query_as::<_, Invite>(&format!("{INVITE_SELECT} WHERE i.id = ?"))
+    let invite = sqlx::query_as::<_, Invite>(sqlx::AssertSqlSafe(format!("{INVITE_SELECT} WHERE i.id = ?")))
         .bind(&id)
         .fetch_one(&state.db)
         .await?;

@@ -633,11 +633,13 @@ async fn token(
                 .execute(&mut *tx)
                 .await?;
             for table in ["oauth_tokens", "oauth_spent_refresh"] {
-                sqlx::query(&format!("DELETE FROM {table} WHERE connection_id = ? AND expires_at <= ?"))
-                    .bind(&connection_id)
-                    .bind(time::now())
-                    .execute(&mut *tx)
-                    .await?;
+                sqlx::query(sqlx::AssertSqlSafe(format!(
+                    "DELETE FROM {table} WHERE connection_id = ? AND expires_at <= ?"
+                )))
+                .bind(&connection_id)
+                .bind(time::now())
+                .execute(&mut *tx)
+                .await?;
             }
             let body = issue(&mut tx, &connection_id, &scope).await?;
             tx.commit().await?;
@@ -721,7 +723,7 @@ async fn end_connection_in(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, id: &st
         .execute(&mut **tx)
         .await?;
     for table in ["oauth_tokens", "oauth_spent_refresh"] {
-        sqlx::query(&format!("DELETE FROM {table} WHERE connection_id = ?"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table} WHERE connection_id = ?")))
             .bind(id)
             .execute(&mut **tx)
             .await?;

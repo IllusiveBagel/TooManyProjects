@@ -220,12 +220,14 @@ pub fn check_date(date: &Option<String>) -> AppResult<()> {
 
 /// The project if the signed-in person may see it, else 404.
 pub async fn visible_project(conn: &mut SqliteConnection, user_id: &str, id: &str) -> AppResult<Project> {
-    sqlx::query_as::<_, Project>(&format!("{PROJECT_SELECT} WHERE p.id = ? AND a.user_id = ?"))
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(conn)
-        .await?
-        .ok_or(AppError::NotFound)
+    sqlx::query_as::<_, Project>(sqlx::AssertSqlSafe(format!(
+        "{PROJECT_SELECT} WHERE p.id = ? AND a.user_id = ?"
+    )))
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(conn)
+    .await?
+    .ok_or(AppError::NotFound)
 }
 
 /// The project if the signed-in person may change it (owner or editor).
@@ -307,9 +309,9 @@ pub(crate) async fn list_projects(
     Query(q): Query<ListQuery>,
 ) -> AppResult<Json<Vec<Project>>> {
     let archived = if q.include_archived { "" } else { " AND p.status <> 'archived'" };
-    let projects = sqlx::query_as::<_, Project>(&format!(
+    let projects = sqlx::query_as::<_, Project>(sqlx::AssertSqlSafe(format!(
         "{PROJECT_SELECT} WHERE a.user_id = ?{archived} ORDER BY p.created_at"
-    ))
+    )))
     .bind(&user.id)
     .fetch_all(&state.db)
     .await?;

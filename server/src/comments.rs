@@ -111,9 +111,9 @@ pub async fn task_comments(
     task: &Task,
 ) -> AppResult<Vec<Comment>> {
     let role = role(conn, viewer, &task.project_id).await?;
-    let rows = sqlx::query_as::<_, CommentRow>(&format!(
+    let rows = sqlx::query_as::<_, CommentRow>(sqlx::AssertSqlSafe(format!(
         "{COMMENT_SELECT} WHERE c.task_id = ? ORDER BY c.created_at, c.rowid"
-    ))
+    )))
     .bind(&task.id)
     .fetch_all(&mut *conn)
     .await?;
@@ -145,11 +145,12 @@ fn clean_body(body: &str, may_be_empty: bool) -> AppResult<String> {
 /// One comment as `viewer` sees it, with the task it is on. 404 when the
 /// viewer can't see the task.
 async fn visible_comment(conn: &mut SqliteConnection, viewer: &str, id: &str) -> AppResult<(Comment, Task)> {
-    let row = sqlx::query_as::<_, CommentRow>(&format!("{COMMENT_SELECT} WHERE c.id = ?"))
-        .bind(id)
-        .fetch_optional(&mut *conn)
-        .await?
-        .ok_or(AppError::NotFound)?;
+    let row =
+        sqlx::query_as::<_, CommentRow>(sqlx::AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = ?")))
+            .bind(id)
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or(AppError::NotFound)?;
     let task = visible_task(conn, viewer, &row.task_id).await?;
     let role = role(conn, viewer, &task.project_id).await?;
     let mut comment = finish(row, viewer, &role);
