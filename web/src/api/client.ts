@@ -2,6 +2,7 @@ import createClient from "openapi-fetch";
 import type { components, paths } from "./schema";
 
 export type User = components["schemas"]["User"];
+export type SessionInfo = components["schemas"]["SessionInfo"];
 export type AuthStatus = components["schemas"]["AuthStatus"];
 export type Invite = components["schemas"]["Invite"];
 export type CreatedInvite = components["schemas"]["CreatedInvite"];

@@ -596,23 +596,49 @@ async fn token(
             .await?;
             let invalid =
                 || OAuthError::bad("invalid_grant", "The refresh token is unknown, used or expired.");
-            let (connection_id, owner, scope) = row.ok_or_else(invalid)?;
+            let Some((connection_id, owner, scope)) = row else {
+                // A refresh token that was already swapped has come back:
+                // someone else has a copy, so end the whole connection.
+                let spent: Option<String> = sqlx::query_scalar(
+                    "SELECT connection_id FROM oauth_spent_refresh WHERE token_hash = ? AND expires_at > ?",
+                )
+                .bind(&hash)
+                .bind(time::now())
+                .fetch_optional(&mut *tx)
+                .await?;
+                if let Some(id) = spent {
+                    tracing::warn!(connection = %id, "a used refresh token came back; ending the connection");
+                    end_connection_in(&mut tx, &id).await?;
+                    tx.commit().await?;
+                }
+                return Err(invalid());
+            };
             if !client_id.is_empty() && owner != client_id {
                 return Err(OAuthError::bad("invalid_grant", "The refresh token belongs to another app."));
             }
             // Each refresh token works once; a second use loses the race here.
-            let used = sqlx::query("DELETE FROM oauth_tokens WHERE token_hash = ?")
-                .bind(&hash)
-                .execute(&mut *tx)
-                .await?;
+            // It is remembered as spent so that a later reuse is noticed.
+            let used = sqlx::query(
+                "INSERT INTO oauth_spent_refresh (token_hash, connection_id, expires_at)
+                 SELECT token_hash, connection_id, expires_at FROM oauth_tokens WHERE token_hash = ?",
+            )
+            .bind(&hash)
+            .execute(&mut *tx)
+            .await?;
             if used.rows_affected() != 1 {
                 return Err(invalid());
             }
-            sqlx::query("DELETE FROM oauth_tokens WHERE connection_id = ? AND expires_at <= ?")
-                .bind(&connection_id)
-                .bind(time::now())
+            sqlx::query("DELETE FROM oauth_tokens WHERE token_hash = ?")
+                .bind(&hash)
                 .execute(&mut *tx)
                 .await?;
+            for table in ["oauth_tokens", "oauth_spent_refresh"] {
+                sqlx::query(&format!("DELETE FROM {table} WHERE connection_id = ? AND expires_at <= ?"))
+                    .bind(&connection_id)
+                    .bind(time::now())
+                    .execute(&mut *tx)
+                    .await?;
+            }
             let body = issue(&mut tx, &connection_id, &scope).await?;
             tx.commit().await?;
             Ok(Json(body))
@@ -682,13 +708,24 @@ async fn revoke(State(state): State<AppState>, Form(f): Form<RevokeForm>) -> Res
 
 async fn end_connection(state: &AppState, id: &str) -> AppResult<()> {
     let mut tx = state.db.begin().await?;
+    end_connection_in(&mut tx, id).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Mark a connection revoked and drop all its tokens, live and spent.
+async fn end_connection_in(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>, id: &str) -> AppResult<()> {
     sqlx::query("UPDATE oauth_connections SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?")
         .bind(time::now())
         .bind(id)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
-    sqlx::query("DELETE FROM oauth_tokens WHERE connection_id = ?").bind(id).execute(&mut *tx).await?;
-    tx.commit().await?;
+    for table in ["oauth_tokens", "oauth_spent_refresh"] {
+        sqlx::query(&format!("DELETE FROM {table} WHERE connection_id = ?"))
+            .bind(id)
+            .execute(&mut **tx)
+            .await?;
+    }
     Ok(())
 }
 

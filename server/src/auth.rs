@@ -40,6 +40,10 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(logout))
         .routes(routes!(me))
         .routes(routes!(update_preferences))
+        .routes(routes!(change_password))
+        .routes(routes!(list_sessions))
+        .routes(routes!(end_other_sessions))
+        .routes(routes!(end_session))
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +97,31 @@ pub struct PreferencesRequest {
     pub theme_id: Option<String>,
     /// `system`, `dark` or `light`.
     pub theme_mode: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+/// A browser or device signed in to this account.
+#[derive(Serialize, FromRow, ToSchema)]
+pub struct SessionInfo {
+    /// A short handle for signing it out; not the session token.
+    pub id: String,
+    pub created_at: String,
+    pub last_seen_at: String,
+    /// The browser it signed in from, as it described itself.
+    pub user_agent: Option<String>,
+    /// The browser making this request.
+    #[sqlx(default)]
+    pub current: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct SessionsEnded {
+    pub ended: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +181,16 @@ pub struct NewAccount {
     pub password: String,
 }
 
+pub fn validate_password(password: &str) -> AppResult<()> {
+    if password.chars().count() < MIN_PASSWORD_LEN || password.len() > 1024 {
+        return Err(AppError::BadRequest(
+            "weak_password",
+            format!("Use a password of at least {MIN_PASSWORD_LEN} characters."),
+        ));
+    }
+    Ok(())
+}
+
 pub fn validate_account(name: &str, email: &str, password: &str) -> AppResult<NewAccount> {
     let name = name.trim();
     let email = email.trim().to_lowercase();
@@ -166,12 +205,7 @@ pub fn validate_account(name: &str, email: &str, password: &str) -> AppResult<Ne
     if !valid_email {
         return Err(AppError::BadRequest("invalid_email", "Enter a valid email address.".into()));
     }
-    if password.chars().count() < MIN_PASSWORD_LEN || password.len() > 1024 {
-        return Err(AppError::BadRequest(
-            "weak_password",
-            format!("Use a password of at least {MIN_PASSWORD_LEN} characters."),
-        ));
-    }
+    validate_password(password)?;
     Ok(NewAccount { name: name.to_string(), email, password: password.to_string() })
 }
 
@@ -449,4 +483,128 @@ async fn update_preferences(
         .execute(&state.db)
         .await?;
     Ok(Json(user_by_id(&state.db, &user.id).await?))
+}
+
+/// The session id the API shows: the start of the token's hash. Knowing it
+/// doesn't let anyone sign in.
+const SESSION_ID_LEN: usize = 16;
+
+/// The hash of the session cookie on this request.
+fn current_session_hash(headers: &HeaderMap) -> AppResult<String> {
+    cookie_token(headers).map(|raw| hash_token(&raw)).ok_or(AppError::Unauthorized)
+}
+
+/// Change your password. Checks the current one first, then signs out every
+/// other browser and device; this one stays signed in.
+#[utoipa::path(post, path = "/me/password", tag = "auth", request_body = ChangePasswordRequest,
+    responses(
+        (status = 200, body = SessionsEnded, description = "Changed; how many other sessions were signed out"),
+        (status = 400, body = crate::error::ErrorBody, description = "Wrong current password, or the new one is too short"),
+        (status = 429, body = crate::error::ErrorBody, description = "Too many wrong passwords; wait"),
+    ))]
+async fn change_password(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    headers: HeaderMap,
+    Json(req): Json<ChangePasswordRequest>,
+) -> AppResult<Json<SessionsEnded>> {
+    let current = current_session_hash(&headers)?;
+    // Same throttle as login, so a borrowed browser can't guess the password here.
+    if let Err(secs) = state.logins.check(&user.email) {
+        let wait =
+            if secs > 90 { format!("{} minutes", secs.div_ceil(60)) } else { format!("{secs} seconds") };
+        return Err(AppError::TooManyRequests(format!("Too many wrong passwords. Try again in {wait}.")));
+    }
+    let hash: String = sqlx::query_scalar("SELECT password_hash FROM users WHERE id = ?")
+        .bind(&user.id)
+        .fetch_one(&state.db)
+        .await?;
+    if !verify_password(req.current_password, hash).await? {
+        state.logins.failed(&user.email);
+        return Err(AppError::BadRequest("wrong_password", "Your current password isn't right.".into()));
+    }
+    state.logins.succeeded(&user.email);
+    validate_password(&req.new_password)?;
+    let new_hash = hash_password(req.new_password).await?;
+    let mut tx = state.db.begin().await?;
+    sqlx::query("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?")
+        .bind(&new_hash)
+        .bind(time::now())
+        .bind(&user.id)
+        .execute(&mut *tx)
+        .await?;
+    let ended = sqlx::query("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?")
+        .bind(&user.id)
+        .bind(&current)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    tx.commit().await?;
+    tracing::info!(user = %user.id, ended, "password changed");
+    Ok(Json(SessionsEnded { ended }))
+}
+
+/// The browsers and devices signed in to your account, most recent first.
+#[utoipa::path(get, path = "/me/sessions", tag = "auth",
+    responses((status = 200, body = Vec<SessionInfo>), (status = 401, body = crate::error::ErrorBody)))]
+async fn list_sessions(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    headers: HeaderMap,
+) -> AppResult<Json<Vec<SessionInfo>>> {
+    let current = current_session_hash(&headers)?;
+    let sessions = sqlx::query_as::<_, SessionInfo>(&format!(
+        "SELECT substr(token_hash, 1, {SESSION_ID_LEN}) AS id, created_at, last_seen_at, user_agent,
+                token_hash = ? AS current
+         FROM sessions WHERE user_id = ? AND expires_at > ?
+         ORDER BY token_hash = ? DESC, last_seen_at DESC"
+    ))
+    .bind(&current)
+    .bind(&user.id)
+    .bind(time::now())
+    .bind(&current)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(sessions))
+}
+
+/// Sign out every browser and device except this one.
+#[utoipa::path(post, path = "/me/sessions/sign-out-others", tag = "auth",
+    responses((status = 200, body = SessionsEnded), (status = 401, body = crate::error::ErrorBody)))]
+async fn end_other_sessions(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    headers: HeaderMap,
+) -> AppResult<Json<SessionsEnded>> {
+    let current = current_session_hash(&headers)?;
+    let ended = sqlx::query("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?")
+        .bind(&user.id)
+        .bind(&current)
+        .execute(&state.db)
+        .await?
+        .rows_affected();
+    Ok(Json(SessionsEnded { ended }))
+}
+
+/// Sign out one browser or device. Use `/auth/logout` for this one.
+#[utoipa::path(delete, path = "/me/sessions/{id}", tag = "auth", params(("id" = String, Path)),
+    responses((status = 204, description = "Signed out"), (status = 404, body = crate::error::ErrorBody)))]
+async fn end_session(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    headers: HeaderMap,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> AppResult<StatusCode> {
+    let current = current_session_hash(&headers)?;
+    if id.len() != SESSION_ID_LEN || !id.bytes().all(|b| b.is_ascii_hexdigit()) || current.starts_with(&id) {
+        return Err(AppError::NotFound);
+    }
+    let ended = sqlx::query("DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, ?) = ?")
+        .bind(&user.id)
+        .bind(SESSION_ID_LEN as i64)
+        .bind(&id)
+        .execute(&state.db)
+        .await?
+        .rows_affected();
+    if ended == 0 { Err(AppError::NotFound) } else { Ok(StatusCode::NO_CONTENT) }
 }

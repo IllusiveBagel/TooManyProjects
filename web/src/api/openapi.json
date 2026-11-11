@@ -2874,6 +2874,57 @@
         }
       }
     },
+    "/me/password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change your password. Checks the current one first, then signs out every\nother browser and device; this one stays signed in.",
+        "operationId": "change_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Changed; how many other sessions were signed out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionsEnded"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Wrong current password, or the new one is too short",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many wrong passwords; wait",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/me/preferences": {
       "patch": {
         "tags": [
@@ -2903,6 +2954,105 @@
             }
           },
           "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/sessions": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "The browsers and devices signed in to your account, most recent first.",
+        "operationId": "list_sessions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionInfo"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/sessions/sign-out-others": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out every browser and device except this one.",
+        "operationId": "end_other_sessions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionsEnded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/sessions/{id}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out one browser or device. Use `/auth/logout` for this one.",
+        "operationId": "end_session",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -6544,6 +6694,21 @@
           }
         }
       },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          }
+        }
+      },
       "ChecklistItem": {
         "type": "object",
         "required": [
@@ -9395,6 +9560,52 @@
           },
           "updated_at": {
             "type": "string"
+          }
+        }
+      },
+      "SessionInfo": {
+        "type": "object",
+        "description": "A browser or device signed in to this account.",
+        "required": [
+          "id",
+          "created_at",
+          "last_seen_at",
+          "current"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "The browser making this request."
+          },
+          "id": {
+            "type": "string",
+            "description": "A short handle for signing it out; not the session token."
+          },
+          "last_seen_at": {
+            "type": "string"
+          },
+          "user_agent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The browser it signed in from, as it described itself."
+          }
+        }
+      },
+      "SessionsEnded": {
+        "type": "object",
+        "required": [
+          "ended"
+        ],
+        "properties": {
+          "ended": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },

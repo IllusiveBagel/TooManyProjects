@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api, unwrap, type CreatedInvite, type Invite } from "../api/client";
-import { useLogout, useMe, useUpdatePreferences } from "../auth/queries";
+import { useMe, useUpdatePreferences } from "../auth/queries";
+import { AccountPanel } from "./AccountPanel";
 import { useImportNotes, useRescan } from "../notes/queries";
 import { AiAccessPanel } from "./AiAccessPanel";
 import { SharingPanel } from "./SharingPanel";
@@ -144,24 +145,6 @@ function NotesPanel() {
             </Button>
           </div>
         </form>
-      </div>
-    </Panel>
-  );
-}
-
-function AccountPanel() {
-  const me = useMe();
-  const logout = useLogout();
-  return (
-    <Panel title="Account">
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex-1">
-          <p className="font-bold">{me.name}</p>
-          <p className="text-text-quiet font-mono text-[13px]">{me.email}</p>
-        </div>
-        <Button type="button" onClick={() => logout.mutate()} disabled={logout.isPending}>
-          Sign out
-        </Button>
       </div>
     </Panel>
   );

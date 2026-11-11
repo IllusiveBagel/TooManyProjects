@@ -182,7 +182,8 @@ pub(crate) async fn import_rows(
     if body.len() as i64 > MAX_ROWS {
         return Err(AppError::BadRequest("too_many_rows", "A database can have up to 10,000 rows.".into()));
     }
-    let header: Vec<String> = header.iter().take(60).cloned().collect();
+    // Our own exports escape formula-like cells; take that back off.
+    let header: Vec<String> = header.iter().take(60).map(|h| csv::unescape_formula(h).to_string()).collect();
     let db = insert_database(conn, project_id, name).await?;
 
     let mut columns: Vec<Column> = vec![];
@@ -199,7 +200,8 @@ pub(crate) async fn import_rows(
             n += 1;
         }
         seen.push(col_name.to_lowercase());
-        let cells: Vec<&str> = body.iter().map(|r| r.get(i).map(String::as_str).unwrap_or("")).collect();
+        let cells: Vec<&str> =
+            body.iter().map(|r| r.get(i).map(|s| csv::unescape_formula(s)).unwrap_or("")).collect();
         let (kind, options) = if i == 0 {
             ("text", ColumnOptions::default())
         } else {
@@ -238,7 +240,7 @@ pub(crate) async fn import_rows(
     for r in body {
         let mut values = Map::new();
         for (i, column) in columns.iter().enumerate() {
-            let raw = r.get(i).map(|s| s.trim()).unwrap_or("");
+            let raw = r.get(i).map(|s| csv::unescape_formula(s).trim()).unwrap_or("");
             if raw.is_empty() {
                 continue;
             }
