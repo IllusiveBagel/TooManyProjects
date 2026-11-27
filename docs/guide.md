@@ -11,6 +11,7 @@ How each part of **too many projects** works. For installing it, see the
 - [Notes](#notes)
 - [Sharing](#sharing)
 - [Project databases](#project-databases)
+- [Whiteboards](#whiteboards)
 - [Parts and the Shopping list](#parts-and-the-shopping-list)
 - [AI access (MCP)](#ai-access-mcp)
 - [Put it online with HTTPS](#put-it-online-with-https)
@@ -319,6 +320,39 @@ an episode tracker or a budget.
   one markdown file per row.
 - **Limits:** 50 databases a project, 60 columns, 20 views and 10,000 rows a
   database.
+
+## Whiteboards
+
+Each project has a **Whiteboards** tab for working things out: a wiring plan,
+an episode outline, a layout. A project can have up to 100 boards.
+
+- **Tools** (desktop keys in brackets): Select (V), Move around (H), Box (R),
+  Ellipse (O), Diamond (D), Arrow (A), Line (L), Pen (P), Text (T), Sticky note
+  (S), Photo (I) and Eraser (E). Drag to draw a shape, or click for one at its
+  usual size; hold Shift for a square.
+- **Arrows join shapes:** start an arrow on a shape and let go on another, and
+  it stays joined when either moves. Select an arrow to drag its ends, add a
+  **Label**, or make it **Dashed**.
+- **Words:** double-click a shape, sticky note or text to type in it (or press
+  Enter with it selected); double-click empty board for new text.
+- **Style:** pick ink or one of the theme's eight colours, and None, Tint or
+  Solid fill for shapes. Text comes in four sizes and a handwritten look.
+- **Photos:** use the Photo tool, paste one, or drop it on the board. They are
+  saved to the project's Photos too.
+- **Moving around:** scroll to pan, Ctrl + scroll (or pinch on a trackpad) to
+  zoom, Space + drag to pan, Shift+1 to fit the board.
+- **Other keys:** Ctrl+Z and Ctrl+Shift+Z undo and redo, Ctrl+C / X / V copy,
+  cut and paste, Ctrl+D duplicates, `]` and `[` bring to front or send to back,
+  arrow keys nudge, Delete removes.
+- **Saving and sharing:** every change saves itself a moment later, one
+  element at a time, so two people drawing on different things never overwrite
+  each other. People the project is shared with as editors draw too; viewers
+  look. Everyone sees each other's named cursors.
+- **On a phone:** a board opens full screen, with the tools along the bottom.
+  One finger draws, two fingers pan and pinch to zoom; with Select, one finger
+  on empty board moves around.
+- **Export:** **⋯ More → Download PNG** or **Download SVG** saves a copy with
+  the theme's colours and fonts built in.
 
 ## Project templates
 

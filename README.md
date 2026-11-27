@@ -108,6 +108,9 @@ And the rest:
 - **📷 Photos and files.** Snap progress from your phone onto a task or a log
   entry, drop in PDFs, STLs and receipts, and read each project's **Photos**
   tab as a build log, week by week. Files stay on your own disk.
+- **🖍️ Whiteboards.** Boxes, arrows that stay joined, sticky notes, text, a
+  pen and photos, for wiring plans and episode outlines. Saves as you draw,
+  shows who else is on the board, and works with a finger on a phone.
 - **🤝 Sharing.** Invite-only accounts. Share one project (and what it
   spawns) or everything, as *Can edit* or *View only*, and assign tasks to
   each other.
@@ -200,7 +203,7 @@ list of tools, resources and prompts.
 
 ## Documentation
 
-- **[User guide](docs/guide.md):** boards, calendar, notes, photos and files, sharing, databases, AI access
+- **[User guide](docs/guide.md):** boards, calendar, notes, photos and files, sharing, databases, whiteboards, AI access
   and theming, in detail.
 - **[Development](docs/development.md):** running it locally, the checks CI
   runs, the code layout, and how releases are made.
