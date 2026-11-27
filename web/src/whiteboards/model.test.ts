@@ -21,7 +21,7 @@ const box = (id: string, x: number, y: number, z = 0): ShapeEl => ({ id, kind: "
 const arrow = (id: string, from?: string, to?: string): ArrowEl => ({ id, kind: "arrow", a: [0, 0], b: [10, 10], from, to, head: true, color: "ink", z: 5 });
 const server = (e: El, version: number, deleted = false): ServerElement => {
   const { id, kind, ...data } = e;
-  return { id, kind, version, deleted, data: data as ServerElement["data"], updated_at: "", updated_by_name: null };
+  return { id, kind, version, deleted, data: data as unknown as ServerElement["data"], updated_at: "", updated_by_name: null };
 };
 
 describe("geometry", () => {
