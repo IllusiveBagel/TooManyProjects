@@ -74,7 +74,7 @@ export function AppShell() {
   const inCalendar = pathname.startsWith("/calendar");
   return (
     <div className="flex h-dvh flex-col">
-      <header className="border-rule bg-surface flex items-center gap-x-6 border-x-0 border-t-0 px-4 py-2.5 sm:px-5">
+      <header className="border-rule bg-surface flex items-center gap-x-2 sm:gap-x-6 border-x-0 border-t-0 px-4 py-2.5 sm:px-5">
         <NavLink to="/" aria-label="Canvas" className="shrink-0">
           <Wordmark count={count} />
         </NavLink>

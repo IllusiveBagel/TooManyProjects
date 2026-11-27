@@ -4952,6 +4952,119 @@
         }
       }
     },
+    "/projects/{id}/whiteboards": {
+      "get": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "A project's whiteboards, in order.",
+        "operationId": "list_whiteboards",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Whiteboard"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Start a new, empty whiteboard at the end of the project's list.",
+        "operationId": "create_whiteboard",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWhiteboardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Whiteboard"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/quick-add": {
       "post": {
         "tags": [
@@ -6328,6 +6441,335 @@
           }
         }
       }
+    },
+    "/whiteboards/{id}": {
+      "get": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "One whiteboard (without its elements).",
+        "operationId": "get_whiteboard",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Whiteboard"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Delete a whiteboard and everything on it. Photos stay with the project.",
+        "operationId": "delete_whiteboard",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Rename a whiteboard or move it in the project's list.",
+        "operationId": "update_whiteboard",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWhiteboardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Whiteboard"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whiteboards/{id}/cursor": {
+      "put": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Say where your pointer is on the board, so others see it. Viewers count\ntoo. Forgotten after 20 seconds without a move.",
+        "operationId": "set_cursor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CursorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whiteboards/{id}/elements": {
+      "get": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Everything on a board, or with `since` only what changed after that save\n(deleted elements included, so you can take them off). Also says where\neveryone else on the board is pointing.",
+        "operationId": "get_elements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Only what changed after this save, deleted elements included.",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardElements"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Save new, changed and deleted elements. Each wins unless the server\nalready has a higher version of it; those come back in `rejected`.",
+        "operationId": "save_elements",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveElementsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveElementsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6681,6 +7123,35 @@
                 "description": "The signed-in person, if any."
               }
             ]
+          }
+        }
+      },
+      "BoardElements": {
+        "type": "object",
+        "description": "A board's elements, or what changed on it.",
+        "required": [
+          "seq",
+          "elements",
+          "cursors"
+        ],
+        "properties": {
+          "cursors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Cursor"
+            },
+            "description": "Where everyone else on the board is pointing."
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Element"
+            }
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Ask with this as `since` next time."
           }
         }
       },
@@ -7853,6 +8324,17 @@
           }
         }
       },
+      "CreateWhiteboardRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "CreatedInvite": {
         "type": "object",
         "required": [
@@ -7889,6 +8371,50 @@
           },
           "token": {
             "$ref": "#/components/schemas/ApiToken"
+          }
+        }
+      },
+      "Cursor": {
+        "type": "object",
+        "description": "Someone else looking at the board.",
+        "required": [
+          "user_id",
+          "name",
+          "x",
+          "y"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number",
+            "format": "double",
+            "description": "Board coordinates."
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "CursorRequest": {
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
           }
         }
       },
@@ -8041,6 +8567,79 @@
             "items": {
               "$ref": "#/components/schemas/View"
             }
+          }
+        }
+      },
+      "Element": {
+        "type": "object",
+        "description": "One thing on a board.",
+        "required": [
+          "id",
+          "kind",
+          "version",
+          "deleted",
+          "data",
+          "updated_at"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Everything else about it: where it is, colour, words. Empty when deleted."
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Removed. Only sent to someone asking for changes `since` a save."
+          },
+          "id": {
+            "type": "string",
+            "description": "Chosen by whoever drew it."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`box`, `ellipse`, `diamond`, `sticky`, `text`, `arrow`, `pen` or `image`."
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Counted up with each change; the higher version wins."
+          }
+        }
+      },
+      "ElementChange": {
+        "type": "object",
+        "description": "A new or changed element.",
+        "required": [
+          "id",
+          "kind",
+          "version"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "The whole element apart from id, kind and version. Ignored when deleted."
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "One more than the version it was changed from (1 when new)."
           }
         }
       },
@@ -9784,6 +10383,41 @@
           }
         }
       },
+      "SaveElementsRequest": {
+        "type": "object",
+        "required": [
+          "elements"
+        ],
+        "properties": {
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElementChange"
+            }
+          }
+        }
+      },
+      "SaveElementsResponse": {
+        "type": "object",
+        "required": [
+          "seq",
+          "rejected"
+        ],
+        "properties": {
+          "rejected": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Element"
+            },
+            "description": "Changes that lost to a newer version someone else saved, as the\nserver has them now. Show these instead."
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The board's save number after this one."
+          }
+        }
+      },
       "SaveNodesRequest": {
         "type": "object",
         "properties": {
@@ -11087,6 +11721,24 @@
           }
         }
       },
+      "UpdateWhiteboardRequest": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Move it after this board; `null` for first."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "UploadForm": {
         "type": "object",
         "description": "One file to upload.",
@@ -11339,6 +11991,61 @@
             "description": "The Monday the week starts on, `YYYY-MM-DD`."
           }
         }
+      },
+      "Whiteboard": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "title",
+          "position",
+          "element_count",
+          "seq",
+          "created_at",
+          "updated_at",
+          "can_edit"
+        ],
+        "properties": {
+          "can_edit": {
+            "type": "boolean",
+            "description": "You may draw on it (you own or edit the project)."
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "element_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Elements on it now."
+          },
+          "id": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Goes up with every save."
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "updated_by_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who saved it last. Missing when their account is gone."
+          }
+        }
       }
     }
   },
@@ -11386,6 +12093,10 @@
     {
       "name": "databases",
       "description": "Project databases: columns, rows, views, import and export"
+    },
+    {
+      "name": "whiteboards",
+      "description": "Whiteboards: shapes, arrows, sticky notes and drawing, saved by element"
     },
     {
       "name": "today",

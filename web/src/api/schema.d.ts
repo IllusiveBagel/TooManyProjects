@@ -1401,6 +1401,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{id}/whiteboards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's whiteboards, in order. */
+        get: operations["list_whiteboards"];
+        put?: never;
+        /** Start a new, empty whiteboard at the end of the project's list. */
+        post: operations["create_whiteboard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/quick-add": {
         parameters: {
             query?: never;
@@ -1810,6 +1828,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/whiteboards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One whiteboard (without its elements). */
+        get: operations["get_whiteboard"];
+        put?: never;
+        post?: never;
+        /** Delete a whiteboard and everything on it. Photos stay with the project. */
+        delete: operations["delete_whiteboard"];
+        options?: never;
+        head?: never;
+        /** Rename a whiteboard or move it in the project's list. */
+        patch: operations["update_whiteboard"];
+        trace?: never;
+    };
+    "/whiteboards/{id}/cursor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Say where your pointer is on the board, so others see it. Viewers count
+         *     too. Forgotten after 20 seconds without a move.
+         */
+        put: operations["set_cursor"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/whiteboards/{id}/elements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything on a board, or with `since` only what changed after that save
+         *     (deleted elements included, so you can take them off). Also says where
+         *     everyone else on the board is pointing.
+         */
+        get: operations["get_elements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Save new, changed and deleted elements. Each wins unless the server
+         *     already has a higher version of it; those come back in `rejected`.
+         */
+        patch: operations["save_elements"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1915,6 +1997,17 @@ export interface components {
             /** @description True until the owner account exists. The web app shows setup instead of login. */
             needs_setup: boolean;
             user?: null | components["schemas"]["User"];
+        };
+        /** @description A board's elements, or what changed on it. */
+        BoardElements: {
+            /** @description Where everyone else on the board is pointing. */
+            cursors: components["schemas"]["Cursor"][];
+            elements: components["schemas"]["Element"][];
+            /**
+             * Format: int64
+             * @description Ask with this as `since` next time.
+             */
+            seq: number;
         };
         CalendarEvent: {
             /** @description You may change or delete it. */
@@ -2294,6 +2387,9 @@ export interface components {
             kind: string;
             name: string;
         };
+        CreateWhiteboardRequest: {
+            title: string;
+        };
         CreatedInvite: {
             invite: components["schemas"]["Invite"];
             /** @description The raw token. It is never shown again. */
@@ -2305,6 +2401,24 @@ export interface components {
             /** @description Shown once. Only a hash is stored. */
             secret: string;
             token: components["schemas"]["ApiToken"];
+        };
+        /** @description Someone else looking at the board. */
+        Cursor: {
+            name: string;
+            user_id: string;
+            /**
+             * Format: double
+             * @description Board coordinates.
+             */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
+        CursorRequest: {
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         Dashboard: {
             /** @description The latest fifteen things that happened. */
@@ -2345,6 +2459,37 @@ export interface components {
             project_id: string;
             project_title: string;
             views: components["schemas"]["View"][];
+        };
+        /** @description One thing on a board. */
+        Element: {
+            /** @description Everything else about it: where it is, colour, words. Empty when deleted. */
+            data: Record<string, never>;
+            /** @description Removed. Only sent to someone asking for changes `since` a save. */
+            deleted: boolean;
+            /** @description Chosen by whoever drew it. */
+            id: string;
+            /** @description `box`, `ellipse`, `diamond`, `sticky`, `text`, `arrow`, `pen` or `image`. */
+            kind: string;
+            updated_at: string;
+            updated_by_name?: string | null;
+            /**
+             * Format: int64
+             * @description Counted up with each change; the higher version wins.
+             */
+            version: number;
+        };
+        /** @description A new or changed element. */
+        ElementChange: {
+            /** @description The whole element apart from id, kind and version. Ignored when deleted. */
+            data?: Record<string, never>;
+            deleted?: boolean;
+            id: string;
+            kind: string;
+            /**
+             * Format: int64
+             * @description One more than the version it was changed from (1 when new).
+             */
+            version: number;
         };
         /** @description Body of every error response. */
         ErrorBody: {
@@ -2895,6 +3040,21 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        SaveElementsRequest: {
+            elements: components["schemas"]["ElementChange"][];
+        };
+        SaveElementsResponse: {
+            /**
+             * @description Changes that lost to a newer version someone else saved, as the
+             *     server has them now. Show these instead.
+             */
+            rejected: components["schemas"]["Element"][];
+            /**
+             * Format: int64
+             * @description The board's save number after this one.
+             */
+            seq: number;
+        };
         SaveNodesRequest: {
             /** @description Groups moved or resized in the same drag. */
             groups?: components["schemas"]["GroupPosition"][];
@@ -3289,6 +3449,11 @@ export interface components {
             name?: string | null;
             pinned?: boolean | null;
         };
+        UpdateWhiteboardRequest: {
+            /** @description Move it after this board; `null` for first. */
+            after?: string | null;
+            title?: string | null;
+        };
         /** @description One file to upload. */
         UploadForm: {
             /** @description One or more files, each in a part named `file`. */
@@ -3369,6 +3534,28 @@ export interface components {
             done: number;
             /** @description The Monday the week starts on, `YYYY-MM-DD`. */
             week: string;
+        };
+        Whiteboard: {
+            /** @description You may draw on it (you own or edit the project). */
+            can_edit: boolean;
+            created_at: string;
+            /**
+             * Format: int64
+             * @description Elements on it now.
+             */
+            element_count: number;
+            id: string;
+            position: string;
+            project_id: string;
+            /**
+             * Format: int64
+             * @description Goes up with every save.
+             */
+            seq: number;
+            title: string;
+            updated_at: string;
+            /** @description Who saved it last. Missing when their account is gone. */
+            updated_by_name?: string | null;
         };
     };
     responses: never;
@@ -6790,6 +6977,84 @@ export interface operations {
             };
         };
     };
+    list_whiteboards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Whiteboard"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_whiteboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWhiteboardRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Whiteboard"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     quick_add: {
         parameters: {
             query?: never;
@@ -7760,6 +8025,239 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_whiteboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Whiteboard"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_whiteboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_whiteboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWhiteboardRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Whiteboard"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    set_cursor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CursorRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_elements: {
+        parameters: {
+            query?: {
+                /** @description Only what changed after this save, deleted elements included. */
+                since?: number | null;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardElements"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    save_elements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveElementsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveElementsResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
             404: {
                 headers: {

@@ -145,6 +145,12 @@ export function activityText(a: Pick<ActivityItem, "kind" | "payload">): string 
       return `planned a session for ${p.when}`;
     case "session.joined":
       return `is joining the session on ${p.when}`;
+    case "whiteboard.created":
+      return `started the ${quote(p)} whiteboard`;
+    case "whiteboard.renamed":
+      return `renamed the ${p.from} whiteboard to ${p.title}`;
+    case "whiteboard.deleted":
+      return `deleted the ${quote(p)} whiteboard`;
     case "link.deleted":
       return `removed a ${p.kind} link`;
     default:

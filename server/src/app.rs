@@ -32,6 +32,7 @@ use crate::{
     themes::{self, ThemeStore},
     today, tokens,
     updates::{self, UpdateChecker},
+    whiteboards,
 };
 
 #[derive(Clone)]
@@ -87,6 +88,7 @@ pub fn api() -> (Router<AppState>, utoipa::openapi::OpenApi) {
         .merge(crate::tls::router())
         .merge(oauth::api_router())
         .merge(updates::router())
+        .merge(whiteboards::router())
         .split_for_parts();
     // No licence is chosen yet; utoipa would otherwise emit an empty one from Cargo.toml.
     doc.info.license = None;

@@ -10,6 +10,7 @@ import { ConnectPage } from "./pages/ConnectPage";
 import { GlobalBoardPage } from "./pages/GlobalBoardPage";
 import { ProjectBoardPage } from "./pages/ProjectBoardPage";
 import { ProjectDataPage } from "./pages/ProjectDataPage";
+import { ProjectWhiteboardsPage } from "./pages/ProjectWhiteboardsPage";
 import { ProjectOverview } from "./pages/ProjectOverview";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectPhotosPage } from "./pages/ProjectPhotosPage";
@@ -84,6 +85,8 @@ const router = createBrowserRouter([
           { path: "notes", element: <ProjectNotesPage /> },
           { path: "data", element: <ProjectDataPage /> },
           { path: "data/:dbId", element: <ProjectDataPage /> },
+          { path: "whiteboards", element: <ProjectWhiteboardsPage /> },
+          { path: "whiteboards/:boardId", element: <ProjectWhiteboardsPage /> },
         ],
       },
       {
