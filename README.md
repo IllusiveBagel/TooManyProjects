@@ -27,11 +27,21 @@ into a set of Blender animations), the new card is joined to its parent with an
 arrow, so you can see how everything you're doing fits together.
 
 Click into any card for a proper dashboard: tasks, a kanban board, notes,
-and tables of your own. It runs on your server as a single Docker container,
+tables of your own, photos and whiteboards. A **Today** page pulls together
+what to touch next across all of it. It runs on your server as a single Docker container,
 keeps your notes as plain markdown files, and lets an AI assistant read and
 update your projects through MCP.
 
 ## Features
+
+### ☀️ Today: what to touch next
+
+The app opens on **Today**: tasks in progress and blocked, what's due this
+week, tonight's work sessions, active projects that have gone quiet, and an
+**Inbox** of quick captures to file later. Press **Ctrl+K** to search
+projects, tasks, task logs, notes, database rows and whiteboards, or to jump
+straight to an action. **Alt+A** quick-adds a task, note or link from
+anywhere, and on Android you can share a link or photo straight into it.
 
 ### 🗺️ One canvas for everything
 
@@ -39,7 +49,8 @@ Projects are cards showing live progress, late tasks and last activity.
 Spawned projects hang off their parents, and *related* and *blocks* links show
 what depends on what. Draw labelled, coloured groups round related cards
 (electronics, cars, code) and drag a group to carry everything in it. Drag,
-zoom, and lay it out however your head works.
+zoom, and lay it out however your head works. The canvas is still there at
+`/`, one click from Today.
 
 <p align="center">
   <img src="docs/images/canvas.png" alt="The canvas: project cards joined by spawned, related and blocking links" width="100%">
@@ -56,8 +67,9 @@ zoom, and lay it out however your head works.
       <h3>📋 Boards, per project and global</h3>
       Each project gets its own kanban columns. The global board folds every
       project into <em>to do</em>, <em>in progress</em>, <em>blocked</em> and
-      <em>done</em>, filterable by project or a whole family of them. Every
-      task keeps a log of comments and links to the notes it taught you.
+      <em>done</em>, filterable by project or a whole family of them. Drag
+      columns to reorder them, and every task keeps a log of comments and
+      links to the notes it taught you.
     </td>
   </tr>
   <tr>
@@ -72,8 +84,8 @@ zoom, and lay it out however your head works.
     <td width="50%" valign="top">
       <h3>📝 A notes vault you own</h3>
       Notes are markdown files on disk, so Obsidian can open the same folder.
-      Wiki links, backlinks, tags, quick capture, and import from Obsidian or
-      Notion.
+      Wiki links, backlinks, tags, quick capture, spell check, and import
+      from Obsidian or Notion (export the whole vault as a zip, too).
     </td>
     <td width="50%" valign="top">
       <h3>🗃️ Databases inside projects</h3>
@@ -110,20 +122,33 @@ And the rest:
   tab as a build log, week by week. Files stay on your own disk.
 - **🖍️ Whiteboards.** Boxes, arrows that stay joined, sticky notes, text, a
   pen and photos, for wiring plans and episode outlines. Saves as you draw,
-  shows who else is on the board, and works with a finger on a phone.
+  shows who else is on the board, and works with a finger on a phone. Link
+  shapes to tasks, show a whole board inside a note, and download it as PNG
+  or SVG.
+- **🔩 Parts and a Shopping list.** Give a build a Parts database (Need →
+  Ordered → Shipped → Arrived → Fitted) and the Shopping list gathers
+  everything still to buy across every project, grouped by supplier with
+  totals. Tasks show when they're waiting on parts, and each project's
+  overview shows what it has cost so far.
+- **🧩 Project templates.** Start a project as Electronics / PCB, 3D print,
+  Car restoration, Video or Software, with the right columns, labels and a
+  Parts database ready. Save any project as a template of your own.
 - **🤝 Sharing.** Invite-only accounts. Share one project (and what it
   spawns) or everything, as *Can edit* or *View only*, and assign tasks to
-  each other.
+  each other. A friend can copy your canvas layout to start from, and you can
+  take someone off a single project without unsharing everything.
 - **🤖 AI assistants.** A built-in [MCP](https://modelcontextprotocol.io)
-  server gives Claude and other assistants a briefing on any project and your
-  calendar, and can create tasks, notes, rows and sessions. Connect Claude
-  by signing in: no tokens to copy.
+  server gives Claude and other assistants a briefing on any project, your
+  Today page and your calendar, and can create tasks, notes, rows, sessions
+  and even whiteboard sketches. Connect Claude by signing in: no tokens to
+  copy.
 - **📱 Works on your phone.** Every screen has a phone layout with bottom tabs
   and full-screen drawers.
 - **🎨 Themeable.** Every colour, font and shadow comes from one theme file.
   The default *Workshop* theme has dark and light *Paper* modes.
 - **📦 Easy to run and back up.** One container, SQLite, no external services.
-  Everything lives in one `/data` folder.
+  Everything lives in one `/data` folder. It serves HTTPS on your home network
+  with its own certificate, and tells the owner when a new release is out.
 
 <p align="center">
   <img src="docs/images/phone-overview.png" alt="A project's overview on a phone" width="30%">
@@ -196,15 +221,21 @@ it needs a public `https://` address
 still there for scripts.
 
 Your assistant can then list and search projects, pull a full briefing on one,
-read notes and a task's log, query databases and, with read-write access, add
-tasks, comments, notes and rows or spawn new projects. Anything it changes is marked *via AI* in the
+read your Today page, the calendar and the week in review, read notes, a
+task's log and its photos, query databases, check the shopping list and look
+at whiteboards. With read-write access it can also add tasks, comments, notes
+and rows, update rows and board columns, move parts along, plan time, draw on
+a whiteboard, attach files it made, and create or spawn projects (from a
+template if you like). Anything it changes is marked *via AI* in the
 project's activity. The [user guide](docs/guide.md#ai-access-mcp) has the full
 list of tools, resources and prompts.
 
 ## Documentation
 
-- **[User guide](docs/guide.md):** boards, calendar, notes, photos and files, sharing, databases, whiteboards, AI access
-  and theming, in detail.
+- **[User guide](docs/guide.md):** Today, search and quick add, canvas
+  groups, boards, calendar, notes, photos and files, sharing, databases,
+  whiteboards, templates, parts and the Shopping list, AI access, HTTPS and
+  theming, in detail.
 - **[Development](docs/development.md):** running it locally, the checks CI
   runs, the code layout, and how releases are made.
 
