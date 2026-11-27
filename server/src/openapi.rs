@@ -19,6 +19,7 @@ use utoipa::OpenApi;
         (name = "notes", description = "Markdown notes in your vault, search, backlinks, import and export"),
         (name = "templates", description = "Project templates: start from one, save a project as one"),
         (name = "databases", description = "Project databases: columns, rows, views, import and export"),
+        (name = "whiteboards", description = "Whiteboards: shapes, arrows, sticky notes and drawing, saved by element"),
         (name = "today", description = "The Today screen: in progress, blocked, due, sessions, gone quiet and the Inbox"),
         (name = "search", description = "One search over projects, tasks, comments, notes and database rows"),
         (name = "capture", description = "Quick add, filing the Inbox, and link previews"),

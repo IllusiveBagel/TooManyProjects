@@ -34,6 +34,7 @@ pub mod tls;
 pub mod today;
 pub mod tokens;
 pub mod updates;
+pub mod whiteboards;
 
 pub use app::{AppState, build_router};
 pub use config::Config;
