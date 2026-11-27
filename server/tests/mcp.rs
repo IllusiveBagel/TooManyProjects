@@ -1175,3 +1175,106 @@ async fn updates_any_cell_on_a_database_row() {
             .await;
     assert!(err && out.contains("no row called Hoses"), "{out}");
 }
+
+#[tokio::test]
+async fn reads_and_draws_on_whiteboards() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let car =
+        app.call("POST", "/api/v1/projects", Some(&me), Some(json!({"title": "Beetle"}))).await.body["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+    let task = app
+        .call(
+            "POST",
+            &format!("/api/v1/projects/{car}/tasks"),
+            Some(&me),
+            Some(json!({"title": "Order fuse box"})),
+        )
+        .await
+        .body;
+    let task_id = task["id"].as_str().unwrap().to_string();
+    let number = task["number"].as_i64().unwrap();
+
+    let read = make_token(&app, &me, "read").await;
+    initialize(&app, &read).await;
+    let (err, out) = tool(&app, &read, "get_whiteboard", json!({"board": ""})).await;
+    assert!(!err, "{out}");
+    assert!(out.contains("No whiteboards"), "{out}");
+    let (err, out) = tool(&app, &read, "draw_on_whiteboard", json!({"board": "Wiring", "project": "Beetle", "create": true, "add": [{"kind": "box", "text": "x"}]})).await;
+    assert!(err && out.contains("read-only"), "{out}");
+
+    let write = make_token(&app, &me, "write").await;
+    initialize(&app, &write).await;
+    // Unknown board without create: say so.
+    let (err, out) = tool(
+        &app,
+        &write,
+        "draw_on_whiteboard",
+        json!({"board": "Wiring", "add": [{"kind": "box", "text": "x"}]}),
+    )
+    .await;
+    assert!(err && out.contains("No whiteboard called Wiring"), "{out}");
+
+    let (err, out) = tool(
+        &app,
+        &write,
+        "draw_on_whiteboard",
+        json!({
+            "board": "Wiring", "project": "Beetle", "create": true,
+            "add": [
+                {"id": "bat", "kind": "box", "text": "Battery", "color": "slot-1"},
+                {"kind": "box", "text": "Fuse box\n10 way", "task": format!("T-{number}")},
+                {"kind": "arrow", "from": "bat", "to": "fuse box", "label": "6 mm²"},
+                {"kind": "sticky", "text": "Room in the loom?"},
+            ]
+        }),
+    )
+    .await;
+    assert!(!err, "{out}");
+    assert!(out.contains("added box “Battery” [bat]"), "{out}");
+
+    let (err, out) = tool(&app, &write, "get_whiteboard", json!({"board": "wiring"})).await;
+    assert!(!err, "{out}");
+    assert!(out.contains("# Wiring (Beetle)"), "{out}");
+    assert!(out.contains("via AI"), "{out}");
+    assert!(out.contains(&format!("stands for task T-{number}")), "{out}");
+    assert!(out.contains("“Battery” [bat] → “Fuse box / 10 way”"), "{out}");
+    assert!(out.contains("labelled “6 mm²”"), "{out}");
+    assert!(out.contains("Room in the loom?"), "{out}");
+
+    // The task finds its board; search finds the words.
+    let boards = app.call("GET", &format!("/api/v1/tasks/{task_id}/whiteboards"), Some(&me), None).await;
+    assert_eq!(boards.body[0]["title"], "Wiring");
+    assert_eq!(boards.body[0]["updated_via"], "ai");
+    let found = app.call("GET", "/api/v1/search?q=loom", Some(&me), None).await;
+    let hit = found.body.as_array().unwrap().iter().find(|h| h["kind"] == "whiteboard").expect("board hit");
+    assert_eq!(hit["title"], "Wiring");
+    assert_eq!(hit["snippet"], "Room in the [loom]?");
+
+    // Change and delete by words; arrows let go of what's removed.
+    let (err, out) = tool(
+        &app,
+        &write,
+        "draw_on_whiteboard",
+        json!({"board": "Wiring", "update": [{"id": "Battery", "color": "slot-3", "text": "Battery 12 V"}], "delete": ["Fuse box"]}),
+    )
+    .await;
+    assert!(!err, "{out}");
+    let (_, out) = tool(&app, &write, "get_whiteboard", json!({"board": "Wiring"})).await;
+    assert!(out.contains("“Battery 12 V” at") && out.contains("slot-3"), "{out}");
+    assert!(out.contains("→ a loose end"), "{out}");
+    assert!(!out.contains("Fuse box"), "{out}");
+    let boards = app.call("GET", &format!("/api/v1/tasks/{task_id}/whiteboards"), Some(&me), None).await;
+    assert_eq!(boards.body, json!([]));
+
+    let (err, out) = tool(
+        &app,
+        &write,
+        "draw_on_whiteboard",
+        json!({"board": "Wiring", "add": [{"kind": "box", "color": "pink"}]}),
+    )
+    .await;
+    assert!(err && out.contains("Colours are"), "{out}");
+}

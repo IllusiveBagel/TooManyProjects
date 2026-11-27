@@ -339,6 +339,15 @@ an episode outline, a layout. A project can have up to 100 boards.
   Solid fill for shapes. Text comes in four sizes and a handwritten look.
 - **Photos:** use the Photo tool, paste one, or drop it on the board. They are
   saved to the project's Photos too.
+- **Tasks:** select a shape and press **Link task** to say it stands for one of
+  the project's tasks. It gets a chip like `T-14`; click the chip to open the
+  task, and the task's drawer lists the boards it's on.
+- **In notes:** `![[Wiring plan]]` on its own line shows the whole board in
+  the note, with a link to open it; type `/whiteboard` in the editor to pick
+  one. **Search** (Ctrl+K) finds boards by name and by the words on them.
+- **AI:** assistants connected over MCP can read a board with
+  `get_whiteboard` and add boxes, sticky notes, text and arrows with
+  `draw_on_whiteboard`. Their changes are marked *via AI*.
 - **Moving around:** scroll to pan, Ctrl + scroll (or pinch on a trackpad) to
   zoom, Space + drag to pan, Shift+1 to fit the board.
 - **Other keys:** Ctrl+Z and Ctrl+Shift+Z undo and redo, Ctrl+C / X / V copy,
@@ -473,7 +482,8 @@ if you let it, add to them.
   `weekly_review` (the week across every project: finished, overdue, due
   next, blocked and stuck tasks, and planned time),
   `query_database` (a saved view or a search as a markdown table, with
-  totals), `get_shopping_list` (parts to buy across projects, by supplier),
+  totals), `get_whiteboard` (everything on a board, with the arrows between
+  things), `get_shopping_list` (parts to buy across projects, by supplier),
   and with read-write access `mark_parts` (move parts to ordered, shipped,
   arrived or fitted), `quick_add` (a line into a project or
   the Inbox), `create_task`, `update_task` (move,
@@ -481,7 +491,8 @@ if you let it, add to them.
   `link_note_to_task`, `attach_file` (a file Claude made, such as a CSV or
   cut list, onto a project, task or note), `add_note` (optionally linked to a task), `append_to_note`,
   `add_row` (values by column name), `update_row` (change any cells on a
-  row, found by its title or id), `spawn_project`, `create_project`,
+  row, found by its title or id), `draw_on_whiteboard` (add, change or remove
+  shapes, sticky notes, text and arrows, or start a board), `spawn_project`, `create_project`,
   `update_project` (title, description, status, tags), `update_note` (a new
   title or body, or one `##` section replaced), `add_column` and
   `update_column` (rename, recategorise or move a board column) and

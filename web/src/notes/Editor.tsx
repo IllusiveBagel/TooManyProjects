@@ -14,6 +14,8 @@ export interface LinkTargets {
   projects: string[];
   /** Database views to embed, as `Database#View`. */
   views?: string[];
+  /** Whiteboards to embed, by name. */
+  boards?: string[];
 }
 
 const theme = EditorView.theme({
@@ -85,23 +87,21 @@ function wikiCompletions(targets: () => LinkTargets) {
   };
 }
 
-/** `/database` (or any start of it) at the start of a line offers views to embed. */
+/** `/database` or `/whiteboard` (or any start of them) at the start of a line offers things to embed. */
 function slashCompletions(targets: () => LinkTargets) {
   return (ctx: CompletionContext) => {
     const line = ctx.state.doc.lineAt(ctx.pos);
     const before = line.text.slice(0, ctx.pos - line.from);
     const m = /^(\s*)\/([a-z ]*)$/i.exec(before);
-    if (!m || !"database view".startsWith(m[2]!.toLowerCase())) return null;
-    const views = targets().views ?? [];
-    return {
-      from: line.from + m[1]!.length,
-      options: views.map((v) => ({
-        label: `/database ${v.replace("#", " · ")}`,
-        detail: "embed",
-        apply: `![[${v}]]`,
-      })),
-      filter: false,
-    };
+    if (!m) return null;
+    const typed = m[2]!.toLowerCase();
+    const options = [];
+    if ("database view".startsWith(typed))
+      for (const v of targets().views ?? []) options.push({ label: `/database ${v.replace("#", " · ")}`, detail: "embed", apply: `![[${v}]]` });
+    if ("whiteboard".startsWith(typed))
+      for (const b of targets().boards ?? []) options.push({ label: `/whiteboard ${b}`, detail: "embed", apply: `![[${b}]]` });
+    if (!options.length) return null;
+    return { from: line.from + m[1]!.length, options, filter: false };
   };
 }
 

@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router";
 import { Modal } from "../components/Modal";
-import { Button, ErrorNote } from "../components/ui";
+import { Button, ErrorNote, ViaBadge } from "../components/ui";
 import { ago } from "../notes/format";
+import { useOpenTask } from "../tasks/TaskDrawer";
 import type { BoardDoc, SaveState } from "../whiteboards/doc";
 import { Editor } from "../whiteboards/Editor";
 import { downloadPng, downloadSvg } from "../whiteboards/export";
@@ -154,6 +155,7 @@ function DesktopBoard({
   creating: boolean;
 }) {
   const sync = useBoardSync(board.id, canEdit);
+  const [, openTask] = useOpenTask();
   const [menu, setMenu] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const update = useUpdateWhiteboard(projectId);
@@ -210,7 +212,7 @@ function DesktopBoard({
       {sync.error && !sync.doc.loaded ? (
         <div className="p-5"><ErrorNote error={new Error(sync.error)} /></div>
       ) : (
-        <Editor doc={sync.doc} rev={sync.rev} canEdit={canEdit} projectId={projectId} cursors={sync.cursors} shareCursor={sync.shareCursor} />
+        <Editor doc={sync.doc} rev={sync.rev} canEdit={canEdit} projectId={projectId} cursors={sync.cursors} shareCursor={sync.shareCursor} onOpenTask={openTask} />
       )}
       {deleting && <DeleteDialog board={board} projectId={projectId} onClose={() => setDeleting(false)} />}
     </>
@@ -219,6 +221,7 @@ function DesktopBoard({
 
 function PhoneBoard({ board, projectId, canEdit, onBack }: { board: Whiteboard; projectId: string; canEdit: boolean; onBack: () => void }) {
   const sync = useBoardSync(board.id, canEdit);
+  const navigate = useNavigate();
   const { doc } = sync;
   // The page under the board shouldn't scroll while it's open.
   useEffect(() => {
@@ -249,7 +252,7 @@ function PhoneBoard({ board, projectId, canEdit, onBack }: { board: Whiteboard; 
         {sync.error && !doc.loaded ? (
           <div className="p-4"><ErrorNote error={new Error(sync.error)} /></div>
         ) : (
-          <Editor doc={doc} rev={sync.rev} canEdit={canEdit} projectId={projectId} cursors={sync.cursors} shareCursor={sync.shareCursor} phone />
+          <Editor doc={doc} rev={sync.rev} canEdit={canEdit} projectId={projectId} cursors={sync.cursors} shareCursor={sync.shareCursor} phone onOpenTask={(id) => navigate(`/projects/${projectId}/whiteboards?task=${id}`)} />
         )}
       </div>
     </div>
@@ -269,6 +272,7 @@ function SaveStatus({ doc, board, error }: { doc: BoardDoc; board: Whiteboard; e
   return (
     <span className="label-mono text-text-quiet shrink-0 px-2 text-[10px]" role="status">
       {text}
+      {doc.state === "saved" && board.updated_via === "ai" && <ViaBadge via="ai" />}
     </span>
   );
 }
@@ -405,6 +409,7 @@ function BoardList({ boards, canEdit, onOpen, onNew, creating }: { boards: White
             <span className="label-mono text-text-quiet text-[10px]">
               Edited {ago(b.updated_at)}
               {b.updated_by_name && ` · ${b.updated_by_name}`}
+              <ViaBadge via={b.updated_via} />
             </span>
           </span>
         </button>

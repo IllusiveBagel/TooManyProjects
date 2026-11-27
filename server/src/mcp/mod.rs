@@ -3,6 +3,7 @@
 //! the same handlers as the web app, as the person who owns the token, so it
 //! can see and change exactly what they can.
 
+mod boards;
 pub mod brief;
 mod data;
 
@@ -459,6 +460,14 @@ pub struct UpdateRowArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct WhiteboardArgs {
+    /// The whiteboard's id, or its name (any case).
+    pub board: String,
+    /// The project it's in (id or title), when two boards share a name.
+    pub project: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct CalendarArgs {
     /// First day, YYYY-MM-DD. Default: today.
     pub from: Option<String>,
@@ -849,14 +858,15 @@ spawned another), each with a kanban board of tasks, plus a vault of markdown no
 (what is in progress, blocked, due, quiet or waiting in the Inbox), list_projects or search, then \
 get_project_context for a full briefing on one project. Capture a quick idea or link with quick_add. Notes link with [[Note title]] and \
 [[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database, add a row with add_row \
-and change any of its cells with update_row. Parts databases track \
+and change any of its cells with update_row. Projects also hold whiteboards (shapes, sticky notes, text and arrows that \
+join them): read one with get_whiteboard and add to or change it with draw_on_whiteboard. Parts databases track \
 parts to buy (Need, Ordered, Shipped, Arrived, Fitted); get_shopping_list lists them all by supplier and mark_parts moves them along. Tasks keep a log of \
 comments and can have notes, photos and files attached: read them with get_task, list a project's photos with \
 list_attachments and look at one with get_attachment, attach a file you made with attach_file, and log progress or lessons with \
 add_task_comment. For a weekly review, call weekly_review and suggest changes before making any. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
 (create_task, quick_add, update_task, add_task_comment, attach_file, link_note_to_task, add_note, append_to_note, update_note, \
-create_project, spawn_project, update_project, add_column, update_column, add_row, update_row, mark_parts, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
+create_project, spawn_project, update_project, add_column, update_column, add_row, update_row, draw_on_whiteboard, mark_parts, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
 
@@ -2002,6 +2012,65 @@ impl Mcp {
                 )
                 .await
             }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Read a project's whiteboard: every shape, sticky note and bit of text with its id, words, place and colour, and the arrows between them. Without a board name, lists the whiteboards you can see."
+    )]
+    async fn get_whiteboard(
+        &self,
+        Parameters(args): Parameters<WhiteboardArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = caller(&ctx)?.user;
+        reply(
+            async {
+                let mut conn = self.conn().await?;
+                if args.board.trim().is_empty() {
+                    let all = crate::whiteboards::all_visible(&mut conn, &user.id).await?;
+                    if all.is_empty() {
+                        return Ok("No whiteboards yet.".to_string());
+                    }
+                    return Ok(all
+                        .iter()
+                        .map(|b| {
+                            format!(
+                                "- {} ({}), {} things, id {}",
+                                b.title, b.project_title, b.element_count, b.id
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n"));
+                }
+                let board =
+                    boards::need_board(&mut conn, &user, &args.board, args.project.as_deref()).await?;
+                boards::describe(&mut conn, &board).await
+            }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Draw on a project's whiteboard: add boxes, ellipses, diamonds, sticky notes and text, join them with arrows (by id or by their words), change or remove what's there, and link a shape to a task (T-12). Things without a position go in rows below what's there. With create: true it makes the board in the given project first. Read the board with get_whiteboard before changing it. Needs read-write access."
+    )]
+    async fn draw_on_whiteboard(
+        &self,
+        Parameters(args): Parameters<boards::DrawArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let mut tx = self.state.db.begin().await?;
+                let out = boards::draw(&mut tx, &user, &args).await?;
+                tx.commit().await?;
+                Ok(out)
+            })
             .await,
         )
     }

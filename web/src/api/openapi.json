@@ -6059,6 +6059,50 @@
         }
       }
     },
+    "/tasks/{id}/whiteboards": {
+      "get": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Whiteboards with a shape that stands for this task.",
+        "operationId": "task_whiteboards",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Whiteboard"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/templates": {
       "get": {
         "tags": [
@@ -6435,6 +6479,30 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whiteboards": {
+      "get": {
+        "tags": [
+          "whiteboards"
+        ],
+        "summary": "Every whiteboard you can see, newest change first: for note embeds and pickers.",
+        "operationId": "list_all_whiteboards",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Whiteboard"
+                  }
                 }
               }
             }
@@ -10523,11 +10591,11 @@
           },
           "id": {
             "type": "string",
-            "description": "The project, task, comment, note or row id."
+            "description": "The project, task, comment, note, row or whiteboard id."
           },
           "kind": {
             "type": "string",
-            "description": "`project`, `task`, `comment`, `note` or `row`."
+            "description": "`project`, `task`, `comment`, `note`, `row` or `whiteboard`."
           },
           "project_color": {
             "type": [
@@ -12003,6 +12071,8 @@
           "seq",
           "created_at",
           "updated_at",
+          "updated_via",
+          "project_title",
           "can_edit"
         ],
         "properties": {
@@ -12027,6 +12097,10 @@
           "project_id": {
             "type": "string"
           },
+          "project_title": {
+            "type": "string",
+            "description": "The project's name."
+          },
           "seq": {
             "type": "integer",
             "format": "int64",
@@ -12044,6 +12118,10 @@
               "null"
             ],
             "description": "Who saved it last. Missing when their account is gone."
+          },
+          "updated_via": {
+            "type": "string",
+            "description": "`web`, or `ai` when an AI assistant made the last change."
           }
         }
       }

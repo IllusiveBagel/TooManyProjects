@@ -58,6 +58,8 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(list_whiteboards, create_whiteboard))
         .routes(routes!(get_whiteboard, update_whiteboard, delete_whiteboard))
         .routes(routes!(set_cursor))
+        .routes(routes!(list_all_whiteboards))
+        .routes(routes!(task_whiteboards))
         .merge(
             OpenApiRouter::new()
                 .routes(routes!(get_elements, save_elements))
@@ -82,6 +84,10 @@ pub struct Whiteboard {
     pub updated_at: String,
     /// Who saved it last. Missing when their account is gone.
     pub updated_by_name: Option<String>,
+    /// `web`, or `ai` when an AI assistant made the last change.
+    pub updated_via: String,
+    /// The project's name.
+    pub project_title: String,
     /// You may draw on it (you own or edit the project).
     pub can_edit: bool,
 }
@@ -97,26 +103,17 @@ struct BoardRow {
     created_at: String,
     updated_at: String,
     updated_by_name: Option<String>,
+    updated_via: String,
+    project_title: String,
 }
 
 const BOARD_SELECT: &str = "SELECT w.id, w.project_id, w.title, w.position, w.seq, w.created_at,
-        w.updated_at, u.name AS updated_by_name,
+        w.updated_at, u.name AS updated_by_name, w.updated_via, p.title AS project_title,
         (SELECT COUNT(*) FROM whiteboard_elements e WHERE e.board_id = w.id AND e.deleted = 0) AS element_count
-    FROM whiteboards w LEFT JOIN users u ON u.id = w.updated_by";
+    FROM whiteboards w JOIN projects p ON p.id = w.project_id LEFT JOIN users u ON u.id = w.updated_by";
 
 fn finish(r: BoardRow, project: &Project) -> Whiteboard {
-    Whiteboard {
-        id: r.id,
-        project_id: r.project_id,
-        title: r.title,
-        position: r.position,
-        element_count: r.element_count,
-        seq: r.seq,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        updated_by_name: r.updated_by_name,
-        can_edit: project.role != "viewer",
-    }
+    Whiteboard { can_edit: project.role != "viewer", ..finish_row(r) }
 }
 
 /// One thing on a board.
@@ -356,10 +353,11 @@ pub async fn apply_changes(
     let checked = changes.iter().map(check_change).collect::<AppResult<Vec<_>>>()?;
     let now = time::now();
     let seq: i64 = sqlx::query_scalar(
-        "UPDATE whiteboards SET seq = seq + 1, updated_at = ?, updated_by = ? WHERE id = ? RETURNING seq",
+        "UPDATE whiteboards SET seq = seq + 1, updated_at = ?, updated_by = ?, updated_via = ? WHERE id = ? RETURNING seq",
     )
     .bind(&now)
     .bind(user_id)
+    .bind(crate::projects::via())
     .bind(board_id)
     .fetch_one(&mut *conn)
     .await?;
@@ -471,6 +469,84 @@ async fn list_whiteboards(
     Ok(Json(rows.into_iter().map(|r| finish(r, &project)).collect()))
 }
 
+/// Every whiteboard you can see, newest change first: for note embeds and pickers.
+#[utoipa::path(get, path = "/whiteboards", tag = "whiteboards",
+    responses((status = 200, body = Vec<Whiteboard>)))]
+async fn list_all_whiteboards(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+) -> AppResult<Json<Vec<Whiteboard>>> {
+    let mut conn = state.db.acquire().await?;
+    Ok(Json(all_visible(&mut conn, &user.id).await?))
+}
+
+/// The boards `user_id` can see, newest change first.
+pub async fn all_visible(conn: &mut SqliteConnection, user_id: &str) -> AppResult<Vec<Whiteboard>> {
+    #[derive(FromRow)]
+    struct WithRole {
+        #[sqlx(flatten)]
+        board: BoardRow,
+        role: String,
+    }
+    let rows = sqlx::query_as::<_, WithRole>(sqlx::AssertSqlSafe(format!(
+        "{} JOIN project_access a ON a.project_id = w.project_id AND a.user_id = ?
+         ORDER BY w.updated_at DESC, w.id",
+        BOARD_SELECT.replace("SELECT w.id,", "SELECT a.role, w.id,")
+    )))
+    .bind(user_id)
+    .fetch_all(conn)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let can_edit = r.role != "viewer";
+            let mut b = finish_row(r.board);
+            b.can_edit = can_edit;
+            b
+        })
+        .collect())
+}
+
+fn finish_row(r: BoardRow) -> Whiteboard {
+    Whiteboard {
+        id: r.id,
+        project_id: r.project_id,
+        title: r.title,
+        position: r.position,
+        element_count: r.element_count,
+        seq: r.seq,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        updated_by_name: r.updated_by_name,
+        updated_via: r.updated_via,
+        project_title: r.project_title,
+        can_edit: false,
+    }
+}
+
+/// Whiteboards with a shape that stands for this task.
+#[utoipa::path(get, path = "/tasks/{id}/whiteboards", tag = "whiteboards", params(("id" = String, Path)),
+    responses((status = 200, body = Vec<Whiteboard>), (status = 404, body = crate::error::ErrorBody)))]
+async fn task_whiteboards(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(id): Path<String>,
+) -> AppResult<Json<Vec<Whiteboard>>> {
+    let mut conn = state.db.acquire().await?;
+    let task = crate::tasks::visible_task(&mut conn, &user.id, &id).await?;
+    let project = visible_project(&mut conn, &user.id, &task.project_id).await?;
+    let rows = sqlx::query_as::<_, BoardRow>(sqlx::AssertSqlSafe(format!(
+        "{BOARD_SELECT} WHERE w.project_id = ? AND EXISTS (SELECT 1 FROM whiteboard_elements e
+            WHERE e.board_id = w.id AND e.deleted = 0 AND json_extract(e.data, '$.task') = ?)
+         ORDER BY w.position, w.id"
+    )))
+    .bind(&task.project_id)
+    .bind(&id)
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(Json(rows.into_iter().map(|r| finish(r, &project)).collect()))
+}
+
 /// Start a new, empty whiteboard at the end of the project's list.
 #[utoipa::path(post, path = "/projects/{id}/whiteboards", tag = "whiteboards", params(("id" = String, Path)),
     request_body = CreateWhiteboardRequest,
@@ -511,8 +587,8 @@ pub async fn create(
     let now = time::now();
     let position = position_last(conn, "whiteboards", "project_id", project_id).await?;
     sqlx::query(
-        "INSERT INTO whiteboards (id, project_id, title, position, created_by, created_at, updated_at, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO whiteboards (id, project_id, title, position, created_by, created_at, updated_at, updated_by, updated_via)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&board_id)
     .bind(project_id)
@@ -522,6 +598,7 @@ pub async fn create(
     .bind(&now)
     .bind(&now)
     .bind(user_id)
+    .bind(crate::projects::via())
     .execute(&mut *conn)
     .await?;
     sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?")

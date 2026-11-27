@@ -189,3 +189,16 @@ export function useBoardSync(boardId: string, canEdit: boolean) {
 
   return { doc, rev, cursors, error, shareCursor };
 }
+
+/** Boards with a shape that stands for this task. */
+export function useTaskWhiteboards(taskId: string) {
+  return useQuery({
+    queryKey: ["task-whiteboards", taskId],
+    queryFn: () => unwrap(api.GET("/tasks/{id}/whiteboards", { params: { path: { id: taskId } } })),
+  });
+}
+
+/** Every board you can see, for note embeds. */
+export function useAllWhiteboards(enabled = true) {
+  return useQuery({ queryKey: ["whiteboards", "all"], queryFn: () => unwrap(api.GET("/whiteboards")), enabled, staleTime: 30_000 });
+}

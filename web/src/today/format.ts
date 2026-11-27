@@ -87,6 +87,8 @@ export function hitPath(h: SearchHit): string {
       return `/notes/${h.id}`;
     case "row":
       return `/projects/${h.project_id}/data/${h.database_id}?row=${h.id}`;
+    case "whiteboard":
+      return `/projects/${h.project_id}/whiteboards/${h.id}`;
     default:
       return "/";
   }
@@ -97,7 +99,7 @@ export const FILTERS = [
   { id: "all", label: "All", kinds: null },
   { id: "tasks", label: "Tasks", kinds: ["task", "comment"] },
   { id: "notes", label: "Notes", kinds: ["note"] },
-  { id: "data", label: "Data", kinds: ["row"] },
+  { id: "data", label: "Data", kinds: ["row", "whiteboard"] },
   { id: "projects", label: "Projects", kinds: ["project"] },
 ] as const;
 export type FilterId = (typeof FILTERS)[number]["id"];
@@ -113,7 +115,7 @@ export function filterHits(hits: SearchHit[], filter: FilterId): SearchHit[] {
 export function groupHits(hits: SearchHit[]): { title: string; hits: SearchHit[] }[] {
   const groups = [
     { title: "Tasks", hits: hits.filter((h) => h.kind === "task" || h.kind === "comment") },
-    { title: "Notes and data", hits: hits.filter((h) => h.kind === "note" || h.kind === "row") },
+    { title: "Notes and data", hits: hits.filter((h) => h.kind === "note" || h.kind === "row" || h.kind === "whiteboard") },
     { title: "Projects", hits: hits.filter((h) => h.kind === "project") },
   ];
   return groups.filter((g) => g.hits.length > 0);

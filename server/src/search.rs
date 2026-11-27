@@ -34,9 +34,9 @@ pub struct SearchQuery {
 /// One thing that matched.
 #[derive(Clone, Debug, Serialize, ToSchema)]
 pub struct SearchHit {
-    /// `project`, `task`, `comment`, `note` or `row`.
+    /// `project`, `task`, `comment`, `note`, `row` or `whiteboard`.
     pub kind: String,
-    /// The project, task, comment, note or row id.
+    /// The project, task, comment, note, row or whiteboard id.
     pub id: String,
     /// The name to show: a title, or for a comment the words around the match.
     pub title: String,
@@ -122,6 +122,7 @@ pub async fn run(state: &AppState, user: &User, q: &str, limit: i64) -> AppResul
         });
     }
     out.extend(rows(&mut conn, &user.id, &like, limit).await?);
+    out.extend(whiteboards(&mut conn, &user.id, q, &like, limit).await?);
     out.extend(projects(&mut conn, &user.id, &like, limit).await?);
     Ok(out)
 }
@@ -255,6 +256,70 @@ async fn rows(
             updated_at: at,
         })
         .collect())
+}
+
+type BoardHit = (String, String, Option<String>, String, String, String, String);
+
+/// Boards whose name, or the words on any shape, note or arrow, match.
+async fn whiteboards(
+    conn: &mut SqliteConnection,
+    user_id: &str,
+    q: &str,
+    like: &str,
+    limit: i64,
+) -> AppResult<Vec<SearchHit>> {
+    let found: Vec<BoardHit> = sqlx::query_as(
+        "SELECT w.id, w.title,
+            (SELECT COALESCE(json_extract(e.data, '$.text'), json_extract(e.data, '$.label'))
+               FROM whiteboard_elements e WHERE e.board_id = w.id AND e.deleted = 0
+                AND (json_extract(e.data, '$.text') LIKE ?2 ESCAPE '\\'
+                  OR json_extract(e.data, '$.label') LIKE ?2 ESCAPE '\\') LIMIT 1) AS hit,
+            p.id, p.title, p.color, w.updated_at
+         FROM whiteboards w JOIN projects p ON p.id = w.project_id
+         JOIN project_access a ON a.project_id = p.id AND a.user_id = ?1
+         WHERE w.title LIKE ?2 ESCAPE '\\' OR hit IS NOT NULL
+         ORDER BY w.title LIKE ?2 ESCAPE '\\' DESC, w.updated_at DESC
+         LIMIT ?3",
+    )
+    .bind(user_id)
+    .bind(like)
+    .bind(limit)
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(found
+        .into_iter()
+        .map(|(id, title, hit, pid, ptitle, pcolor, at)| SearchHit {
+            kind: "whiteboard".into(),
+            id,
+            title,
+            snippet: hit.map(|h| mark(&h.replace('\n', " "), q)),
+            project_id: Some(pid),
+            project_title: Some(ptitle),
+            project_color: Some(pcolor),
+            task_id: None,
+            task_number: None,
+            context: Some("Whiteboard".into()),
+            database_id: None,
+            done: false,
+            updated_at: at,
+        })
+        .collect())
+}
+
+/// `text` with `[` and `]` around the first place `q` appears, any case.
+fn mark(text: &str, q: &str) -> String {
+    let lower = text.to_lowercase();
+    match lower.find(&q.to_lowercase()) {
+        // Lowercasing can change byte lengths; only mark when it didn't.
+        Some(i)
+            if lower.len() == text.len()
+                && text.is_char_boundary(i)
+                && text.is_char_boundary(i + q.len()) =>
+        {
+            format!("{}[{}]{}", &text[..i], &text[i..i + q.len()], &text[i + q.len()..])
+        }
+        _ => text.to_string(),
+    }
 }
 
 type ProjectHit = (String, String, String, String, Option<String>, String);
