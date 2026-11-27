@@ -1685,7 +1685,7 @@ async fn create_row(
 #[utoipa::path(patch, path = "/db-rows/{id}", tag = "databases", params(("id" = String, Path)),
     request_body = UpdateRowRequest,
     responses((status = 200, body = Row), (status = 400, body = crate::error::ErrorBody)))]
-async fn update_row(
+pub(crate) async fn update_row(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(id): Path<String>,

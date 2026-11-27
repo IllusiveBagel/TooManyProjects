@@ -196,6 +196,10 @@ time.
   Ctrl K, a note opens rendered with an **Edit** toggle (Ctrl E) and autosave.
   Typing `[[` suggests notes, `[[@` suggests projects. Each project has a
   **Notes** tab listing its notes and the notes that mention it.
+- **Spell check:** the editor uses your browser's spell checker, so mistakes
+  get a red underline and right-click (or a long press on a phone) offers
+  fixes. Code, links, `[[wiki links]]`, `#tags` and front matter are skipped.
+  The language is your browser's; add more in its settings.
 - **Quick note:** Alt N anywhere (or **+ New** on the Notes screen on a
   phone) drops a note into the Inbox, or straight under a project.
 - **Import and export** (**Settings → Notes**): import a zipped Obsidian vault
@@ -442,7 +446,8 @@ if you let it, add to them.
   finish, reopen or edit by `T-12` or id), `add_task_comment`,
   `link_note_to_task`, `attach_file` (a file Claude made, such as a CSV or
   cut list, onto a project, task or note), `add_note` (optionally linked to a task), `append_to_note`,
-  `add_row` (values by column name), `spawn_project`, `create_project`,
+  `add_row` (values by column name), `update_row` (change any cells on a
+  row, found by its title or id), `spawn_project`, `create_project`,
   `update_project` (title, description, status, tags), `update_note` (a new
   title or body, or one `##` section replaced), `add_column` and
   `update_column` (rename, recategorise or move a board column) and

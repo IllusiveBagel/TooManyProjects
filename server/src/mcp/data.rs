@@ -1,15 +1,15 @@
-//! MCP access to project databases: read a view as a markdown table, add a row
-//! with values given by column name.
+//! MCP access to project databases: read a view as a markdown table, add or
+//! change a row with values given by column name.
 
 use std::collections::HashMap;
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 use sqlx::SqliteConnection;
 
 use super::{bad, find_project};
 use crate::{
     auth::User,
-    databases::{self, Column, CreateRowRequest, DatabaseRef, RelationTarget},
+    databases::{self, Column, CreateRowRequest, DatabaseRef, RelationTarget, UpdateRowRequest},
     error::{AppError, AppResult},
     projects::editable_project,
 };
@@ -146,15 +146,17 @@ pub(super) async fn query(
         out.push_str("No rows.\n");
         return Ok(out);
     }
+    // The row id comes last, for update_row when two rows share a title.
     out.push_str(&format!(
-        "| {} |\n",
+        "| {} | id |\n",
         shown.iter().map(|c| c.name.replace('|', "\\|")).collect::<Vec<_>>().join(" | ")
     ));
-    out.push_str(&format!("|{}\n", " --- |".repeat(shown.len())));
+    out.push_str(&format!("|{}\n", " --- |".repeat(shown.len() + 1)));
     for row in rows.iter().take(limit) {
         out.push_str(&format!(
-            "| {} |\n",
-            shown.iter().map(|c| cell(c, row)).collect::<Vec<_>>().join(" | ")
+            "| {} | {} |\n",
+            shown.iter().map(|c| cell(c, row)).collect::<Vec<_>>().join(" | "),
+            row.id
         ));
     }
     // Totals for number and currency columns, which is what people usually ask.
@@ -346,4 +348,110 @@ pub(super) async fn add_row(
         other => other,
     })?;
     Ok(format!("Added “{name}” to {} in {}.", d.name, d.project_title))
+}
+
+/// What `update_row` resolved: the row, and the change to make to it.
+pub(super) struct RowChange {
+    pub row_id: String,
+    pub summary: String,
+    pub request: UpdateRowRequest,
+}
+
+/// Find a row by id or by its title, and turn values keyed by column name
+/// into a change. `null` (or an empty list) clears a cell.
+pub(super) async fn row_change(
+    conn: &mut SqliteConnection,
+    user: &User,
+    database: &str,
+    project: Option<&str>,
+    row: &str,
+    input: &HashMap<String, Value>,
+) -> AppResult<RowChange> {
+    if input.is_empty() {
+        return Err(bad("no_changes", "Give at least one column to change in `values`."));
+    }
+    let d = find_database(conn, user, database, project).await?;
+    editable_project(conn, &user.id, &d.project_id).await?;
+    let columns = databases::columns_of(conn, &d.id).await?;
+    let title = columns.iter().find(|c| c.is_title);
+    let rows = databases::query_rows(conn, &user.id, &d.id, None, None).await?;
+    let title_of = |r: &databases::Row| title.map(|t| cell(t, r)).unwrap_or_default();
+    let key = row.trim();
+    let found = match rows.iter().find(|r| r.id == key) {
+        Some(r) => r,
+        None => {
+            let hits: Vec<&databases::Row> =
+                rows.iter().filter(|r| title_of(r).trim().eq_ignore_ascii_case(key)).collect();
+            match hits.as_slice() {
+                [one] => *one,
+                [] => {
+                    return Err(bad(
+                        "unknown_row",
+                        format!("{} has no row called {key}. Find it with query_database.", d.name),
+                    ));
+                }
+                many => {
+                    return Err(bad(
+                        "ambiguous_row",
+                        format!(
+                            "{} rows in {} are called {key}. Give one of their ids: {}.",
+                            many.len(),
+                            d.name,
+                            many.iter().map(|r| r.id.as_str()).collect::<Vec<_>>().join(", ")
+                        ),
+                    ));
+                }
+            }
+        }
+    };
+    let name = title_of(found);
+    let mut values = Map::new();
+    let mut relations = HashMap::new();
+    let mut changed = vec![];
+    // Column order, so the summary reads the same way every time.
+    let mut named: Vec<(&Column, &Value)> = vec![];
+    for (col, v) in input {
+        let column = columns
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(col.trim()) || c.id == *col)
+            .ok_or_else(|| {
+                bad(
+                    "invalid_column",
+                    format!(
+                        "{} has no column called {col}. Its columns: {}.",
+                        d.name,
+                        columns.iter().map(|c| c.name.as_str()).collect::<Vec<_>>().join(", ")
+                    ),
+                )
+            })?;
+        named.push((column, v));
+    }
+    named.sort_by_key(|(c, _)| columns.iter().position(|x| x.id == c.id));
+    for (column, v) in named {
+        let empty = v.is_null() || v.as_array().is_some_and(Vec::is_empty) || v.as_str() == Some("");
+        if column.kind == "relation" {
+            let targets =
+                if empty { vec![] } else { targets_for(conn, user, &d.project_id, column, v).await? };
+            relations.insert(column.id.clone(), targets);
+        } else {
+            let value = if empty { Value::Null } else { value_for(conn, &d.project_id, column, v).await? };
+            values.insert(column.id.clone(), value);
+        }
+        changed.push(column.name.clone());
+    }
+    Ok(RowChange {
+        row_id: found.id.clone(),
+        summary: format!(
+            "Changed {} on “{}” in {} ({}).",
+            changed.join(", "),
+            if name.is_empty() { "Untitled" } else { name.as_str() },
+            d.name,
+            d.project_title
+        ),
+        request: UpdateRowRequest {
+            values: (!values.is_empty()).then_some(values),
+            relations: (!relations.is_empty()).then_some(relations),
+            after_id: None,
+        },
+    })
 }

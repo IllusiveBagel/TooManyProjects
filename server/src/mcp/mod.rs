@@ -446,6 +446,19 @@ pub struct AddRowArgs {
 }
 
 #[derive(Deserialize, JsonSchema)]
+pub struct UpdateRowArgs {
+    /// Database id, or its name (any case).
+    pub database: String,
+    /// The project it's in (id or title), when two projects have databases with that name.
+    pub project: Option<String>,
+    /// The row: its id (the last column of query_database), or its title when no other row shares it.
+    pub row: String,
+    /// Only the columns to change, by name. Values as for add_row; null or "" clears a cell,
+    /// and a relation's list replaces its links.
+    pub values: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[derive(Deserialize, JsonSchema)]
 pub struct CalendarArgs {
     /// First day, YYYY-MM-DD. Default: today.
     pub from: Option<String>,
@@ -835,14 +848,15 @@ const INSTRUCTIONS: &str = "TooManyProjects holds the user's projects (cards on 
 spawned another), each with a kanban board of tasks, plus a vault of markdown notes. Start with get_today \
 (what is in progress, blocked, due, quiet or waiting in the Inbox), list_projects or search, then \
 get_project_context for a full briefing on one project. Capture a quick idea or link with quick_add. Notes link with [[Note title]] and \
-[[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database. Parts databases track \
+[[@Project title]]. Projects can hold databases (tables with typed columns): read one with query_database, add a row with add_row \
+and change any of its cells with update_row. Parts databases track \
 parts to buy (Need, Ordered, Shipped, Arrived, Fitted); get_shopping_list lists them all by supplier and mark_parts moves them along. Tasks keep a log of \
 comments and can have notes, photos and files attached: read them with get_task, list a project's photos with \
 list_attachments and look at one with get_attachment, attach a file you made with attach_file, and log progress or lessons with \
 add_task_comment. For a weekly review, call weekly_review and suggest changes before making any. A calendar holds work sessions on projects (which people a project is shared with can \
 join) and the user's private busy time: read it with get_calendar, add to it with plan_time. Write tools \
 (create_task, quick_add, update_task, add_task_comment, attach_file, link_note_to_task, add_note, append_to_note, update_note, \
-create_project, spawn_project, update_project, add_column, update_column, add_row, mark_parts, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
+create_project, spawn_project, update_project, add_column, update_column, add_row, update_row, mark_parts, plan_time) need read-write access, and everything they change shows in the project's history as done via AI. Prefer adding to \
 an existing note over making a near-duplicate. Projects other people have shared with the user are included; \
 a project shared as viewer can be read but not changed.";
 
@@ -2013,6 +2027,49 @@ impl Mcp {
                 tx.commit().await?;
                 Ok(out)
             }
+            .await,
+        )
+    }
+
+    #[tool(
+        description = "Change cells on one row of a project database: any column, by name (text, numbers, dates, selects, people, checkboxes, relations). Only the columns given change. Find the row by its title or its id from query_database. On a Parts database, changing Status fills in Ordered on and Arrived on, as mark_parts does. Needs read-write access."
+    )]
+    async fn update_row(
+        &self,
+        Parameters(args): Parameters<UpdateRowArgs>,
+        ctx: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let user = match writer(&ctx)? {
+            Ok(c) => c.user,
+            Err(r) => return Ok(r),
+        };
+        reply(
+            as_ai(async {
+                let change = {
+                    let mut conn = self.conn().await?;
+                    data::row_change(
+                        &mut conn,
+                        &user,
+                        &args.database,
+                        args.project.as_deref(),
+                        &args.row,
+                        &args.values,
+                    )
+                    .await?
+                };
+                let _row = crate::databases::update_row(
+                    State(self.state.clone()),
+                    CurrentUser(user.clone()),
+                    Path(change.row_id),
+                    Json(change.request),
+                )
+                .await
+                .map_err(|e| match e {
+                    AppError::BadRequest(code, msg) => bad(code, msg),
+                    other => other,
+                })?;
+                Ok(change.summary)
+            })
             .await,
         )
     }
