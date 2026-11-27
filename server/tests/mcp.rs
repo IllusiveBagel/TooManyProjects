@@ -1065,3 +1065,113 @@ async fn create_task_assigns_to_the_connection_owner_by_default() {
     assert_eq!(find(&tasks, "Unassigned")["assignee_id"], Value::Null);
     assert_eq!(find(&tasks, "By email")["assignee_name"], "Logan");
 }
+
+#[tokio::test]
+async fn updates_any_cell_on_a_database_row() {
+    let app = TestApp::new().await;
+    let me = app.setup_owner().await;
+    let car =
+        app.call("POST", "/api/v1/projects", Some(&me), Some(json!({"title": "Beetle"}))).await.body["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+    app.call(
+        "POST",
+        &format!("/api/v1/projects/{car}/tasks"),
+        Some(&me),
+        Some(json!({"title": "Fit brake lines"})),
+    )
+    .await;
+    let csv = "Part,Cost,Status,Supplier\r\nKit,42,To order,Heritage\r\nCalipers,118.5,Ordered,\r\nPads,30,Ordered,\r\nPads,12,To order,\r\n";
+    let (status, body) = app
+        .call_raw(
+            "POST",
+            &format!("/api/v1/projects/{car}/databases/import?name=Parts"),
+            &me,
+            "text/csv",
+            csv.into(),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let db: Value = serde_json::from_slice(&body).unwrap();
+    let db_id = db["database"]["id"].as_str().unwrap().to_string();
+    app.call(
+        "POST",
+        &format!("/api/v1/databases/{db_id}/columns"),
+        Some(&me),
+        Some(json!({"name": "For task", "kind": "relation", "options": {"target": "task"}})),
+    )
+    .await;
+
+    let read = make_token(&app, &me, "read").await;
+    initialize(&app, &read).await;
+    let (err, out) =
+        tool(&app, &read, "update_row", json!({"database": "Parts", "row": "Kit", "values": {"Cost": 40}}))
+            .await;
+    assert!(err && out.contains("read-only"), "{out}");
+
+    let write = make_token(&app, &me, "write").await;
+    // Any column, by name, in any case; relations by task number.
+    let (err, out) = tool(
+        &app,
+        &write,
+        "update_row",
+        json!({"database": "parts", "row": "kit", "values": {"supplier": "Just Kampers", "Cost": "39.5", "For task": "T-1"}}),
+    )
+    .await;
+    assert!(!err, "{out}");
+    assert_eq!(out, "Changed Cost, Supplier, For task on “Kit” in Parts (Beetle).");
+    let (_, table) = tool(&app, &read, "query_database", json!({"database": "Parts", "search": "kit"})).await;
+    assert!(table.contains("| Kit | 39.5 | To order | Just Kampers | T-1 Fit brake lines |"), "{table}");
+
+    // Clearing cells and links.
+    let (err, out) = tool(
+        &app,
+        &write,
+        "update_row",
+        json!({"database": "Parts", "row": "Kit", "values": {"Supplier": null, "For task": []}}),
+    )
+    .await;
+    assert!(!err, "{out}");
+    let (_, table) = tool(&app, &read, "query_database", json!({"database": "Parts", "search": "kit"})).await;
+    assert!(table.contains("| Kit | 39.5 | To order |  |  |"), "{table}");
+
+    // Bad values and columns say what's allowed.
+    let (err, out) = tool(
+        &app,
+        &write,
+        "update_row",
+        json!({"database": "Parts", "row": "Kit", "values": {"Status": "lost"}}),
+    )
+    .await;
+    assert!(err && out.contains("Status is one of: To order, Ordered"), "{out}");
+    let (err, out) = tool(
+        &app,
+        &write,
+        "update_row",
+        json!({"database": "Parts", "row": "Kit", "values": {"Colour": "red"}}),
+    )
+    .await;
+    assert!(err && out.contains("no column called Colour"), "{out}");
+
+    // Two rows called Pads: the title isn't enough, the id from query_database is.
+    let (err, out) =
+        tool(&app, &write, "update_row", json!({"database": "Parts", "row": "Pads", "values": {"Cost": 31}}))
+            .await;
+    assert!(err && out.contains("2 rows in Parts are called Pads"), "{out}");
+    let (_, table) = tool(&app, &read, "query_database", json!({"database": "Parts", "search": "12"})).await;
+    let line = table.lines().find(|l| l.starts_with("| Pads | 12 |")).expect(&table);
+    let id = line.trim_end_matches(" |").rsplit("| ").next().unwrap().to_string();
+    let (err, out) =
+        tool(&app, &write, "update_row", json!({"database": "Parts", "row": id, "values": {"Cost": 14}}))
+            .await;
+    assert!(!err, "{out}");
+    let (_, table) =
+        tool(&app, &read, "query_database", json!({"database": "Parts", "search": "pads"})).await;
+    assert!(table.contains("| Pads | 14 |") && table.contains("| Pads | 30 |"), "{table}");
+
+    let (err, out) =
+        tool(&app, &write, "update_row", json!({"database": "Parts", "row": "Hoses", "values": {"Cost": 1}}))
+            .await;
+    assert!(err && out.contains("no row called Hoses"), "{out}");
+}

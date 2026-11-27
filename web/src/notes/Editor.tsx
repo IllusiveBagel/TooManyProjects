@@ -7,6 +7,7 @@ import { EditorView, keymap, placeholder as cmPlaceholder } from "@codemirror/vi
 import { tags as t } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
 import { openWikiQuery } from "./format";
+import { proseOnlySpellcheck } from "./spellcheck";
 
 export interface LinkTargets {
   notes: string[];
@@ -152,7 +153,16 @@ export function MarkdownEditor({
           keymap.of([...closeBracketsKeymap, ...completionKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           EditorView.lineWrapping,
           cmPlaceholder(placeholder),
-          EditorView.contentAttributes.of({ "aria-label": label, "aria-multiline": "true" }),
+          // CodeMirror turns the browser's spell check off by default; notes are
+          // prose, so turn it back on (with the phone keyboard's autocorrect).
+          EditorView.contentAttributes.of({
+            "aria-label": label,
+            "aria-multiline": "true",
+            spellcheck: "true",
+            autocorrect: "on",
+            autocapitalize: "sentences",
+          }),
+          proseOnlySpellcheck,
           theme,
           EditorView.domEventHandlers({
             paste(e, view) {

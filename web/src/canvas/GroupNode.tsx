@@ -58,6 +58,18 @@ export function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
     ),
   );
 
+  // Keep this callback the same between renders. React Flow rebinds the
+  // resize handles whenever it changes, and the group re-renders on every
+  // step of a resize; on a touch screen the rebind drops the finger after a
+  // few pixels (T-28). A mouse drag survives it, which hid the bug on desktop.
+  const onResized = useRef(data.onResized);
+  onResized.current = data.onResized;
+  const onResizeEnd = useCallback(
+    (_: unknown, p: { x: number; y: number; width: number; height: number }) =>
+      onResized.current({ x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) }),
+    [],
+  );
+
   return (
     <>
       <NodeResizer
@@ -67,7 +79,7 @@ export function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
         color={color}
         handleClassName="tmp-group-resize"
         lineClassName="tmp-group-resize-line"
-        onResizeEnd={(_, p) => data.onResized({ x: Math.round(p.x), y: Math.round(p.y), width: Math.round(p.width), height: Math.round(p.height) })}
+        onResizeEnd={onResizeEnd}
       />
       {phone ? (
         // On a phone the group is often wider than the screen, so its tools
