@@ -14,6 +14,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { uploadFiles } from "../files/queries";
+import { useProjectTasks } from "../tasks/queries";
 import type { BoardDoc, Changes } from "./doc";
 import { copies, deletion, restack } from "./edit";
 import {
@@ -34,6 +35,7 @@ import {
   CSS_FONTS,
   SLOTS,
   TEXT_SIZE,
+  taskChip,
   topAt,
   within,
   type ArrowEl,
@@ -46,6 +48,7 @@ import {
   type PenEl,
   type Pt,
   type Rect,
+  type ShapeEl,
   type Slot,
   type TextSize,
 } from "./model";
@@ -137,6 +140,9 @@ type Gesture =
 /** Copied elements, kept across boards. */
 let clipboard: El[] = [];
 
+const inside = (p: Pt, r: Rect, pad = 0) =>
+  p[0] >= r.x - pad && p[0] <= r.x + r.w + pad && p[1] >= r.y - pad && p[1] <= r.y + r.h + pad;
+
 const typing = (t: EventTarget | null) =>
   t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
 
@@ -156,9 +162,11 @@ export interface EditorProps {
   cursors: Cursor[];
   shareCursor: (x: number, y: number) => void;
   phone?: boolean;
+  /** Opens a task, from a shape's task chip. */
+  onOpenTask?: (taskId: string) => void;
 }
 
-export function Editor({ doc, rev, canEdit, projectId, cursors, shareCursor, phone = false }: EditorProps) {
+export function Editor({ doc, rev, canEdit, projectId, cursors, shareCursor, phone = false, onOpenTask }: EditorProps) {
   const pid = useId().replace(/:/g, "");
   const svgRef = useRef<SVGSVGElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -588,6 +596,15 @@ export function Editor({ doc, rev, canEdit, projectId, cursors, shareCursor, pho
       return b;
     };
 
+    // A task chip opens its task, for viewers too.
+    if (tool === "select" || !canEdit) {
+      const chip = els.findLast((e) => isShape(e) && e.task && inside(p, taskChip(e as Boxed), 2 / camRef.current.z));
+      if (chip && isShape(chip) && chip.task && onOpenTask) {
+        onOpenTask(chip.task);
+        return;
+      }
+    }
+
     if (tool === "select") {
       if (!canEdit) return pan();
       const z = camRef.current.z;
@@ -891,7 +908,28 @@ export function Editor({ doc, rev, canEdit, projectId, cursors, shareCursor, pho
 
       {canEdit && selEls.length > 0 && !editing && !drawing && (
         <div className={phone ? "absolute inset-x-3 bottom-3" : "absolute top-4 left-1/2 max-w-[calc(100%-120px)] -translate-x-1/2"}>
-          <StyleBar els={selEls} stacked={phone} onStyle={restyle} onDelete={deleteSelected} onLabel={(id) => startEditing(id)} />
+          <StyleBar
+            els={selEls}
+            stacked={phone}
+            onStyle={restyle}
+            onDelete={deleteSelected}
+            onLabel={(id) => startEditing(id)}
+            projectId={projectId}
+            onTask={(id, task) => {
+              const e = doc.get(id);
+              if (!e || !isShape(e)) return;
+              const n = { ...e };
+              if (task) {
+                n.task = task.id;
+                n.taskRef = `T-${task.number}`;
+              } else {
+                delete n.task;
+                delete n.taskRef;
+              }
+              change({ [id]: n });
+            }}
+            onOpenTask={onOpenTask}
+          />
         </div>
       )}
 
@@ -1142,12 +1180,18 @@ function StyleBar({
   onStyle,
   onDelete,
   onLabel,
+  projectId,
+  onTask,
+  onOpenTask,
 }: {
   els: El[];
   stacked?: boolean;
   onStyle: (p: Partial<Style> & { dashed?: boolean; head?: boolean; hand?: boolean }) => void;
   onDelete: () => void;
   onLabel: (id: string) => void;
+  projectId: string;
+  onTask: (id: string, task: { id: string; number: number } | null) => void;
+  onOpenTask?: (taskId: string) => void;
 }) {
   const btn = "label-mono text-text hover:bg-surface-raised min-h-10 shrink-0 cursor-pointer rounded-md px-2.5 text-[11px]";
   const seg = (on: boolean) => `label-mono min-h-8 cursor-pointer rounded-sm px-2 text-[10px] ${on ? "bg-accent text-on-accent" : "text-text-quiet hover:text-text"}`;
@@ -1214,6 +1258,8 @@ function StyleBar({
       Delete
     </button>
   );
+  const shape = els.length === 1 && isShape(first) ? first : null;
+  const task = shape && <TaskButton shape={shape} projectId={projectId} btn={btn} onTask={(t) => onTask(shape.id, t)} onOpen={onOpenTask} up={stacked} />;
   const name =
     els.length > 1
       ? `${els.length} selected`
@@ -1231,11 +1277,14 @@ function StyleBar({
           {fill || sizes || arrowBits}
         </div>
         {swatches}
-        <div className="flex items-center justify-end">{remove}</div>
+        <div className="flex items-center justify-between gap-2">
+          {task ?? <span />}
+          {remove}
+        </div>
       </div>
     );
   return (
-    <div className="border-rule bg-surface-card shadow-card flex items-center gap-1 overflow-x-auto rounded-lg p-1">
+    <div className="border-rule bg-surface-card shadow-card flex flex-wrap items-center gap-1 rounded-lg p-1">
       {swatches}
       {fill && (
         <>
@@ -1255,9 +1304,96 @@ function StyleBar({
           {arrowBits}
         </>
       )}
+      {task && (
+        <>
+          {rule}
+          {task}
+        </>
+      )}
       {rule}
       {remove}
     </div>
+  );
+}
+
+/** Links the selected shape to one of the project's tasks, or shows the link. */
+function TaskButton({
+  shape,
+  projectId,
+  btn,
+  onTask,
+  onOpen,
+  up,
+}: {
+  shape: ShapeEl;
+  projectId: string;
+  btn: string;
+  onTask: (t: { id: string; number: number } | null) => void;
+  onOpen?: (taskId: string) => void;
+  up: boolean;
+}) {
+  const [picking, setPicking] = useState(false);
+  const [q, setQ] = useState("");
+  const tasks = useProjectTasks(projectId).data ?? [];
+  const linked = shape.task ? tasks.find((t) => t.id === shape.task) : undefined;
+  const words = q.trim().toLowerCase();
+  const shown = tasks
+    .filter((t) => !words || t.title.toLowerCase().includes(words) || `t-${t.number}`.startsWith(words))
+    .sort((a, b) => Number(a.category === "done") - Number(b.category === "done") || b.number - a.number)
+    .slice(0, 8);
+  if (shape.task)
+    return (
+      <span className="flex shrink-0 items-center">
+        <button type="button" className={`${btn} flex items-center gap-1.5`} onClick={() => onOpen?.(shape.task!)} title="Open the task">
+          <span className="bg-accent text-on-accent rounded-sm px-1.5 py-0.5 text-[10px]">{shape.taskRef}</span>
+          <span className="max-w-40 truncate normal-case">{linked?.title ?? "Task"}</span>
+        </button>
+        <button type="button" aria-label="Unlink the task" title="Unlink the task" className="text-text-quiet hover:text-text min-h-10 cursor-pointer px-1.5" onClick={() => onTask(null)}>
+          ×
+        </button>
+      </span>
+    );
+  return (
+    <span className="relative shrink-0">
+      <button type="button" className={btn} aria-expanded={picking} onClick={() => setPicking((p) => !p)}>
+        Link task
+      </button>
+      {picking && (
+        <div className={`border-rule bg-surface-raised shadow-card absolute z-30 flex w-72 flex-col gap-1 rounded-lg p-1.5 ${up ? "bottom-11 left-0" : "top-11 left-0"}`}>
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") setPicking(false);
+              if (e.key === "Enter" && shown[0]) {
+                onTask(shown[0]);
+                setPicking(false);
+              }
+            }}
+            placeholder="Find a task"
+            aria-label="Find a task"
+            className="border-rule bg-surface text-text min-h-9 rounded-md px-2.5 font-mono text-[12px] outline-none"
+          />
+          {shown.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className="hover:bg-line flex min-h-9 cursor-pointer items-center gap-2 rounded-sm px-2 text-left text-sm"
+              onClick={() => {
+                onTask(t);
+                setPicking(false);
+              }}
+            >
+              <span className="label-mono text-text-quiet w-11 shrink-0 text-[10px]">T-{t.number}</span>
+              <span className={`truncate ${t.category === "done" ? "text-text-quiet line-through" : ""}`}>{t.title}</span>
+            </button>
+          ))}
+          {!shown.length && <span className="label-mono text-text-quiet px-2 py-2 text-[10px]">No tasks match</span>}
+        </div>
+      )}
+    </span>
   );
 }
 

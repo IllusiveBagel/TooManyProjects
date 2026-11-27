@@ -89,6 +89,8 @@ function hitMeta(h: SearchHit): string {
       return `On T-${h.task_number} · ${day}`;
     case "row":
       return [h.project_title, h.context].filter(Boolean).join(" · ");
+    case "whiteboard":
+      return [h.project_title, h.snippet?.replace(/[[\]]/g, "")].filter(Boolean).join(" · ");
     case "note":
       return h.context ?? "";
     case "project":
@@ -177,7 +179,7 @@ function PaletteBody() {
     }
     const firstProject = text ? search.data?.find((h) => h.kind === "project") : undefined;
     if (firstProject) {
-      for (const [tab, label] of [["board", "board"], ["notes", "notes"], ["data", "data"], ["photos", "photos"]] as const) {
+      for (const [tab, label] of [["board", "board"], ["notes", "notes"], ["data", "data"], ["photos", "photos"], ["whiteboards", "whiteboards"]] as const) {
         actions.push({ key: `p-${tab}`, kind: "go to", isHit: false, title: `${firstProject.title} ${label}`, run: () => go(`/projects/${firstProject.id}/${tab}`) });
       }
     }

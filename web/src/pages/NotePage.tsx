@@ -13,6 +13,7 @@ import { NoteCard } from "./NotesPage";
 import { uploadFiles } from "../files/queries";
 import { CAMERA_ICON, CLIP_ICON, Icon, PickButton } from "../files/Files";
 import type { Attachment } from "../files/format";
+import { useAllWhiteboards } from "../whiteboards/queries";
 
 /** Obsidian embeds for files just added to the note's vault, one per line. */
 const embedsFor = (added: Attachment[]) => added.map((a) => `![[${a.name}]]`).join("\n");
@@ -120,13 +121,15 @@ function NoteView({ detail }: { detail: NoteDetail }) {
   });
 
   const databases = useAllDatabases(editing);
+  const boards = useAllWhiteboards(editing);
   const targets = useMemo(
     () => ({
       notes: (allNotes.data ?? []).filter((n) => n.id !== note.id).map((n) => n.title),
       projects: projects.map((p) => p.title),
       views: (databases.data ?? []).flatMap((d) => d.views.map((v) => `${d.name}#${v.name}`)),
+      boards: (boards.data ?? []).map((b) => b.title),
     }),
-    [allNotes.data, projects, note.id, databases.data],
+    [allNotes.data, projects, note.id, databases.data, boards.data],
   );
 
   const createLinked = useCallback(

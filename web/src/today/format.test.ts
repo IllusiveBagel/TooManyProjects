@@ -108,3 +108,12 @@ describe("palette", () => {
     ]);
   });
 });
+
+describe("whiteboard hits", () => {
+  it("open the board and group with notes and data", () => {
+    const hit = { kind: "whiteboard", id: "b", project_id: "p", title: "Wiring", updated_at: "2026-11-27T00:00:00Z", done: false } as SearchHit;
+    expect(hitPath(hit)).toBe("/projects/p/whiteboards/b");
+    expect(groupHits([hit])[0]!.title).toBe("Notes and data");
+    expect(filterHits([hit], "data")).toHaveLength(1);
+  });
+});

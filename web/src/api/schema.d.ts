@@ -1700,6 +1700,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks/{id}/whiteboards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whiteboards with a shape that stands for this task. */
+        get: operations["task_whiteboards"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/templates": {
         parameters: {
             query?: never;
@@ -1823,6 +1840,23 @@ export interface paths {
         post?: never;
         /** Stop a token working. It stays in the list, marked revoked. */
         delete: operations["revoke_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/whiteboards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every whiteboard you can see, newest change first: for note embeds and pickers. */
+        get: operations["list_all_whiteboards"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3087,9 +3121,9 @@ export interface components {
             database_id?: string | null;
             /** @description A finished task, or a project that is done or archived. */
             done: boolean;
-            /** @description The project, task, comment, note or row id. */
+            /** @description The project, task, comment, note, row or whiteboard id. */
             id: string;
-            /** @description `project`, `task`, `comment`, `note` or `row`. */
+            /** @description `project`, `task`, `comment`, `note`, `row` or `whiteboard`. */
             kind: string;
             project_color?: string | null;
             project_id?: string | null;
@@ -3547,6 +3581,8 @@ export interface components {
             id: string;
             position: string;
             project_id: string;
+            /** @description The project's name. */
+            project_title: string;
             /**
              * Format: int64
              * @description Goes up with every save.
@@ -3556,6 +3592,8 @@ export interface components {
             updated_at: string;
             /** @description Who saved it last. Missing when their account is gone. */
             updated_by_name?: string | null;
+            /** @description `web`, or `ai` when an AI assistant made the last change. */
+            updated_via: string;
         };
     };
     responses: never;
@@ -7744,6 +7782,35 @@ export interface operations {
             };
         };
     };
+    task_whiteboards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Whiteboard"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_templates: {
         parameters: {
             query?: never;
@@ -8032,6 +8099,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_all_whiteboards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Whiteboard"][];
                 };
             };
         };

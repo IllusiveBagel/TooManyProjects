@@ -21,8 +21,10 @@ export interface ShapeEl extends Base {
   h: number;
   fill: Fill;
   text?: string;
-  /** A task this shape stands for, shown as a chip (such as `T-14`). */
+  /** The id of a task this shape stands for. */
   task?: string;
+  /** That task's number, shown as a chip (such as `T-14`). */
+  taskRef?: string;
 }
 export interface StickyEl extends Base {
   kind: "sticky";
@@ -419,3 +421,6 @@ export function toData(e: El): Record<string, unknown> {
   const { id: _id, kind: _kind, ...rest } = e;
   return rest;
 }
+
+/** Where a shape's task chip sits, in board units. */
+export const taskChip = (e: Pick<ShapeEl, "x" | "y" | "w">): Rect => ({ x: e.x + e.w - 50, y: e.y - 11, w: 48, h: 20 });

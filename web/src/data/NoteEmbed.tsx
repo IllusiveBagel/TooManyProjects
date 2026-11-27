@@ -2,6 +2,8 @@ import { Link } from "react-router";
 import { DatabaseView } from "./DatabaseView";
 import { resolveEmbed, VIEW_LABEL } from "./format";
 import { useAllDatabases, useDatabase } from "./queries";
+import { WhiteboardEmbed } from "../whiteboards/Embed";
+import { useAllWhiteboards } from "../whiteboards/queries";
 
 /**
  * A live database view inside a note, from `![[Parts list#To order]]`.
@@ -9,15 +11,21 @@ import { useAllDatabases, useDatabase } from "./queries";
  */
 export function NoteEmbed({ target, projectIds }: { target: string; projectIds: string[] }) {
   const all = useAllDatabases();
+  const boards = useAllWhiteboards();
   const found = all.data ? resolveEmbed(target, all.data, projectIds) : null;
   const detail = useDatabase(found?.database.id);
-  if (all.isPending) return <p className="label-mono text-text-quiet my-4 text-[11px]">Loading {target}…</p>;
-  if (!found)
+  if (all.isPending || boards.isPending) return <p className="label-mono text-text-quiet my-4 text-[11px]">Loading {target}…</p>;
+  if (!found) {
+    // Not a database: a whiteboard of that name, in the note's projects first.
+    const named = (boards.data ?? []).filter((b) => b.title.toLowerCase() === target.trim().toLowerCase());
+    const board = named.find((b) => projectIds.includes(b.project_id)) ?? named[0];
+    if (board) return <WhiteboardEmbed board={board} />;
     return (
       <p className="label-mono border-rule text-text-quiet my-4 rounded-md border-dashed px-3 py-2 text-[11px] normal-case">
-        No database called “{target.split("#")[0]}” that you can see.
+        No database or whiteboard called “{target.split("#")[0]}” that you can see.
       </p>
     );
+  }
   const view = detail.data?.views.find((v) => v.id === found.view?.id) ?? found.view;
   return (
     <section

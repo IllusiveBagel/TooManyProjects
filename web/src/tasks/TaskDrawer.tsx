@@ -4,6 +4,7 @@ import type { TaskDetail } from "../api/client";
 import { lastActive } from "../canvas/format";
 import { useProjectDetail } from "../canvas/queries";
 import { TaskLinkedRows } from "../data/LinkedRows";
+import { TaskWhiteboards } from "../whiteboards/TaskBoards";
 import { useTaskRows } from "../data/queries";
 import { useMembers } from "../sharing/queries";
 import { Button, ErrorNote, ViaBadge } from "../components/ui";
@@ -339,6 +340,7 @@ function Body({ detail, onClose }: { detail: TaskDetail; onClose: () => void }) 
         </fieldset>
         <TaskLinkedRows groups={linkedRows.data ?? []} taskId={task.id} canEdit={canEdit} />
         <TaskNotes detail={detail} canEdit={canEdit} />
+        <TaskWhiteboards taskId={task.id} />
         <TaskLog detail={detail} canEdit={canEdit} />
 
         <ErrorNote error={update.error ?? remove.error ?? createLabel.error ?? items.add.error} />

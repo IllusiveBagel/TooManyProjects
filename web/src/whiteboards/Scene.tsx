@@ -227,7 +227,7 @@ function Shape({ e, fonts }: { e: ShapeEl; fonts: Fonts }) {
           fill={textFill}
         />
       )}
-      {e.task && (
+      {e.taskRef && (
         <g>
           <rect x={e.x + e.w - 50} y={e.y - 11} width={48} height={20} rx={3} fill="var(--tmp-accent)" />
           <text
@@ -237,7 +237,7 @@ function Shape({ e, fonts }: { e: ShapeEl; fonts: Fonts }) {
             fill="var(--tmp-on-accent)"
             style={{ font: "700 11px var(--tmp-font-mono)", letterSpacing: "0.04em" }}
           >
-            {e.task}
+            {e.taskRef}
           </text>
         </g>
       )}
